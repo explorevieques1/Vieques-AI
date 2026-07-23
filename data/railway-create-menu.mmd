@@ -1,0 +1,50 @@
+%% ===========================================================================
+%%  Explore Vieques — Railway "What would you like to create?" decision map
+%% ===========================================================================
+%%  Which items in Railway's create menu you actually use for THIS backend.
+%%   GREEN  = use it (this is how the backend gets built + run)
+%%   AMBER  = optional, only if you add a feature later
+%%   GREY   = skip — wrong tool for this app (reason on the node)
+%%
+%%  Bottom line: create the backend from GITHUB REPOSITORY. Your database is
+%%  already on Supabase, and the app is a long-running server, so none of the
+%%  other menu items are needed to get it running correctly.
+%% ===========================================================================
+
+flowchart TD
+    menu["Railway: What would you like to create?"]
+
+    menu --> gh["GitHub Repository"]
+    menu --> dbm["Database"]
+    menu --> tmpl["Template"]
+    menu --> docker["Docker Image"]
+    menu --> func["Function"]
+    menu --> bucket["Bucket"]
+    menu --> vol["Volume"]
+    menu --> empty["Empty Service"]
+
+    %% --- The one you use ---
+    gh --> ghUse["USE THIS<br/>Deploy from this repo<br/>Root Directory = backend<br/>Nixpacks builds it, npm start runs it"]
+
+    %% --- Skip: DB already external ---
+    dbm --> dbSkip["SKIP<br/>DB lives in Supabase already<br/>connect via DATABASE_URL var,<br/>not a Railway Postgres node"]
+
+    %% --- Skip: wrong tool ---
+    tmpl --> tmplSkip["SKIP<br/>Pre-built stacks<br/>you don't need a starter"]
+    docker --> dockerSkip["SKIP<br/>Alt build path<br/>Nixpacks from GitHub is simpler<br/>(no Dockerfile in repo)"]
+    func --> funcSkip["SKIP - IMPORTANT<br/>Functions are short-lived<br/>your API is long-running:<br/>persistent pool + 10-60s Claude loop"]
+    vol --> volSkip["SKIP<br/>Persistent disk<br/>all state is in Supabase,<br/>server keeps nothing on disk"]
+    empty --> emptySkip["SKIP<br/>Blank service<br/>GitHub Repo already wires the build"]
+
+    %% --- Optional later ---
+    bucket --> bucketMaybe["LATER MAYBE<br/>Object storage (S3-like)<br/>only if you host user uploads<br/>/ images someday"]
+
+    classDef use fill:#166534,color:#ffffff,stroke:#22c55e,stroke-width:2px;
+    classDef maybe fill:#854d0e,color:#fffbeb,stroke:#f59e0b;
+    classDef skip fill:#1f2937,color:#9ca3af,stroke:#4b5563;
+    classDef head fill:#5b21b6,color:#ffffff,stroke:#a78bfa,stroke-width:2px;
+
+    class menu head;
+    class gh,ghUse use;
+    class bucket,bucketMaybe maybe;
+    class dbm,dbSkip,tmpl,tmplSkip,docker,dockerSkip,func,funcSkip,vol,volSkip,empty,emptySkip skip;

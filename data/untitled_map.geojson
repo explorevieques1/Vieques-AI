@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          -65.443073,
+          18.149639
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "name": "Supermercado Morales"
+      },
+      "id": "KLN95"
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          -65.442064,
+          18.149043
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "name": "Family Market"
+      },
+      "id": "qW9rm"
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          -65.451876,
+          18.14106
+        ],
+        "type": "Point"
+      },
+      "properties": {
+        "name": "Superdescuentos Morales"
+      },
+      "id": "OW7kQ"
+    }
+  ]
+}

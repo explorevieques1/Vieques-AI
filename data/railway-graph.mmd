@@ -1,0 +1,68 @@
+%% ===========================================================================
+%%  Explore Vieques — Railway deployment topology (wiring sketch)
+%% ===========================================================================
+%%  The ONE node you create inside Railway is the purple "backend API service".
+%%  Everything else is external (Vercel, Cloudflare, Supabase, Stripe, Claude,
+%%  OSRM). The arrows are the connections to wire up — solid = live request
+%%  traffic, dotted = DNS resolution. Edge labels name the env var / mechanism
+%%  that makes each connection work.
+%%
+%%  View it: paste into https://mermaid.live, or open with a Mermaid preview
+%%  extension in VS Code.
+%% ===========================================================================
+
+flowchart LR
+    user["🌐 Visitor's browser"]
+
+    subgraph cloudflare["Cloudflare — DNS only"]
+        dns["DNS records<br/>CNAME per subdomain"]
+    end
+
+    subgraph vercel["Vercel — static frontends"]
+        landing["Landing site<br/>explorevieques.org"]
+        mapapp["Map app<br/>app.explorevieques.org"]
+    end
+
+    subgraph railwayproj["Railway project — eplorevieques"]
+        api["backend API service<br/>• Root dir = backend<br/>• Start = npm start<br/>• Binds 0.0.0.0 on $PORT<br/>• Health = /api/health<br/>• Domain = api.explorevieques.org<br/>• NODE_ENV = production"]
+    end
+
+    subgraph supabase["Supabase"]
+        db[("Postgres + PostGIS<br/>transaction pooler :6543")]
+        auth["Auth — verify JWT"]
+    end
+
+    stripe["Stripe<br/>Checkout + Webhook"]
+    anthropic["Anthropic<br/>Claude API"]
+    osrm["OSRM<br/>public routing"]
+
+    %% --- DNS resolution (dotted) ---
+    user --> dns
+    dns -. resolves .-> landing
+    dns -. resolves .-> mapapp
+    dns -. resolves .-> api
+
+    %% --- Browser loads the frontends ---
+    user --> landing
+    user --> mapapp
+
+    %% --- Frontends call the API (gatekeeper) ---
+    landing -->|VITE_API_BASE| api
+    mapapp -->|VITE_API_BASE| api
+
+    %% --- API is the ONLY thing talking to the backing services ---
+    api -->|DATABASE_URL| db
+    api -->|SUPABASE_URL + anon key| auth
+    api -->|STRIPE_SECRET_KEY| stripe
+    stripe -->|signed webhook -> /api/stripe/webhook| api
+    api -->|ANTHROPIC_API_KEY| anthropic
+    api -->|/api/directions| osrm
+
+    %% --- Styling ---
+    classDef rail fill:#5b21b6,color:#ffffff,stroke:#a78bfa,stroke-width:2px;
+    classDef ext fill:#1f2937,color:#e5e7eb,stroke:#6b7280;
+    classDef front fill:#0f172a,color:#e2e8f0,stroke:#334155;
+
+    class api rail;
+    class db,auth,stripe,anthropic,osrm ext;
+    class landing,mapapp,dns front;

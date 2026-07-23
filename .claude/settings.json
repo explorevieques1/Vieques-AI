@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /tmp/ai.json -w \"HTTP %{http_code} in %{time_total}s\\\\n\" -X POST https://explore-vieques-production.up.railway.app/api/ai/chat -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}' --max-time 90)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /tmp/b.json -w \"HTTP %{http_code}\\\\n\" https://explore-vieques-production.up.railway.app/api/beaches --max-time 30)",
+      "Bash(python3 -c 'import json;print\\(len\\(json.load\\(open\\(\"/tmp/b.json\"\\)\\)\\)\\)')",
+      "Bash(echo \"rows: $\\(python3 -c 'import json;print\\(len\\(json.load\\(open\\(\"/tmp/b.json\"\\)\\)\\)\\)' 2>/dev/null\\)\")",
+      "Bash(npx shadcn@latest init -y -b neutral)",
+      "Bash(cd \"/home/giancarlo/Desktop/Vieques AI/frontend\" && mkdir -p src/components/ui src/lib && mv \"@/components/ui/\"*.tsx src/components/ui/ && mv \"@/lib/utils.ts\" src/lib/ && rm -rf \"@\" && echo \"--- moved ---\" && ls src/components/ui/ src/lib/)",
+      "Bash(npx tsc *)"
+    ],
+    "additionalDirectories": [
+      "/home/giancarlo/Desktop/Vieques AI/@/components/ui"
+    ]
+  }
+}
