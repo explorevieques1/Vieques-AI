@@ -54,7 +54,7 @@ html, body, #root {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Vieques AI — ocean brand palette.
+/* Explore Vieques — ocean brand palette.
    Hue ~200–245 (cyan → deep sea), primary keyed to cyan-400/500. */
 :root {
   --background: oklch(0.99 0.006 220);

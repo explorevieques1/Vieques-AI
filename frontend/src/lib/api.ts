@@ -13,7 +13,10 @@ function resolveApiBase(): string {
   }
   return `http://localhost:${BACKEND_PORT}`
 }
-const API_BASE = resolveApiBase()
+export const API_BASE = resolveApiBase()
+
+/** Where the marketing site lives — sign-in, pricing and checkout all happen there. */
+export const LANDING_URL = import.meta.env.VITE_LANDING_URL || 'http://localhost:5174'
 
 // Every route below requires a signed-in user (requireAuth on the backend),
 // so every call attaches the current Supabase session token. Without this,
@@ -23,6 +26,96 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
   const token = data.session?.access_token
   const headers = { ...(init.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   return fetch(`${API_BASE}${path}`, { ...init, headers })
+}
+
+/**
+ * A failed API call, with the backend's structured detail preserved.
+ *
+ * The old pattern — `throw new Error(msg.error || ...)` — flattened every
+ * failure to a string, which meant the UI could not tell "you're out of AI
+ * messages" (fixable by upgrading) from "the server broke" (not the user's
+ * fault). Both rendered as raw backend prose with no call to action.
+ *
+ * `code` comes from requireTier / requireCredits in backend/middleware.js:
+ *   'UPGRADE_REQUIRED' — plan lacks this feature; `feature` says which
+ *   'NO_CREDITS'       — Ask AI allowance exhausted
+ */
+export class ApiError extends Error {
+  status: number
+  code?: string
+  feature?: string
+  remaining?: number
+
+  constructor(status: number, body: Record<string, unknown>, fallback: string) {
+    super((body.error as string) || fallback)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = body.code as string | undefined
+    this.feature = body.feature as string | undefined
+    this.remaining = body.remaining as number | undefined
+  }
+
+  /** True when upgrading the user's plan would fix this. */
+  get isUpgradeable(): boolean {
+    return this.code === 'UPGRADE_REQUIRED' || this.code === 'NO_CREDITS'
+  }
+}
+
+/** Throw a structured ApiError from a non-OK response. */
+async function raise(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => ({}))
+  throw new ApiError(res.status, body, `${fallback}: ${res.status}`)
+}
+
+// ---------------------------------------------------------------------------
+//  Entitlement
+// ---------------------------------------------------------------------------
+
+export type Tier = 'free' | 'day_trip' | 'vacation' | 'exploration'
+
+/** One active purchase. A user can hold several (bought Day Trip, then upgraded). */
+export type ActivePlan = {
+  plan: string
+  status: string
+  /** Null for open-ended subscription access; a date for time-boxed passes. */
+  expires_at: string | null
+}
+
+export type Entitlement = {
+  /** Holds a paid pass. False for the free tier — which is still allowed in. */
+  hasAccess: boolean
+  tier: Tier
+  /** Feature slugs this tier unlocks; see FEATURES in backend/payments.js. */
+  features: string[]
+  /** Remaining Ask AI messages (ledger balance). */
+  credits: number
+  deviceLimit: number
+  /** Every active purchase, newest first. Drives the profile page. */
+  plans: ActivePlan[]
+}
+
+/** What an unknown/failed entitlement resolves to. Fails CLOSED, not open. */
+export const FREE_ENTITLEMENT: Entitlement = {
+  hasAccess: false,
+  tier: 'free',
+  features: ['map', 'search', 'beach_names', 'restaurant_preview', 'ai_trial'],
+  credits: 0,
+  deviceLimit: 1,
+  plans: [],
+}
+
+/**
+ * Ask the backend what this user is entitled to.
+ *
+ * Previously AccessGate did this with its own raw `fetch` and a duplicated copy
+ * of resolveApiBase(); it lives here so there is one API surface and one place
+ * that knows the base URL.
+ */
+export async function fetchEntitlement(): Promise<Entitlement> {
+  const res = await apiFetch('/api/entitlement')
+  if (!res.ok) await raise(res, 'Entitlement check failed')
+  const data = await res.json()
+  return { ...FREE_ENTITLEMENT, ...data }
 }
 
 export type Beach = {
@@ -157,19 +250,9 @@ export async function fetchServiceListings(slug: string): Promise<ServiceListing
   return res.json()
 }
 
-export async function startCheckout(plan: string): Promise<void> {
-  const res = await apiFetch(`/api/checkout`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan }),
-  })
-  if (!res.ok) {
-    const msg = await res.json().catch(() => ({}))
-    throw new Error(msg.error || `Checkout failed: ${res.status}`)
-  }
-  const { url } = await res.json()
-  if (url) window.location.href = url // redirect to Stripe
-}
+// NOTE: startCheckout used to live here. Payment and plan advertising moved
+// entirely to the landing app (landing/src/pages/Pricing.jsx), so the map app
+// no longer starts Stripe sessions — it links out to `${LANDING_URL}/pricing`.
 
 export type TransportCategory = { slug: string; label: string; is_physical: boolean }
 export type TransportVehicle = {
@@ -256,16 +339,16 @@ export type AiChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export async function sendAiChat(
   messages: AiChatMessage[],
-): Promise<{ reply: string; pins: AiPin[] }> {
+): Promise<{ reply: string; pins: AiPin[]; creditsRemaining: number }> {
   const res = await apiFetch(`/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages }),
   })
-  if (!res.ok) {
-    const msg = await res.json().catch(() => ({}))
-    throw new Error(msg.error || `AI chat failed: ${res.status}`)
-  }
+  // A 402 here means the allowance is spent. Thrown as an ApiError with
+  // code 'NO_CREDITS' so AiChatPane can offer an upgrade rather than printing
+  // the raw server message.
+  if (!res.ok) await raise(res, 'AI chat failed')
   return res.json()
 }
 

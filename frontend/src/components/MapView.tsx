@@ -38,6 +38,8 @@ import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import RestaurantDetailPanel from './RestaurantDetailPanel'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useFeature } from '../lib/entitlement'
+import UpsellOverlay from './UpsellOverlay'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
 const KEY = import.meta.env.VITE_MAPTILER_KEY
@@ -61,6 +63,9 @@ type Props = {
 }
 
 function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Props) {
+  // Snorkeling is the Vacation-tier upsell (PRICING.md §4). Advisory only —
+  // requireTier on the server and the RLS policy in 0022 are the real gates.
+  const canSnorkel = useFeature('snorkel_zones')
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<maplibregl.Marker[]>([])
@@ -225,6 +230,14 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
 
     // --- Snorkeling: load spots into state; a separate effect plots them ---
     if (activitySlug === 'snorkeling') {
+      // Vacation and up (PRICING.md §4). Skip the fetch entirely for lower
+      // tiers — the server would 402 anyway, and an avoidable failed request
+      // just puts a red line in the console. The UI shows an upsell instead;
+      // this check is convenience, the real gate is requireTier server-side.
+      if (!canSnorkel) {
+        setSnorkelSpots([])
+        return
+      }
       let cancelled = false
       fetchSnorkelSpots()
         .then((spots: SnorkelSpot[]) => {
@@ -267,7 +280,9 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
     return () => {
       cancelled = true
     }
-  }, [activitySlug])
+    // canSnorkel is a dep so the zones load immediately after an upgrade,
+    // without needing a page reload.
+  }, [activitySlug, canSnorkel])
 
   // Plot snorkel markers from state, re-filtering when the toggle changes.
   // Hidden once a spot's zones are shown (zonesShown).
@@ -669,8 +684,24 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
         onClose={() => setSelectedCarRental(null)}
       />
 
+      {/* Snorkeling is Vacation-tier. Show the lock rather than hiding the
+          category: a feature the user never sees is a feature they never buy.
+          See PRICING.md §4.1. */}
+      {activitySlug === 'snorkeling' && !canSnorkel && (
+        <div
+          className="absolute z-20 w-72"
+          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
+        >
+          <UpsellOverlay
+            feature="snorkel_zones"
+            title="Snorkeling zone maps"
+            blurb="See every snorkeling zone, where to enter the water, depth and difficulty — plus the Bio Bay moon-phase guide."
+          />
+        </div>
+      )}
+
       {/* snorkel Go Yourself / Book a Tour toggle — only before zones are shown */}
-      {activitySlug === 'snorkeling' && !zonesShown && (
+      {activitySlug === 'snorkeling' && canSnorkel && !zonesShown && (
         <div
           className="absolute z-20 flex gap-1 rounded-lg bg-card/85 backdrop-blur border border-border shadow-lg p-1"
           style={{ top: '4rem', left: leftOffset(sidebarOpen) }}

@@ -21,3 +21,8 @@ export const supabase = createClient(url, anonKey, {
 })
 
 export const getSession = () => supabase.auth.getSession()
+
+// Clears this origin's session only. The landing site is a different origin
+// with its own localStorage, so signing out here does NOT sign the user out
+// there — the profile panel sends them to the landing to finish the job.
+export const signOut = () => supabase.auth.signOut()

@@ -1,27 +1,31 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { getSession, supabase } from '../lib/supabase'
+import { fetchEntitlement, FREE_ENTITLEMENT, LANDING_URL, type Entitlement } from '../lib/api'
+import { EntitlementProvider } from '../lib/entitlement'
 
-// Where the marketing/landing site lives (login + pricing).
-// Set VITE_LANDING_URL in frontend/.env (e.g. https://explorevieques.org).
-const LANDING_URL = import.meta.env.VITE_LANDING_URL || 'http://localhost:5174'
+// ============================================================================
+//  AccessGate — the boundary between "signed out" and "in the app"
+// ============================================================================
+//
+//  This used to be a paywall: no active subscription meant a bounce to the
+//  landing pricing page. PRICING.md replaced that with a free tier, so the gate
+//  now checks IDENTITY only:
+//
+//     no session      → hard redirect to the landing login (still a real gate)
+//     signed in       → admitted, at whatever tier they hold (free included)
+//
+//  The paywall did not disappear, it moved. Instead of one wall at the door,
+//  each feature checks its own tier — server-side in requireTier /
+//  requireCredits, and in the UI via useFeature(). That is what makes the free
+//  tier a funnel rather than a locked door: people can see what they'd be
+//  buying. See PRICING.md §4.1.
+// ============================================================================
 
-function resolveApiBase(): string {
-  const fromEnv = import.meta.env.VITE_API_BASE
-  if (fromEnv) return fromEnv
-  if (typeof window !== 'undefined' && window.location?.hostname) {
-    return `${window.location.protocol}//${window.location.hostname}:3001`
-  }
-  return 'http://localhost:3001'
-}
-const API_BASE = resolveApiBase()
+type GateState = 'checking' | 'allowed'
 
-type GateState = 'checking' | 'allowed' | 'denied'
-
-// Wrap the entire map app. Nobody sees the map until we've confirmed, against
-// the backend, that this signed-in user has an active plan. Unpaid or
-// unauthenticated users are bounced to the landing site.
 export default function AccessGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>('checking')
+  const [entitlement, setEntitlement] = useState<Entitlement>(FREE_ENTITLEMENT)
 
   useEffect(() => {
     let cancelled = false
@@ -47,32 +51,26 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       const { data } = await getSession()
       const token = data?.session?.access_token
 
-      // Not logged in at all -> send to login on the landing site.
+      // Not logged in at all -> send to login on the landing site. Still a hard
+      // gate: everything downstream needs a user id to resolve a tier against.
       if (!token) {
         redirect(`${LANDING_URL}/login`)
         return
       }
 
-      // Logged in -> ask the backend if they've actually paid.
       try {
-        const res = await fetch(`${API_BASE}/api/entitlement`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        const ent = res.ok ? await res.json() : { hasAccess: false }
+        const ent = await fetchEntitlement()
         if (cancelled) return
-
-        if (ent.hasAccess) {
-          setState('allowed')
-        } else {
-          setState('denied')
-          redirect(`${LANDING_URL}/pricing`)
-        }
+        setEntitlement(ent)
       } catch {
         if (cancelled) return
-        // On a network error, fail closed (deny) rather than leak access.
-        setState('denied')
-        redirect(`${LANDING_URL}/pricing`)
+        // Fail CLOSED, but not shut: admit them at the free tier rather than
+        // granting paid features on a network blip. Worst case a paying user
+        // briefly sees upsells; they never lose access to the app itself, and
+        // the server would reject an over-reach anyway.
+        setEntitlement(FREE_ENTITLEMENT)
       }
+      if (!cancelled) setState('allowed')
     }
 
     check()
@@ -84,22 +82,15 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       <div className="h-screen w-screen grid place-items-center bg-slate-900 text-slate-300">
         <div className="text-center">
           <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-slate-700 border-t-cyan-400 animate-spin" />
-          <p>Checking your access…</p>
+          <p>Loading your island guide…</p>
         </div>
       </div>
     )
   }
 
-  if (state === 'denied') {
-    // The redirect is already firing; show a brief message meanwhile.
-    return (
-      <div className="h-screen w-screen grid place-items-center bg-slate-900 text-slate-300">
-        <p>Redirecting…</p>
-      </div>
-    )
-  }
-
-  return <>{children}</>
+  // Seed the provider with what we already fetched, so the app doesn't ask for
+  // entitlement a second time on boot.
+  return <EntitlementProvider initial={entitlement}>{children}</EntitlementProvider>
 }
 
 function redirect(url: string) {
