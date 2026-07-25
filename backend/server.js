@@ -93,13 +93,28 @@ const pool = new pg.Pool(
 // ----------------------------------------------------------------------------
 const IS_PROD = process.env.NODE_ENV === 'production'
 
+// An origin and its www/apex twin. Vercel serves the landing site from
+// www.explorevieques.org while the apex redirects to it, so a LANDING_URL set
+// to either form must allow both — otherwise real browser traffic from the
+// other form is rejected as an unknown origin.
+const withWwwTwin = (url) => {
+  if (!url) return []
+  try {
+    const { protocol, host } = new URL(url)
+    const bare = host.replace(/^www\./, '')
+    return [`${protocol}//${bare}`, `${protocol}//www.${bare}`]
+  } catch {
+    return [url]   // not a parseable URL — pass through untouched
+  }
+}
+
 // Explicit allowlist. `.filter(Boolean)` drops LANDING_URL/APP_URL when unset
 // so we never accidentally allow the string "undefined" as an origin.
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
-  process.env.LANDING_URL,   // e.g. https://explorevieques.org
-  process.env.APP_URL,       // e.g. https://app.explorevieques.org
+  ...withWwwTwin(process.env.LANDING_URL),   // e.g. https://explorevieques.org
+  ...withWwwTwin(process.env.APP_URL),       // e.g. https://app.explorevieques.org
 ].filter(Boolean)
 
 // Dev-only: match any http://localhost:PORT or http://127.0.0.1:PORT origin.

@@ -35,8 +35,11 @@ import { createClient } from '@supabase/supabase-js'
 // unset (individual requests fail instead of crashing on startup).
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '')
 
-// Where Stripe sends the browser back after checkout (success/cancel pages).
-const APP_URL = process.env.APP_URL || 'http://localhost:5173'
+// Where Stripe sends the browser back after checkout. Both /success and
+// /pricing are LANDING routes (see landing/src/App.jsx) — the map app has no
+// such routes, so sending Stripe to APP_URL drops the user on a blank map
+// instead of the receipt page.
+const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
 
 // Supabase client used ONLY to verify a user's JWT (auth.getUser). The anon key
 // is enough — verifying a token needs no elevated privileges, and we never use
@@ -271,8 +274,8 @@ export async function createCheckoutSession(pool, req, res) {
       // This metadata is the ONLY link between the payment and the account —
       // the webhook reads it back to decide who gets access and to which plan.
       metadata: { supabase_user_id: user.id, plan: req.body.plan },
-      success_url: `${APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/pricing?checkout=cancel`,
+      success_url: `${LANDING_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${LANDING_URL}/pricing?checkout=cancel`,
     })
 
     res.json({ url: session.url })
