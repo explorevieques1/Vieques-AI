@@ -97,14 +97,21 @@ const IS_PROD = process.env.NODE_ENV === 'production'
 // www.explorevieques.org while the apex redirects to it, so a LANDING_URL set
 // to either form must allow both — otherwise real browser traffic from the
 // other form is rejected as an unknown origin.
-const withWwwTwin = (url) => {
+//
+//  Tolerant of how these get typed into a deploy dashboard: surrounding
+//  whitespace, a trailing slash, or a bare host with no scheme all still
+//  produce usable origins. A scheme-less value silently matched nothing before,
+//  which reads as "CORS is broken" rather than "the variable has a typo".
+const withWwwTwin = (raw) => {
+  const url = raw?.trim().replace(/\/+$/, '')
   if (!url) return []
   try {
-    const { protocol, host } = new URL(url)
+    const { protocol, host } = new URL(/^https?:\/\//.test(url) ? url : `https://${url}`)
     const bare = host.replace(/^www\./, '')
     return [`${protocol}//${bare}`, `${protocol}//www.${bare}`]
   } catch {
-    return [url]   // not a parseable URL — pass through untouched
+    console.warn(`CORS: ignoring unparseable origin ${JSON.stringify(raw)}`)
+    return []
   }
 }
 
@@ -117,6 +124,14 @@ const ALLOWED_ORIGINS = [
   ...withWwwTwin(process.env.APP_URL),       // e.g. https://app.explorevieques.org
 ].filter(Boolean)
 
+// Print the effective allowlist at boot. A missing or misspelled LANDING_URL /
+// APP_URL surfaces in the browser as an opaque CORS failure on every call; this
+// line turns that into a one-glance check in the deploy host's logs.
+console.log('CORS allowlist:', ALLOWED_ORIGINS.join(', '))
+for (const [name, value] of [['LANDING_URL', process.env.LANDING_URL], ['APP_URL', process.env.APP_URL]]) {
+  if (!value) console.warn(`CORS: ${name} is not set — browser calls from that origin will be rejected`)
+}
+
 // Dev-only: match any http://localhost:PORT or http://127.0.0.1:PORT origin.
 // Returns false in production regardless of the URL shape.
 const isDevLocalhost = (origin) =>
@@ -127,6 +142,10 @@ app.use(cors({
     // No origin header = same-origin request or a tool like curl → allow it.
     // Otherwise the origin must be on the allowlist (or a dev localhost port).
     if (!origin || ALLOWED_ORIGINS.includes(origin) || isDevLocalhost(origin)) return cb(null, true)
+    // Log the rejection with the allowlist beside it. Without this the only
+    // evidence is a 500 with no CORS headers, which looks identical to the
+    // server being down.
+    console.warn(`CORS: rejected origin ${origin} — allowed: ${ALLOWED_ORIGINS.join(', ')}`)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
 }))
