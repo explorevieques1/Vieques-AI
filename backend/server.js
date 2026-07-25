@@ -35,8 +35,8 @@ import cors from 'cors'
 import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
-import { createCheckoutSession, handleWebhook, getEntitlement } from './payments.js'
-import { requireAuth, requireEntitlement, rateLimit } from './middleware.js'
+import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
+import { requireAuth, requireTier, requireCredits, rateLimit } from './middleware.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -164,7 +164,7 @@ app.get('/api/health', async (_req, res) => {
 //   ?water=calm               (exact water_conditions)
 //   ?refuge=true|false        (in_wildlife_refuge)
 //   ?facilities=restroom,parking  (facility text contains ANY keyword)
-app.get('/api/beaches', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/beaches', requireAuth, requireTier(pool, 'beach_names'), async (req, res) => {
   try {
     const where = ['is_active = true']
     const params = []
@@ -196,10 +196,22 @@ app.get('/api/beaches', requireAuth, requireEntitlement(pool), async (req, res) 
       }
     }
 
+    // The free tier gets pins and names, not the detail people pay for
+    // (facilities, 4x4 access, conditions). Trimming here rather than 402-ing
+    // is the whole point of the free tier — see PRICING.md §4.1: an empty map
+    // sells nothing, a map with locked detail sells the upgrade.
+    //
+    // This is a column-level rule, which RLS cannot express — hence it lives
+    // here rather than in 0022_tier_rls.sql. Safe because the backend pool
+    // connects as the table owner and bypasses RLS anyway.
+    const cols = tierHas(req.tier, 'beach_profiles')
+      ? `id, name, local_name, latitude, longitude,
+         region, type, water_conditions, access, facilities,
+         best_for, in_wildlife_refuge, gate_hours, notes`
+      : `id, name, latitude, longitude, region`
+
     const { rows } = await pool.query(
-      `SELECT id, name, local_name, latitude, longitude,
-              region, type, water_conditions, access, facilities,
-              best_for, in_wildlife_refuge, gate_hours, notes
+      `SELECT ${cols}
        FROM beaches
        WHERE ${where.join(' AND ')}
        ORDER BY name`,
@@ -213,7 +225,7 @@ app.get('/api/beaches', requireAuth, requireEntitlement(pool), async (req, res) 
 
 
 // Activity categories for the sidebar
-app.get('/api/activity-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/activity-categories', requireAuth, requireTier(pool, 'activities'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM activity_categories ORDER BY sort_order'
@@ -225,7 +237,7 @@ app.get('/api/activity-categories', requireAuth, requireEntitlement(pool), async
 })
 
 // Listings (pins) for one activity slug
-app.get('/api/activities/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/activities/:slug', requireAuth, requireTier(pool, 'activities'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.website, l.address,
@@ -245,7 +257,7 @@ app.get('/api/activities/:slug', requireAuth, requireEntitlement(pool), async (r
 
 
 // Self-guided snorkeling spots (pins)
-app.get('/api/snorkel-spots', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/snorkel-spots', requireAuth, requireTier(pool, 'snorkel_zones'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, name, beach_id, description, difficulty, entry_notes,
@@ -261,7 +273,7 @@ app.get('/api/snorkel-spots', requireAuth, requireEntitlement(pool), async (_req
 })
 
 // Zones for one snorkel spot, returned as a GeoJSON FeatureCollection
-app.get('/api/snorkel-spots/:id/zones', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/snorkel-spots/:id/zones', requireAuth, requireTier(pool, 'snorkel_zones'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, label, zone_type, color, description,
@@ -290,7 +302,7 @@ app.get('/api/snorkel-spots/:id/zones', requireAuth, requireEntitlement(pool), a
 
 
 // Service categories for the sidebar
-app.get('/api/service-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/service-categories', requireAuth, requireTier(pool, 'activities'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM service_categories ORDER BY sort_order'
@@ -302,7 +314,7 @@ app.get('/api/service-categories', requireAuth, requireEntitlement(pool), async 
 })
 
 // Listings for one service slug. ?located=true returns only mappable ones.
-app.get('/api/services/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/services/:slug', requireAuth, requireTier(pool, 'activities'), async (req, res) => {
   try {
     const onlyLocated = req.query.located === 'true'
     const { rows } = await pool.query(
@@ -338,7 +350,7 @@ app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
 
 
 // Transportation categories for the sidebar
-app.get('/api/transport-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/transport-categories', requireAuth, requireTier(pool, 'transport'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label, is_physical FROM transport_categories ORDER BY sort_order'
@@ -351,7 +363,7 @@ app.get('/api/transport-categories', requireAuth, requireEntitlement(pool), asyn
 
 // Listings for one transport slug. Includes taxi metadata and, for car
 // rentals, the vehicle fleet (aggregated as JSON).
-app.get('/api/transport/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/transport/:slug', requireAuth, requireTier(pool, 'transport'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.email, l.website,
@@ -380,7 +392,7 @@ app.get('/api/transport/:slug', requireAuth, requireEntitlement(pool), async (re
 
 
 // Restaurant categories for the sidebar
-app.get('/api/restaurant-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/restaurant-categories', requireAuth, requireTier(pool, 'restaurant_preview'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM restaurant_categories ORDER BY sort_order'
@@ -392,7 +404,7 @@ app.get('/api/restaurant-categories', requireAuth, requireEntitlement(pool), asy
 })
 
 // Listings for one restaurant category slug
-app.get('/api/restaurants/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, 'restaurant_preview'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.cuisine, l.price,
@@ -405,7 +417,9 @@ app.get('/api/restaurants/:slug', requireAuth, requireEntitlement(pool), async (
        ORDER BY l.name`,
       [req.params.slug]
     )
-    res.json(rows)
+    // Free tier sees a 3-listing taste of each category (PRICING.md §4:
+    // "Restaurant profiles — 3 preview"). Paid tiers get the full list.
+    res.json(tierHas(req.tier, 'restaurants') ? rows : rows.slice(0, 3))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -441,9 +455,13 @@ FORMATTING RULES (important — your answer shows in a narrow mobile chat pane):
 - Use **bold** only for place names. Avoid headings.
 - The places you mention also appear as pins on the map, so you don't need to repeat addresses.`
 
+// Gated on CREDITS, not entitlement. Entitlement is wrong in both directions
+// here: Day Trip holds an active subscription but is allocated 0 AI messages,
+// while the free tier holds no subscription but gets 3. Only the ledger balance
+// answers "may this person ask a question?" correctly.
 app.post('/api/ai/chat',
   requireAuth,
-  requireEntitlement(pool),
+  requireCredits(pool),
   rateLimit({ windowMs: 60_000, max: 10 }),
   async (req, res) => {
   try {
@@ -500,7 +518,32 @@ app.post('/api/ai/chat',
       return true
     })
 
-    res.json({ reply: finalText || 'Sorry, I could not find an answer.', pins })
+    // Meter the message only now that we have an answer to hand back. Deducting
+    // up front would charge the user for our outage — an Anthropic 500, a
+    // timeout, or a tool-loop bug would silently eat their allowance.
+    //
+    // The ledger is append-only: this negative row IS the deduction, and
+    // credit_balances is SUM(amount) over it. No balance column to race on.
+    await pool.query(
+      `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
+       VALUES ($1, -1, 'ai_query', $2)`,
+      [req.user.id, `chat_${Date.now()}`],
+    )
+
+    // Read the balance back in a separate statement rather than a RETURNING
+    // subquery — a subquery in RETURNING runs against the statement's start
+    // snapshot, so it would report the balance BEFORE the deduction.
+    const { rows: bal } = await pool.query(
+      'SELECT balance FROM public.credit_balances WHERE user_id = $1',
+      [req.user.id],
+    )
+
+    res.json({
+      reply: finalText || 'Sorry, I could not find an answer.',
+      pins,
+      // Lets the chat pane show "12 messages left" without a second round trip.
+      creditsRemaining: Number(bal[0]?.balance ?? 0),
+    })
   } catch (e) {
     console.error('AI chat error:', e)
     res.status(500).json({ error: e.message })
@@ -546,7 +589,7 @@ async function resolvePlace(term) {
 // Resolves each name to coordinates, asks the free public OSRM router for a
 // driving route, and returns the geometry + distance/time + a Google Maps link.
 // Body: { from: string, to: string }
-app.post('/api/directions', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.post('/api/directions', requireAuth, requireTier(pool, 'directions'), async (req, res) => {
   try {
     const from = String(req.body?.from || '').trim()
     const to = String(req.body?.to || '').trim()
@@ -581,7 +624,7 @@ app.post('/api/directions', requireAuth, requireEntitlement(pool), async (req, r
 
 
 // Essential service categories for the sidebar
-app.get('/api/essential-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
+app.get('/api/essential-categories', requireAuth, requireTier(pool, 'essentials'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM essential_categories ORDER BY sort_order'
@@ -593,7 +636,7 @@ app.get('/api/essential-categories', requireAuth, requireEntitlement(pool), asyn
 })
 
 // Listings for one essential category slug
-app.get('/api/essentials/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
+app.get('/api/essentials/:slug', requireAuth, requireTier(pool, 'essentials'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.email, l.website,

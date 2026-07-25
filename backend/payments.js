@@ -54,19 +54,130 @@ const supabaseAuth = createClient(
 //  along in Stripe metadata to the webhook.
 //
 //  Field guide:
-//    amount   — price in CENTS (900 = $9.00).
+//    amount   — price in CENTS (1299 = $12.99).
 //    mode     — 'payment' (one-time) or 'subscription' (recurring).
 //    interval — billing period for subscriptions ('month').
+//    tier     — feature level the map app gates on (see FEATURES below).
 //    grants   — what fulfillment hands out on success:
-//                 { type: 'access',  days }   → time-boxed island access
+//                 { type: 'access',  days, aiMessages } → time-boxed access,
+//                       optionally pre-loaded with Ask AI messages
 //                 { type: 'access' }          → open-ended (subscription-gated)
-//                 { type: 'credits', amount } → pay-as-you-go AI query credits
+//                 { type: 'credits', amount } → top-up AI message pack
+//                 { type: 'extend',  days }   → add days to an active pass
+//
+//  Pricing rationale for every number here lives in PRICING.md. If you change
+//  an amount, change it there too — and remember landing/src/lib/plans.js
+//  renders the *display* price, so it must be updated to match or the pricing
+//  page will advertise one number and charge another.
+//
+//  Adding a plan key also requires widening the `plan` CHECK constraint on
+//  public.subscriptions — see db/migrations/0021_pricing_tiers.sql. Without
+//  that, checkout succeeds and fulfillment throws, so the customer pays and
+//  gets nothing.
 // ----------------------------------------------------------------------------
 export const PLANS = {
-  traveler:          { name: 'Traveler Plan', amount: 900,  mode: 'payment',      description: 'Full island access for your trip', grants: { type: 'access', days: 30 } },
-  credits:           { name: 'Credit Pack',   amount: 300,  mode: 'payment',      description: 'Pay-as-you-go AI queries',         grants: { type: 'credits', amount: 20 } },
-  business_basic:    { name: 'Basic Plan',    amount: 2900, mode: 'subscription', description: 'Get your business on the map', interval: 'month', grants: { type: 'access' } },
-  business_featured: { name: 'Featured',      amount: 7900, mode: 'subscription', description: 'Priority placement',           interval: 'month', grants: { type: 'access' } },
+  // ── Travelers (one-time passes) ───────────────────────────────────────────
+  day_trip: {
+    name: 'Day Trip', amount: 699, mode: 'payment', tier: 'day_trip',
+    description: 'Full island access for 48 hours',
+    grants: { type: 'access', days: 2, aiMessages: 0 },
+  },
+  vacation: {
+    name: 'Vacation', amount: 1299, mode: 'payment', tier: 'vacation',
+    description: 'Everything you need for your stay — 7 days, 25 Ask AI messages',
+    grants: { type: 'access', days: 7, aiMessages: 25 },
+  },
+  exploration: {
+    name: 'Exploration', amount: 2499, mode: 'payment', tier: 'exploration',
+    description: 'Full access for 30 days, 150 Ask AI messages, itinerary builder',
+    grants: { type: 'access', days: 30, aiMessages: 150 },
+  },
+
+  // ── Add-ons ───────────────────────────────────────────────────────────────
+  credits: {
+    name: 'AI Credit Pack', amount: 499, mode: 'payment',
+    description: '30 more Ask AI messages. They never expire.',
+    grants: { type: 'credits', amount: 30 },
+  },
+  extend: {
+    name: 'Trip Extension', amount: 499, mode: 'payment',
+    description: '7 more days on your current pass',
+    grants: { type: 'extend', days: 7 },
+  },
+
+  // ── Businesses (recurring) ────────────────────────────────────────────────
+  business_basic: {
+    name: 'Basic', amount: 1900, mode: 'subscription', interval: 'month', tier: 'basic',
+    description: 'Your business on the map with a full profile',
+    grants: { type: 'access' },
+  },
+  business_featured: {
+    name: 'Featured', amount: 5900, mode: 'subscription', interval: 'month', tier: 'featured',
+    description: 'Featured badge, spotlight slots, and engagement analytics',
+    grants: { type: 'access' },
+  },
+  business_partner: {
+    name: 'Island Partner', amount: 14900, mode: 'subscription', interval: 'month', tier: 'partner',
+    description: 'Up to 5 locations, homepage placement, full analytics',
+    grants: { type: 'access' },
+  },
+}
+
+// ----------------------------------------------------------------------------
+//  Feature gating — what each tier can actually reach
+// ----------------------------------------------------------------------------
+//  Server-side answer to "is this user allowed to see snorkel zones?". The map
+//  app mirrors these for UI purposes, but the browser copy is advisory only:
+//  routes must check FEATURES, never trust what the client claims to hold.
+//
+//  'free' is the tier for a signed-in user with no active purchase.
+// ----------------------------------------------------------------------------
+export const FEATURES = {
+  free:        ['map', 'search', 'beach_names', 'restaurant_preview', 'ai_trial'],
+  day_trip:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+                'transport', 'activities', 'filters', 'directions', 'road_conditions',
+                'snorkel_zones_preview', 'favorites'],
+  vacation:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+                'transport', 'activities', 'filters', 'directions', 'road_conditions',
+                'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
+                'ai_chat', 'ai_history', 'support'],
+  exploration: ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+                'transport', 'activities', 'filters', 'directions', 'road_conditions',
+                'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
+                'ai_chat', 'ai_history', 'support', 'support_priority',
+                'itinerary', 'itinerary_export', 'offline_maps'],
+}
+
+/** Device limit per tier — see PRICING.md §4. */
+export const DEVICE_LIMITS = { free: 1, day_trip: 1, vacation: 2, exploration: 5 }
+
+/**
+ * Does a tier include a feature?
+ *
+ * @param {string} tier     One of the FEATURES keys; unknown tiers get 'free'.
+ * @param {string} feature  A feature slug from the FEATURES lists.
+ * @returns {boolean}
+ */
+export function tierHas(tier, feature) {
+  return (FEATURES[tier] || FEATURES.free).includes(feature)
+}
+
+/**
+ * Collapse a user's active subscription rows into the single best tier they
+ * hold. A user can legitimately hold more than one (they bought Day Trip, then
+ * upgraded to Vacation) — the most generous one wins.
+ *
+ * @param {Array<{ plan: string }>} rows  Active subscription rows.
+ * @returns {string} A FEATURES key.
+ */
+export function bestTier(rows = []) {
+  const rank = { free: 0, day_trip: 1, vacation: 2, exploration: 3 }
+  let best = 'free'
+  for (const r of rows) {
+    const tier = PLANS[r.plan]?.tier
+    if (tier && rank[tier] > rank[best]) best = tier
+  }
+  return best
 }
 
 /**
@@ -279,11 +390,33 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
     )
     if (inserted.rowCount === 0) { await client.query('COMMIT'); return }
 
-    if (plan.grants?.type === 'credits') {
+    // How many Ask AI messages this purchase is worth. Two shapes grant them:
+    //   • an access pass with a bundled allowance (vacation = 25, exploration = 150)
+    //   • a standalone credit pack (the add-on)
+    // Both land in the same append-only ledger, so the balance is just SUM().
+    const credits =
+      plan.grants?.type === 'credits' ? plan.grants.amount
+      : plan.grants?.type === 'access' ? (plan.grants.aiMessages || 0)
+      : 0
+
+    if (credits > 0) {
       await client.query(
         `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
          VALUES ($1, $2, 'purchase', $3)`,
-        [userId, plan.grants.amount, session.id]
+        [userId, credits, session.id]
+      )
+    }
+
+    // The Extend add-on pushes out the expiry of the pass the user already
+    // holds rather than granting a new one. Guarded to active, unexpired rows
+    // so it can't resurrect a pass that already lapsed.
+    if (plan.grants?.type === 'extend') {
+      await client.query(
+        `UPDATE public.subscriptions
+            SET expires_at = expires_at + ($2 || ' days')::interval
+          WHERE user_id = $1 AND status = 'active'
+            AND expires_at IS NOT NULL AND expires_at > now()`,
+        [userId, String(plan.grants.days)]
       )
     }
 
@@ -325,8 +458,16 @@ export async function getEntitlement(pool, req, res) {
       [user.id]
     )
 
+    // Everyone signed in gets at least the free tier — the map is visible to
+    // all, and the tier decides how much of it resolves. `hasAccess` stays as
+    // "holds a paid pass" for the callers that already depend on that meaning.
+    const tier = bestTier(rows)
+
     res.json({
       hasAccess: rows.length > 0,
+      tier,
+      features: FEATURES[tier] || FEATURES.free,
+      deviceLimit: DEVICE_LIMITS[tier] ?? 1,
       plans: rows,
       credits: bal[0]?.balance ?? 0,
     })

@@ -6,7 +6,7 @@
 //  not use requireAuth has NO authentication — CORS does not count (it only
 //  stops browser JS from other origins, not curl/scripts).
 // ============================================================================
-import { getUserFromAuthHeader } from './payments.js'
+import { getUserFromAuthHeader, bestTier, tierHas } from './payments.js'
 
 // --- Authentication ----------------------------------------------------------
 // Verifies the Supabase JWT via getUserFromAuthHeader and attaches req.user.
@@ -31,6 +31,77 @@ export function requireEntitlement(pool) {
       if (!rows.length) {
         return res.status(402).json({ error: 'This feature requires an active plan.' })
       }
+      next()
+    } catch (e) {
+      res.status(500).json({ error: e.message })
+    }
+  }
+}
+
+// --- Tier gating ---------------------------------------------------------------
+// Graduated replacement for requireEntitlement. Where requireEntitlement asks
+// "have you paid at all?", this asks "does your plan include THIS feature?" —
+// the check PRICING.md's ladder needs. Must run AFTER requireAuth.
+//
+// Mirrors public.tier_rank() in db/migrations/0022_tier_rls.sql. The Postgres
+// policy and this middleware are two enforcement layers over the same rule; if
+// they disagree, the API and direct-PostgREST callers see different data.
+//
+// Sets req.tier so handlers can trim their response for lower tiers (e.g.
+// /api/beaches returns name + coords only for 'free') instead of 402-ing.
+export function requireTier(pool, feature) {
+  return async (req, res, next) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT plan FROM public.subscriptions
+          WHERE user_id = $1 AND status = 'active'
+            AND (expires_at IS NULL OR expires_at > now())`,
+        [req.user.id],
+      )
+      const tier = bestTier(rows)
+      if (!tierHas(tier, feature)) {
+        // 402 Payment Required, with enough structure for the client to render
+        // a targeted upsell rather than a generic "access denied".
+        return res.status(402).json({
+          error: 'Your plan does not include this feature.',
+          code: 'UPGRADE_REQUIRED',
+          feature,
+          tier,
+        })
+      }
+      req.tier = tier
+      next()
+    } catch (e) {
+      res.status(500).json({ error: e.message })
+    }
+  }
+}
+
+// --- Credit gating --------------------------------------------------------------
+// The Ask AI gate. Entitlement is the WRONG check for AI in both directions:
+// Day Trip holds an active subscription but is allocated 0 messages, while the
+// free tier holds no subscription but gets 3. Only the ledger balance answers
+// this correctly.
+//
+// Balance comes from the credit_balances view (SUM over the append-only
+// ledger). Does not deduct — the handler does that AFTER a successful
+// completion, so an upstream failure never burns a user's message.
+export function requireCredits(pool) {
+  return async (req, res, next) => {
+    try {
+      const { rows } = await pool.query(
+        'SELECT balance FROM public.credit_balances WHERE user_id = $1',
+        [req.user.id],
+      )
+      const balance = Number(rows[0]?.balance ?? 0)
+      if (balance <= 0) {
+        return res.status(402).json({
+          error: "You're out of Ask AI messages.",
+          code: 'NO_CREDITS',
+          remaining: 0,
+        })
+      }
+      req.credits = balance
       next()
     } catch (e) {
       res.status(500).json({ error: e.message })
