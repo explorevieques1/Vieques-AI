@@ -22,8 +22,8 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-900 text-slate-100">
-      <header className="bg-slate-800 border-b border-slate-700 shrink-0">
+    <div className="h-app w-screen flex flex-col bg-slate-900 text-slate-100">
+      <header className="bg-slate-800 border-b border-slate-700 shrink-0 pad-safe-top pad-safe-x">
         <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <h1
             className="text-lg sm:text-xl font-bold tracking-tight shrink-0 cursor-pointer"

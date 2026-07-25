@@ -37,6 +37,7 @@ import { makeMarkerEl, BEACH_ICON, ACTIVITY_ICONS, ESSENTIAL_ICONS, DEFAULT_ICON
 import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import RestaurantDetailPanel from './RestaurantDetailPanel'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
 const KEY = import.meta.env.VITE_MAPTILER_KEY
@@ -84,6 +85,12 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
   const [snorkelSpots, setSnorkelSpots] = useState<SnorkelSpot[]>([])
   const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
   const zonesShown = snorkelLegend.length > 0
+  const isMobile = useIsMobile()
+
+  // Desktop: floating controls shift right to clear an open left sidebar (w-64
+  // = 16rem + gap). Mobile: sidebars are bottom sheets, so controls stay at the
+  // left edge.
+  const leftOffset = (open: boolean) => (!isMobile && open ? '17.5rem' : '1rem')
 
   const sidebarOpen =
     activeCategory === 'activities' ||
@@ -529,8 +536,8 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       {/* Beach search — only on beaches, top-left, shifts right if a sidebar is open */}
       {beaches.length > 0 && (
         <div
-          className={`absolute top-4 z-10 pointer-events-auto transition-all ${sidebarOpen ? 'max-sm:hidden' : ''}`}
-          style={{ left: sidebarOpen ? '16.5rem' : '1rem' }}
+          className="absolute top-4 z-10 pointer-events-auto transition-all"
+          style={{ left: leftOffset(sidebarOpen) }}
         >
           <SearchBar items={beaches} onSelect={selectBeach} placeholder="Search beaches…" />
         </div>
@@ -540,12 +547,12 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       {activeCategory === 'beaches' && (
         <button
           onClick={() => setFilterOpen((v) => !v)}
-          className={`absolute z-20 px-4 py-2 text-sm rounded-full shadow-lg transition-colors ${sidebarOpen ? 'max-sm:hidden' : ''} ${
+          className={`absolute z-20 px-4 py-2 text-sm rounded-full shadow-lg transition-colors ${
             filterOpen || Object.keys(beachFilters).length > 0
-              ? 'bg-cyan-500 text-slate-900 font-medium'
-              : 'bg-slate-900/85 backdrop-blur border border-slate-700 text-slate-200 hover:bg-slate-700'
+              ? 'bg-primary text-primary-foreground font-medium'
+              : 'bg-card/85 backdrop-blur border border-border text-foreground hover:bg-accent'
           }`}
-          style={{ top: '4rem', left: sidebarOpen ? '16.5rem' : '1rem' }}
+          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
         >
           Filters{Object.keys(beachFilters).length > 0 ? ' ●' : ''}
         </button>
@@ -562,19 +569,31 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       {/* Style switcher — top-left area, clear of the top-right zoom controls,
           shifts right when the activities sidebar is open */}
       <div
-        className={`absolute top-4 z-10 flex gap-1 rounded-lg bg-slate-900/80 p-1 backdrop-blur border border-slate-700 shadow-lg transition-all ${sidebarOpen ? 'max-sm:hidden' : ''}`}
-        style={{
-          left: sidebarOpen ? '16.5rem' : beaches.length > 0 ? '21rem' : '1rem',
-        }}
+        className="absolute z-10 flex gap-1 rounded-lg bg-card/80 p-1 backdrop-blur border border-border shadow-lg transition-all max-w-[calc(100vw-2rem)] overflow-x-auto"
+        style={
+          isMobile
+            ? {
+                bottom: 'calc(env(safe-area-inset-bottom) + 1rem)',
+                left: '1rem',
+              }
+            : {
+                top: '1rem',
+                left: sidebarOpen
+                  ? '17.5rem'
+                  : beaches.length > 0
+                    ? '22rem'
+                    : '1rem',
+              }
+        }
       >
         {STYLES.map((s) => (
           <button
             key={s.id}
             onClick={() => changeStyle(s.id)}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
               active === s.id
-                ? 'bg-cyan-500 text-slate-900 font-medium'
-                : 'text-slate-300 hover:bg-slate-700'
+                ? 'bg-primary text-primary-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
             {s.label}
@@ -653,15 +672,15 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       {/* snorkel Go Yourself / Book a Tour toggle — only before zones are shown */}
       {activitySlug === 'snorkeling' && !zonesShown && (
         <div
-          className={`absolute z-20 flex gap-1 rounded-lg bg-slate-900/85 backdrop-blur border border-slate-700 shadow-lg p-1 ${sidebarOpen ? 'max-sm:hidden' : ''}`}
-          style={{ top: '4rem', left: sidebarOpen ? '16.5rem' : '1rem' }}
+          className="absolute z-20 flex gap-1 rounded-lg bg-card/85 backdrop-blur border border-border shadow-lg p-1"
+          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
         >
           <button
             onClick={() => setTourFilter('all')}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
               tourFilter === 'all'
-                ? 'bg-cyan-500 text-slate-900 font-medium'
-                : 'text-slate-300 hover:bg-slate-700'
+                ? 'bg-primary text-primary-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
             Go Yourself
@@ -670,8 +689,8 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
             onClick={() => setTourFilter('tours')}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
               tourFilter === 'tours'
-                ? 'bg-cyan-500 text-slate-900 font-medium'
-                : 'text-slate-300 hover:bg-slate-700'
+                ? 'bg-primary text-primary-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
             Book a Tour
@@ -682,20 +701,20 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       {/* snorkel legend — sits under the style toggles, right of the sidebar */}
       {snorkelLegend.length > 0 && (
         <div
-          className={`absolute z-20 w-64 rounded-lg bg-slate-900/90 backdrop-blur border border-slate-700 shadow-xl p-3 ${sidebarOpen ? 'max-sm:hidden' : ''}`}
-          style={{ top: '4rem', left: sidebarOpen ? '16.5rem' : '1rem' }}
+          className="absolute z-20 w-64 max-w-[calc(100vw-2rem)] rounded-lg bg-card/90 backdrop-blur border border-border shadow-xl p-3"
+          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
         >
-          <div className="text-xs font-semibold text-white mb-2">Snorkel zones</div>
+          <div className="text-xs font-semibold text-foreground mb-2">Snorkel zones</div>
           <ul className="space-y-1.5">
             {snorkelLegend.map((z, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-slate-300">
+              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span
                   className="mt-0.5 inline-block w-3 h-3 rounded-sm border border-white/40 shrink-0"
                   style={{ background: z.color ?? '#3b82f6' }}
                 />
                 <span>
-                  <span className="text-slate-100 font-medium">{z.label}</span>
-                  {z.description ? <span className="block text-slate-400">{z.description}</span> : null}
+                  <span className="text-foreground font-medium">{z.label}</span>
+                  {z.description ? <span className="block text-muted-foreground">{z.description}</span> : null}
                 </span>
               </li>
             ))}

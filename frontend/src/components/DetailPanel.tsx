@@ -1,4 +1,6 @@
 import type { Beach } from '../lib/api'
+import { ResponsivePanel } from './ui/ResponsivePanel'
+import { Badge } from './ui/badge'
 
 type Props = {
   beach: Beach | null
@@ -8,8 +10,8 @@ type Props = {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2 text-sm">
-      <span className="text-slate-400 shrink-0">{label}</span>
-      <span className="text-slate-200">{value}</span>
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="text-foreground">{value}</span>
     </div>
   )
 }
@@ -18,28 +20,26 @@ function DetailPanel({ beach, onClose }: Props) {
   if (!beach) return null
 
   return (
-    <aside className="absolute top-0 right-0 h-full w-full sm:w-96 z-20 bg-slate-900/95 backdrop-blur border-l border-slate-700 shadow-2xl flex flex-col">
-      <div className="flex items-start justify-between gap-3 p-5 border-b border-slate-800">
+    <ResponsivePanel side="right" title={beach.name} desktopWidth="sm:w-96" onClose={onClose}>
+      <div className="flex items-start justify-between gap-3 p-5 border-b border-border">
         <div>
-          <h2 className="text-lg font-semibold text-white leading-tight">{beach.name}</h2>
-          {beach.local_name && <p className="text-sm text-slate-400">{beach.local_name}</p>}
+          <h2 className="text-lg font-semibold text-foreground leading-tight">{beach.name}</h2>
+          {beach.local_name && <p className="text-sm text-muted-foreground">{beach.local_name}</p>}
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-white text-xl leading-none px-2 -mr-1"
+          className="text-muted-foreground hover:text-foreground text-xl leading-none px-2 -mr-1"
           aria-label="Close"
         >
           ×
         </button>
       </div>
 
-      <div className="p-5 space-y-4 overflow-y-auto">
+      <div className="p-5 space-y-4 overflow-y-auto scroll-contain">
         {beach.type?.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {beach.type.map((t) => (
-              <span key={t} className="px-2 py-0.5 text-xs rounded-full bg-cyan-500/15 text-cyan-300">
-                {t}
-              </span>
+              <Badge key={t}>{t}</Badge>
             ))}
           </div>
         )}
@@ -64,7 +64,7 @@ function DetailPanel({ beach, onClose }: Props) {
         </div>
 
         {beach.notes && (
-          <p className="text-sm text-slate-300 leading-relaxed border-t border-slate-800 pt-4">
+          <p className="text-sm text-foreground/90 leading-relaxed border-t border-border pt-4">
             {beach.notes}
           </p>
         )}
@@ -73,12 +73,12 @@ function DetailPanel({ beach, onClose }: Props) {
           href={`https://www.google.com/maps/dir/?api=1&destination=${beach.latitude},${beach.longitude}`}
           target="_blank"
           rel="noreferrer"
-          className="block text-center bg-cyan-500 text-slate-900 font-medium rounded-lg py-2.5 hover:bg-cyan-400 transition-colors"
+          className="block text-center bg-primary text-primary-foreground font-medium rounded-lg py-2.5 hover:bg-primary/90 transition-colors"
         >
           Get Directions
         </a>
       </div>
-    </aside>
+    </ResponsivePanel>
   )
 }
 

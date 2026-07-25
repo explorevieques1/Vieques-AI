@@ -31,8 +31,8 @@ function CategoryTabs({ active, onSelect }: Props) {
           onClick={() => onSelect(c.slug)}
           className={`shrink-0 px-4 py-2 text-sm rounded-full transition-colors ${
             active === c.slug
-              ? 'bg-cyan-500 text-slate-900 font-medium'
-              : 'text-slate-300 hover:bg-slate-700'
+              ? 'bg-primary text-primary-foreground font-medium'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           }`}
         >
           {c.label}

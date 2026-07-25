@@ -36,6 +36,7 @@ import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { createCheckoutSession, handleWebhook, getEntitlement } from './payments.js'
+import { requireAuth, requireEntitlement, rateLimit } from './middleware.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -150,8 +151,11 @@ app.get('/api/health', async (_req, res) => {
 
 // ============================================================================
 //  CONTENT ROUTES (read-only map data)
-//  Everything below serves public map content from Supabase. No auth needed —
-//  the paywall is enforced in the map app's AccessGate, not on these reads.
+//  This data (beaches, restaurants, activities, transport, services,
+//  essentials, snorkel spots) is the paid product, not marketing — every
+//  route below requires a signed-in user with an active plan. Matching RLS
+//  policies (see db/migrations/0019_gate_content_rls.sql) block anyone who
+//  bypasses this API and queries Supabase directly with the anon key.
 // ============================================================================
 
 // All active beaches, shaped for the map + popup.
@@ -160,7 +164,7 @@ app.get('/api/health', async (_req, res) => {
 //   ?water=calm               (exact water_conditions)
 //   ?refuge=true|false        (in_wildlife_refuge)
 //   ?facilities=restroom,parking  (facility text contains ANY keyword)
-app.get('/api/beaches', async (req, res) => {
+app.get('/api/beaches', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const where = ['is_active = true']
     const params = []
@@ -209,7 +213,7 @@ app.get('/api/beaches', async (req, res) => {
 
 
 // Activity categories for the sidebar
-app.get('/api/activity-categories', async (_req, res) => {
+app.get('/api/activity-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM activity_categories ORDER BY sort_order'
@@ -221,7 +225,7 @@ app.get('/api/activity-categories', async (_req, res) => {
 })
 
 // Listings (pins) for one activity slug
-app.get('/api/activities/:slug', async (req, res) => {
+app.get('/api/activities/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.website, l.address,
@@ -241,7 +245,7 @@ app.get('/api/activities/:slug', async (req, res) => {
 
 
 // Self-guided snorkeling spots (pins)
-app.get('/api/snorkel-spots', async (_req, res) => {
+app.get('/api/snorkel-spots', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, name, beach_id, description, difficulty, entry_notes,
@@ -257,7 +261,7 @@ app.get('/api/snorkel-spots', async (_req, res) => {
 })
 
 // Zones for one snorkel spot, returned as a GeoJSON FeatureCollection
-app.get('/api/snorkel-spots/:id/zones', async (req, res) => {
+app.get('/api/snorkel-spots/:id/zones', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, label, zone_type, color, description,
@@ -286,7 +290,7 @@ app.get('/api/snorkel-spots/:id/zones', async (req, res) => {
 
 
 // Service categories for the sidebar
-app.get('/api/service-categories', async (_req, res) => {
+app.get('/api/service-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM service_categories ORDER BY sort_order'
@@ -298,7 +302,7 @@ app.get('/api/service-categories', async (_req, res) => {
 })
 
 // Listings for one service slug. ?located=true returns only mappable ones.
-app.get('/api/services/:slug', async (req, res) => {
+app.get('/api/services/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const onlyLocated = req.query.located === 'true'
     const { rows } = await pool.query(
@@ -334,7 +338,7 @@ app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
 
 
 // Transportation categories for the sidebar
-app.get('/api/transport-categories', async (_req, res) => {
+app.get('/api/transport-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label, is_physical FROM transport_categories ORDER BY sort_order'
@@ -347,7 +351,7 @@ app.get('/api/transport-categories', async (_req, res) => {
 
 // Listings for one transport slug. Includes taxi metadata and, for car
 // rentals, the vehicle fleet (aggregated as JSON).
-app.get('/api/transport/:slug', async (req, res) => {
+app.get('/api/transport/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.email, l.website,
@@ -376,7 +380,7 @@ app.get('/api/transport/:slug', async (req, res) => {
 
 
 // Restaurant categories for the sidebar
-app.get('/api/restaurant-categories', async (_req, res) => {
+app.get('/api/restaurant-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM restaurant_categories ORDER BY sort_order'
@@ -388,7 +392,7 @@ app.get('/api/restaurant-categories', async (_req, res) => {
 })
 
 // Listings for one restaurant category slug
-app.get('/api/restaurants/:slug', async (req, res) => {
+app.get('/api/restaurants/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.cuisine, l.price,
@@ -437,7 +441,11 @@ FORMATTING RULES (important — your answer shows in a narrow mobile chat pane):
 - Use **bold** only for place names. Avoid headings.
 - The places you mention also appear as pins on the map, so you don't need to repeat addresses.`
 
-app.post('/api/ai/chat', async (req, res) => {
+app.post('/api/ai/chat',
+  requireAuth,
+  requireEntitlement(pool),
+  rateLimit({ windowMs: 60_000, max: 10 }),
+  async (req, res) => {
   try {
     const userMessages = Array.isArray(req.body?.messages) ? req.body.messages : []
     if (!userMessages.length) return res.status(400).json({ error: 'No messages' })
@@ -538,7 +546,7 @@ async function resolvePlace(term) {
 // Resolves each name to coordinates, asks the free public OSRM router for a
 // driving route, and returns the geometry + distance/time + a Google Maps link.
 // Body: { from: string, to: string }
-app.post('/api/directions', async (req, res) => {
+app.post('/api/directions', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const from = String(req.body?.from || '').trim()
     const to = String(req.body?.to || '').trim()
@@ -573,7 +581,7 @@ app.post('/api/directions', async (req, res) => {
 
 
 // Essential service categories for the sidebar
-app.get('/api/essential-categories', async (_req, res) => {
+app.get('/api/essential-categories', requireAuth, requireEntitlement(pool), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM essential_categories ORDER BY sort_order'
@@ -585,7 +593,7 @@ app.get('/api/essential-categories', async (_req, res) => {
 })
 
 // Listings for one essential category slug
-app.get('/api/essentials/:slug', async (req, res) => {
+app.get('/api/essentials/:slug', requireAuth, requireEntitlement(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.email, l.website,

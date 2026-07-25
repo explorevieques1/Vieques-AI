@@ -241,9 +241,13 @@ export async function handleWebhook(pool, req, res) {
  * IDEMPOTENT by design: Stripe delivers webhooks at-least-once (it retries on
  * timeout), so we key on `stripe_session_id` and bail early if that session was
  * already fulfilled — otherwise a retry would grant access twice or double the
- * credits. Access plans write a `subscriptions` row (with an expiry for
- * time-boxed plans); credit packs additionally write a `credit_transactions`
- * row. Any failure rolls the whole thing back.
+ * credits. The guard is enforced by a unique index on
+ * subscriptions.stripe_session_id (see db/migrations/0020) plus
+ * `ON CONFLICT DO NOTHING` here, so two concurrent deliveries of the same
+ * event can't both win a SELECT-then-INSERT race and double-grant. Access
+ * plans write a `subscriptions` row (with an expiry for time-boxed plans);
+ * credit packs additionally write a `credit_transactions` row. Any failure
+ * rolls the whole thing back.
  *
  * @param {import('pg').Pool} pool
  * @param {{ userId: string, planKey: string, plan: object, session: object }} ctx
@@ -254,14 +258,6 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
   try {
     await client.query('BEGIN')
 
-    // Duplicate-delivery guard: if this checkout session was already recorded,
-    // commit the no-op and return so retries don't double-grant.
-    const dup = await client.query(
-      'SELECT 1 FROM public.subscriptions WHERE stripe_session_id = $1',
-      [session.id]
-    )
-    if (dup.rowCount > 0) { await client.query('COMMIT'); return }
-
     // Time-boxed access (e.g. traveler = 30 days) gets an expiry; subscription
     // access is open-ended (null) and governed by Stripe's subscription status.
     const expiresAt =
@@ -269,13 +265,19 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
         ? new Date(Date.now() + plan.grants.days * 86400_000) // days → ms
         : null
 
-    await client.query(
+    // Duplicate-delivery guard: the unique index on stripe_session_id makes
+    // this INSERT the atomic idempotency check — a concurrent retry of the
+    // same event loses the race here (not in an earlier SELECT) and gets
+    // rowCount 0, so we commit the no-op and skip the credit grant below.
+    const inserted = await client.query(
       `INSERT INTO public.subscriptions
          (user_id, plan, status, expires_at,
           stripe_customer_id, stripe_subscription_id, stripe_session_id)
-       VALUES ($1, $2, 'active', $3, $4, $5, $6)`,
+       VALUES ($1, $2, 'active', $3, $4, $5, $6)
+       ON CONFLICT (stripe_session_id) DO NOTHING`,
       [userId, planKey, expiresAt, session.customer, session.subscription || null, session.id]
     )
+    if (inserted.rowCount === 0) { await client.query('COMMIT'); return }
 
     if (plan.grants?.type === 'credits') {
       await client.query(

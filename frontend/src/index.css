@@ -54,73 +54,75 @@ html, body, #root {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Vieques AI — ocean brand palette.
+   Hue ~200–245 (cyan → deep sea), primary keyed to cyan-400/500. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.99 0.006 220);
+  --foreground: oklch(0.21 0.03 245);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.03 245);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.03 245);
+  --primary: oklch(0.68 0.13 205);
+  --primary-foreground: oklch(0.99 0.01 210);
+  --secondary: oklch(0.96 0.012 220);
+  --secondary-foreground: oklch(0.24 0.03 245);
+  --muted: oklch(0.96 0.012 220);
+  --muted-foreground: oklch(0.52 0.03 240);
+  --accent: oklch(0.93 0.03 205);
+  --accent-foreground: oklch(0.24 0.03 245);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --border: oklch(0.9 0.015 225);
+  --input: oklch(0.9 0.015 225);
+  --ring: oklch(0.68 0.13 205);
+  --chart-1: oklch(0.72 0.13 200);
+  --chart-2: oklch(0.62 0.11 235);
+  --chart-3: oklch(0.7 0.15 160);
+  --chart-4: oklch(0.75 0.14 85);
+  --chart-5: oklch(0.66 0.2 25);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.98 0.008 220);
+  --sidebar-foreground: oklch(0.21 0.03 245);
+  --sidebar-primary: oklch(0.68 0.13 205);
+  --sidebar-primary-foreground: oklch(0.99 0.01 210);
+  --sidebar-accent: oklch(0.93 0.03 205);
+  --sidebar-accent-foreground: oklch(0.24 0.03 245);
+  --sidebar-border: oklch(0.9 0.015 225);
+  --sidebar-ring: oklch(0.68 0.13 205);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.19 0.03 245);
+  --foreground: oklch(0.97 0.005 220);
+  --card: oklch(0.23 0.035 245);
+  --card-foreground: oklch(0.97 0.005 220);
+  --popover: oklch(0.23 0.035 245);
+  --popover-foreground: oklch(0.97 0.005 220);
+  --primary: oklch(0.78 0.13 200);
+  --primary-foreground: oklch(0.2 0.03 245);
+  --secondary: oklch(0.3 0.03 245);
+  --secondary-foreground: oklch(0.97 0.005 220);
+  --muted: oklch(0.3 0.03 245);
+  --muted-foreground: oklch(0.72 0.02 230);
+  --accent: oklch(0.34 0.05 215);
+  --accent-foreground: oklch(0.97 0.005 220);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --ring: oklch(0.78 0.13 200);
+  --chart-1: oklch(0.78 0.13 200);
+  --chart-2: oklch(0.66 0.12 235);
+  --chart-3: oklch(0.74 0.15 160);
+  --chart-4: oklch(0.78 0.14 85);
+  --chart-5: oklch(0.7 0.2 25);
+  --sidebar: oklch(0.21 0.032 245);
+  --sidebar-foreground: oklch(0.97 0.005 220);
+  --sidebar-primary: oklch(0.78 0.13 200);
+  --sidebar-primary-foreground: oklch(0.2 0.03 245);
+  --sidebar-accent: oklch(0.34 0.05 215);
+  --sidebar-accent-foreground: oklch(0.97 0.005 220);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.78 0.13 200);
 }
 
 @layer base {
@@ -132,5 +134,48 @@ html, body, #root {
   }
   html {
     @apply font-sans;
+  }
+  /* iOS Safari zooms in when a focused input has a font-size < 16px.
+     Floor form controls at 16px so focus never triggers a zoom. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile / iOS viewport helpers
+   - h-app: full viewport height using the *dynamic* unit (100dvh) so the app
+     shell isn't cut off under Safari's collapsing address bar. Falls back to
+     100vh on browsers without dvh.
+   - pad-safe-*: expose the notch / home-indicator safe areas as padding so UI
+     clears them in the browser and, especially, in installed PWA (standalone)
+     mode where viewport-fit=cover lets content run under the status bar.
+--------------------------------------------------------------------------- */
+@layer utilities {
+  .h-app {
+    height: 100vh; /* fallback */
+    height: 100dvh;
+  }
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .pad-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pad-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pad-safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* Contain scroll momentum inside panels/sheets instead of bleeding to the
+     page (prevents the whole app from rubber-banding on iOS). */
+  .scroll-contain {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }

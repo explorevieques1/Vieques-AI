@@ -10,7 +10,7 @@
       <stop offset="1" stop-color="#e6fbff"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#sea)"/>
+  <rect width="512" height="512" fill="url(#sea)"/>
   <g stroke="#ffffff" stroke-opacity="0.22" stroke-width="10" stroke-linecap="round" fill="none">
     <path d="M96 388 q40 -30 80 0 t80 0 t80 0 t80 0"/>
     <path d="M120 430 q36 -26 72 0 t72 0 t72 0" stroke-opacity="0.14"/>

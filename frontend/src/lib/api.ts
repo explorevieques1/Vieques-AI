@@ -1,3 +1,5 @@
+import { getSession } from './supabase'
+
 // Talks to the backend API.
 // Priority: explicit env override -> same host the page loaded from -> localhost.
 // This means it "just works" on localhost, on your phone, or on another computer
@@ -12,6 +14,16 @@ function resolveApiBase(): string {
   return `http://localhost:${BACKEND_PORT}`
 }
 const API_BASE = resolveApiBase()
+
+// Every route below requires a signed-in user (requireAuth on the backend),
+// so every call attaches the current Supabase session token. Without this,
+// calls silently 401 for a logged-in user whose session simply wasn't sent.
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const { data } = await getSession()
+  const token = data.session?.access_token
+  const headers = { ...(init.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  return fetch(`${API_BASE}${path}`, { ...init, headers })
+}
 
 export type Beach = {
   id: string
@@ -44,7 +56,7 @@ export async function fetchBeaches(filters: BeachFilters = {}): Promise<Beach[]>
   if (typeof filters.refuge === 'boolean') qs.set('refuge', String(filters.refuge))
   if (filters.facilities?.length) qs.set('facilities', filters.facilities.join(','))
   const q = qs.toString()
-  const res = await fetch(`${API_BASE}/api/beaches${q ? `?${q}` : ''}`)
+  const res = await apiFetch(`/api/beaches${q ? `?${q}` : ''}`)
   if (!res.ok) throw new Error(`Beaches request failed: ${res.status}`)
   return res.json()
 }
@@ -66,13 +78,13 @@ export type ActivityListing = {
 }
 
 export async function fetchActivityCategories(): Promise<ActivityCategory[]> {
-  const res = await fetch(`${API_BASE}/api/activity-categories`)
+  const res = await apiFetch(`/api/activity-categories`)
   if (!res.ok) throw new Error(`Activity categories failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchActivityListings(slug: string): Promise<ActivityListing[]> {
-  const res = await fetch(`${API_BASE}/api/activities/${slug}`)
+  const res = await apiFetch(`/api/activities/${slug}`)
   if (!res.ok) throw new Error(`Activity listings failed: ${res.status}`)
   return res.json()
 }
@@ -105,13 +117,13 @@ export type ZoneFeatureCollection = {
 }
 
 export async function fetchSnorkelSpots(): Promise<SnorkelSpot[]> {
-  const res = await fetch(`${API_BASE}/api/snorkel-spots`)
+  const res = await apiFetch(`/api/snorkel-spots`)
   if (!res.ok) throw new Error(`Snorkel spots failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchSnorkelZones(spotId: string): Promise<ZoneFeatureCollection> {
-  const res = await fetch(`${API_BASE}/api/snorkel-spots/${spotId}/zones`)
+  const res = await apiFetch(`/api/snorkel-spots/${spotId}/zones`)
   if (!res.ok) throw new Error(`Snorkel zones failed: ${res.status}`)
   return res.json()
 }
@@ -134,19 +146,19 @@ export type ServiceListing = {
 }
 
 export async function fetchServiceCategories(): Promise<ServiceCategory[]> {
-  const res = await fetch(`${API_BASE}/api/service-categories`)
+  const res = await apiFetch(`/api/service-categories`)
   if (!res.ok) throw new Error(`Service categories failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchServiceListings(slug: string): Promise<ServiceListing[]> {
-  const res = await fetch(`${API_BASE}/api/services/${slug}`)
+  const res = await apiFetch(`/api/services/${slug}`)
   if (!res.ok) throw new Error(`Service listings failed: ${res.status}`)
   return res.json()
 }
 
 export async function startCheckout(plan: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/checkout`, {
+  const res = await apiFetch(`/api/checkout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plan }),
@@ -190,13 +202,13 @@ export type TransportListing = {
 }
 
 export async function fetchTransportCategories(): Promise<TransportCategory[]> {
-  const res = await fetch(`${API_BASE}/api/transport-categories`)
+  const res = await apiFetch(`/api/transport-categories`)
   if (!res.ok) throw new Error(`Transport categories failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchTransportListings(slug: string): Promise<TransportListing[]> {
-  const res = await fetch(`${API_BASE}/api/transport/${slug}`)
+  const res = await apiFetch(`/api/transport/${slug}`)
   if (!res.ok) throw new Error(`Transport listings failed: ${res.status}`)
   return res.json()
 }
@@ -221,13 +233,13 @@ export type RestaurantListing = {
 }
 
 export async function fetchRestaurantCategories(): Promise<RestaurantCategory[]> {
-  const res = await fetch(`${API_BASE}/api/restaurant-categories`)
+  const res = await apiFetch(`/api/restaurant-categories`)
   if (!res.ok) throw new Error(`Restaurant categories failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchRestaurantListings(slug: string): Promise<RestaurantListing[]> {
-  const res = await fetch(`${API_BASE}/api/restaurants/${slug}`)
+  const res = await apiFetch(`/api/restaurants/${slug}`)
   if (!res.ok) throw new Error(`Restaurant listings failed: ${res.status}`)
   return res.json()
 }
@@ -245,7 +257,7 @@ export type AiChatMessage = { role: 'user' | 'assistant'; content: string }
 export async function sendAiChat(
   messages: AiChatMessage[],
 ): Promise<{ reply: string; pins: AiPin[] }> {
-  const res = await fetch(`${API_BASE}/api/ai/chat`, {
+  const res = await apiFetch(`/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages }),
@@ -267,7 +279,7 @@ export type DirectionsResult = {
 }
 
 export async function fetchDirections(from: string, to: string): Promise<DirectionsResult> {
-  const res = await fetch(`${API_BASE}/api/directions`, {
+  const res = await apiFetch(`/api/directions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to }),
@@ -283,13 +295,13 @@ export type EssentialCategory = { slug: string; label: string }
 export type EssentialListing = ServiceListing // same shape
 
 export async function fetchEssentialCategories(): Promise<EssentialCategory[]> {
-  const res = await fetch(`${API_BASE}/api/essential-categories`)
+  const res = await apiFetch(`/api/essential-categories`)
   if (!res.ok) throw new Error(`Essential categories failed: ${res.status}`)
   return res.json()
 }
 
 export async function fetchEssentialListings(slug: string): Promise<EssentialListing[]> {
-  const res = await fetch(`${API_BASE}/api/essentials/${slug}`)
+  const res = await apiFetch(`/api/essentials/${slug}`)
   if (!res.ok) throw new Error(`Essential listings failed: ${res.status}`)
   return res.json()
 }

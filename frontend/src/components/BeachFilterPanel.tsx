@@ -1,4 +1,6 @@
 import type { BeachFilters } from '../lib/api'
+import { useIsMobile } from '../hooks/useIsMobile'
+import { Drawer, DrawerContent, DrawerTitle } from './ui/drawer'
 
 type Props = {
   filters: BeachFilters
@@ -11,6 +13,8 @@ const WATER = ['calm', 'moderate', 'rough']
 const FACILITIES = ['restroom', 'parking', 'shade', 'picnic']
 
 function BeachFilterPanel({ filters, onChange, onClose }: Props) {
+  const isMobile = useIsMobile()
+
   const toggleType = (t: string) => {
     const set = new Set(filters.type ?? [])
     set.has(t) ? set.delete(t) : set.add(t)
@@ -29,23 +33,16 @@ function BeachFilterPanel({ filters, onChange, onClose }: Props) {
   const clearAll = () => onChange({})
 
   const chip = (active: boolean) =>
-    `px-3 py-1 text-xs rounded-full border transition-colors ${
+    `px-3 py-1.5 text-xs rounded-full border transition-colors ${
       active
-        ? 'bg-cyan-500 text-slate-900 border-cyan-500 font-medium'
-        : 'text-slate-300 border-slate-600 hover:bg-slate-700'
+        ? 'bg-primary text-primary-foreground border-primary font-medium'
+        : 'text-muted-foreground border-border hover:bg-accent hover:text-foreground'
     }`
 
-  return (
-    <div className="absolute z-30 w-72 rounded-lg bg-slate-900/95 backdrop-blur border border-slate-700 shadow-2xl p-4"
-      style={{ top: '7.5rem', left: '1rem' }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-white">Filter beaches</h3>
-        <button onClick={onClose} className="text-slate-400 hover:text-white text-lg leading-none">×</button>
-      </div>
-
+  const body = (
+    <>
       <div className="mb-3">
-        <div className="text-xs text-slate-400 mb-1.5">Type</div>
+        <div className="text-xs text-muted-foreground mb-1.5">Type</div>
         <div className="flex flex-wrap gap-1.5">
           {TYPES.map((t) => (
             <button key={t} onClick={() => toggleType(t)} className={chip(filters.type?.includes(t) ?? false)}>
@@ -56,7 +53,7 @@ function BeachFilterPanel({ filters, onChange, onClose }: Props) {
       </div>
 
       <div className="mb-3">
-        <div className="text-xs text-slate-400 mb-1.5">Water</div>
+        <div className="text-xs text-muted-foreground mb-1.5">Water</div>
         <div className="flex flex-wrap gap-1.5">
           {WATER.map((w) => (
             <button key={w} onClick={() => setWater(w)} className={chip(filters.water === w)}>
@@ -67,7 +64,7 @@ function BeachFilterPanel({ filters, onChange, onClose }: Props) {
       </div>
 
       <div className="mb-3">
-        <div className="text-xs text-slate-400 mb-1.5">Facilities</div>
+        <div className="text-xs text-muted-foreground mb-1.5">Facilities</div>
         <div className="flex flex-wrap gap-1.5">
           {FACILITIES.map((f) => (
             <button key={f} onClick={() => toggleFacility(f)} className={chip(filters.facilities?.includes(f) ?? false)}>
@@ -85,10 +82,37 @@ function BeachFilterPanel({ filters, onChange, onClose }: Props) {
 
       <button
         onClick={clearAll}
-        className="w-full py-1.5 text-xs rounded-md bg-slate-700 text-slate-200 hover:bg-slate-600"
+        className="w-full py-2 text-xs rounded-md bg-secondary text-secondary-foreground hover:bg-accent"
       >
         Clear all
       </button>
+    </>
+  )
+
+  if (isMobile) {
+    return (
+      <Drawer open onOpenChange={(o) => !o && onClose()}>
+        <DrawerContent>
+          <DrawerTitle className="sr-only">Filter beaches</DrawerTitle>
+          <div className="px-4 pb-4 pt-1">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Filter beaches</h3>
+            {body}
+          </div>
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <div
+      className="absolute z-30 w-72 rounded-xl bg-card/95 backdrop-blur border border-border shadow-2xl p-4"
+      style={{ top: '7.5rem', left: '1rem' }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-foreground">Filter beaches</h3>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">×</button>
+      </div>
+      {body}
     </div>
   )
 }

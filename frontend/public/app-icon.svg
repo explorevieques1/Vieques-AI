@@ -10,11 +10,14 @@
       <stop offset="1" stop-color="#e6fbff"/>
     </linearGradient>
   </defs>
+  <!-- background -->
   <rect width="512" height="512" rx="112" fill="url(#sea)"/>
+  <!-- subtle wave lines -->
   <g stroke="#ffffff" stroke-opacity="0.22" stroke-width="10" stroke-linecap="round" fill="none">
     <path d="M96 388 q40 -30 80 0 t80 0 t80 0 t80 0"/>
     <path d="M120 430 q36 -26 72 0 t72 0 t72 0" stroke-opacity="0.14"/>
   </g>
+  <!-- map pin -->
   <path fill="url(#pin)" d="M256 120c-62 0-112 50-112 112 0 78 96 152 108 161a6 6 0 0 0 8 0c12-9 108-83 108-161 0-62-50-112-112-112z"/>
   <circle cx="256" cy="228" r="46" fill="#0e8fb0"/>
 </svg>
