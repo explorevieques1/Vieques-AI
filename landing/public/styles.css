@@ -61,7 +61,11 @@ h1,h2,h3 { font-family: var(--font-head); letter-spacing: -0.02em; margin: 0; }
 /* ---------- nav ---------- */
 .nav {
   position: sticky; top:0; z-index:50; display:flex; align-items:center;
-  justify-content:space-between; gap:16px; padding:12px var(--pad-x);
+  justify-content:space-between; gap:16px;
+  /* Clear the iPhone notch/Dynamic Island (top) and rounded corners in
+     landscape (left/right) via the safe-area insets exposed by
+     viewport-fit=cover. */
+  padding: calc(12px + env(safe-area-inset-top)) max(var(--pad-x), env(safe-area-inset-right)) 12px max(var(--pad-x), env(safe-area-inset-left));
   background: linear-gradient(180deg, var(--bg) 0%, rgba(11,17,32,.92) 100%);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(148,163,184,.1);
