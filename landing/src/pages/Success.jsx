@@ -55,6 +55,16 @@ export default function Success() {
     return () => { cancelled = true }
   }, [sessionId])
 
+  // Once the webhook has landed and access is real, hand off to the map without
+  // making the user click. The short pause is deliberate: it lets them see WHICH
+  // plan activated before the page navigates away. The button below stays as a
+  // manual fallback for anyone whose browser blocks the programmatic redirect.
+  useEffect(() => {
+    if (state !== 'active') return
+    const timer = setTimeout(() => { void launchMapApp() }, 1800)
+    return () => clearTimeout(timer)
+  }, [state])
+
   return (
     <main style={styles.wrap}>
       <div style={styles.glow} aria-hidden="true" />
@@ -73,8 +83,8 @@ export default function Success() {
             <h1 style={styles.h1}>You're all set!</h1>
             <p style={styles.sub}>
               {plan && PLAN_LABELS[plan]
-                ? `Your ${PLAN_LABELS[plan]} is active. Your island guide is ready.`
-                : 'Payment confirmed. Your island guide is ready.'}
+                ? `Your ${PLAN_LABELS[plan]} is active. Taking you to the map…`
+                : 'Payment confirmed. Taking you to the map…'}
             </p>
             <div style={styles.actions}>
               <button onClick={launchMapApp} style={styles.btnPrimary}>Launch App →</button>
