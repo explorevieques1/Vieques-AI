@@ -2,15 +2,9 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
 import { launchMapApp } from '../lib/mapApp.js'
+import { PLAN_LABELS } from '../lib/plans.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
-
-const PLAN_LABELS = {
-  traveler: 'Traveler Plan',
-  credits: 'Credit Pack',
-  business_basic: 'Basic Business',
-  business_featured: 'Featured Business',
-}
 
 // Ask the backend whether THIS user actually has access. This is the
 // source of truth — the webhook wrote it after Stripe confirmed payment.

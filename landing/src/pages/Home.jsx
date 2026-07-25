@@ -191,34 +191,44 @@ export default function Home() {
           </div>
         </div>
 
-        {/* TRAVELER */}
+        {/* TRAVELER — headline tiers only. The full feature matrix lives on
+            /pricing; this section is a teaser, so it stays to three cards. */}
         <div className={aud==='traveler'?'plans':'plans hidden'}>
+          <div className="plan">
+            <h3>Day Trip</h3><p className="sub">Off the ferry and back by dark</p>
+            <div className="price">$6.99<small>one-time · 48 hours</small></div>
+            <ul>
+              <li>Full beach &amp; restaurant profiles</li><li>Directions &amp; road conditions</li>
+              <li>Essentials and transport</li><li>Smart filters &amp; search</li>
+            </ul>
+            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('day_trip')}>Get Day Trip</button>
+          </div>
           <div className="plan featured">
             <span className="badge">Most popular</span>
-            <h3>Traveler Plan</h3><p className="sub">Everything, for your whole trip</p>
-            <div className="price">$9<small>one-time · 30 days</small></div>
+            <h3>Vacation</h3><p className="sub">Everything you need for your stay</p>
+            <div className="price">$12.99<small>one-time · 7 days</small></div>
             <ul>
-              <li>Unlimited Ask AI questions</li><li>All categories &amp; smart filters</li>
-              <li>Snorkeling zone maps</li><li>Directions &amp; routing</li><li>Restaurant profiles</li>
+              <li>Everything in Day Trip</li><li>25 Ask AI messages</li>
+              <li>All snorkeling zones &amp; spot detail</li><li>Bio Bay moon-phase guide</li>
             </ul>
-            <button className="btn btn-primary btn-lg" onClick={() => choosePlan('traveler')}>Get Traveler Access</button>
+            <button className="btn btn-primary btn-lg" onClick={() => choosePlan('vacation')}>Get Vacation</button>
           </div>
           <div className="plan">
-            <h3>Credits</h3><p className="sub">Pay as you go</p>
-            <div className="price">$3<small>per credit pack</small></div>
+            <h3>Exploration</h3><p className="sub">Long stays and repeat visitors</p>
+            <div className="price">$24.99<small>one-time · 30 days</small></div>
             <ul>
-              <li>20 Ask AI queries per pack</li><li>Map browsing always free</li>
-              <li>Credits never expire</li><li>Top up anytime</li>
+              <li>Everything in Vacation</li><li>150 Ask AI messages</li>
+              <li>Multi-day itinerary builder</li><li>Offline map pack</li>
             </ul>
-            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('credits')}>Buy Credits</button>
+            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('exploration')}>Get Exploration</button>
           </div>
         </div>
 
         {/* BUSINESS */}
         <div className={aud==='business'?'plans':'plans hidden'}>
           <div className="plan">
-            <h3>Basic</h3><p className="sub">Get your business on the map</p>
-            <div className="price">$29<small>/month</small></div>
+            <h3>Basic</h3><p className="sub">Kiosks, food trucks, small operators</p>
+            <div className="price">$19<small>/month · $190/yr</small></div>
             <ul>
               <li>Your pin on the island map</li><li>Full profile: hours, prices, contact</li>
               <li>Appears in filters &amp; search</li><li>Update your listing anytime</li>
@@ -227,16 +237,28 @@ export default function Home() {
           </div>
           <div className="plan featured">
             <span className="badge">Recommended</span>
-            <h3>Featured</h3><p className="sub">Be the answer visitors see first</p>
-            <div className="price">$79<small>/month</small></div>
+            <h3>Featured</h3><p className="sub">Restaurants, dive shops, tour operators</p>
+            <div className="price">$59<small>/month · $590/yr</small></div>
             <ul>
-              <li>Everything in Basic</li><li>Priority placement in results</li>
-              <li>Highlighted in AI recommendations</li><li>Featured badge &amp; custom marker</li>
-              <li>Seasonal promo slots</li>
+              <li>Everything in Basic</li><li>Featured badge &amp; custom marker</li>
+              <li>Monthly category spotlight</li><li>Engagement analytics</li>
             </ul>
             <button className="btn btn-primary btn-lg" onClick={() => choosePlan('business_featured')}>Get Featured</button>
           </div>
+          <div className="plan">
+            <h3>Island Partner</h3><p className="sub">Hotels and multi-location operators</p>
+            <div className="price">$149<small>/month · $1,490/yr</small></div>
+            <ul>
+              <li>Everything in Featured</li><li>Up to 5 locations</li>
+              <li>Homepage placement</li><li>Search-term data &amp; quarterly report</li>
+            </ul>
+            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('business_partner')}>Become a Partner</button>
+          </div>
         </div>
+
+        <p className="center" style={{ marginTop: 22 }}>
+          <Link to="/pricing" className="link">Compare every feature →</Link>
+        </p>
       </section>
 
       {/* ================= FINAL CTA ================= */}

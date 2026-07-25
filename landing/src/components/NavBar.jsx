@@ -22,8 +22,8 @@ export default function NavBar() {
   // start the traveler flow.
   function launchApp() {
     if (session) { launchMapApp(); return }
-    try { sessionStorage.setItem('vq_plan', 'traveler') } catch (_) {}
-    navigate('/signup?plan=traveler')
+    try { sessionStorage.setItem('vq_plan', 'vacation') } catch (_) {}
+    navigate('/signup?plan=vacation')
   }
 
   async function handleLogout() {
