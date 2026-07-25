@@ -33,4 +33,7 @@ git commit -m "Map app: access gate blocking unpaid users"
 git add db/
 git commit -m "Add customers table migration"
 
+git add db/
+git commit -m "Add customers table migration"
+
 git push origin main
