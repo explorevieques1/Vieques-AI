@@ -435,15 +435,29 @@ export type StayListing = {
   directions_note: string | null
 }
 
+export type StayCategory = { slug: string; label: string }
+
+/** Chips for the stays panel: Hotels, Guest House, Vacation Rental, Eco Retreat. */
+export async function fetchStayCategories(): Promise<StayCategory[]> {
+  const res = await apiFetch(`/api/stay-categories`)
+  if (!res.ok) await raise(res, 'Stay categories failed')
+  return res.json()
+}
+
 /**
- * All lodging in one call — there are only ~6 properties island-wide, so unlike
- * restaurants there is no subcategory to pick first.
+ * All lodging in one call, or one category of it.
+ *
+ * Unlike restaurants the slug is optional and the unfiltered list is the
+ * default view — there are only ~6 properties island-wide, so making a traveller
+ * pick a chip before seeing anything would hide most of the island's lodging
+ * behind a guess about what they want.
  *
  * Uses `raise` rather than a bare Error so a free-tier 402 arrives as an
  * ApiError with code 'UPGRADE_REQUIRED' and ResultsList can render the upsell.
  */
-export async function fetchStays(): Promise<StayListing[]> {
-  const res = await apiFetch(`/api/stays`)
+export async function fetchStays(category?: string | null): Promise<StayListing[]> {
+  const qs = category ? `?category=${encodeURIComponent(category)}` : ''
+  const res = await apiFetch(`/api/stays${qs}`)
   if (!res.ok) await raise(res, 'Stays failed')
   return res.json()
 }

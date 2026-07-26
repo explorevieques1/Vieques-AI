@@ -11,6 +11,7 @@ import {
   fetchServiceCategories,
   fetchServiceListings,
   fetchSnorkelSpots,
+  fetchStayCategories,
   fetchStays,
   fetchTrails,
   fetchTransportCategories,
@@ -110,7 +111,9 @@ export function useCategoryPlaces(
   useEffect(() => {
     if (!category) return
     const meta = categoryMeta(category)
-    if (!meta.hasSubcategories) return
+    // `optionalSubcategories` (stays) fetches chips the same way; the only
+    // difference is downstream, in `shouldFetch` — the listings do not wait.
+    if (!meta.hasSubcategories && !meta.optionalSubcategories) return
     let cancelled = false
     const load = {
       restaurants: fetchRestaurantCategories,
@@ -118,6 +121,7 @@ export function useCategoryPlaces(
       services: fetchServiceCategories,
       transportation: fetchTransportCategories,
       essentials: fetchEssentialCategories,
+      stays: fetchStayCategories,
     }[category as string]
     if (!load) return
     load()
@@ -165,10 +169,11 @@ export function useCategoryPlaces(
         )
         break
 
-      // No subcategory to wait on — the whole island's lodging is one request,
-      // same as beaches.
+      // No subcategory to *wait* on — the whole island's lodging is one
+      // request, same as beaches. The chip row is a filter over that list, so
+      // `subSlug` is passed when set and the null case is the default view.
       case 'stays':
-        fetchStays().then((rows) => finish(rows.map(stayToPlace)), fail)
+        fetchStays(subSlug).then((rows) => finish(rows.map(stayToPlace)), fail)
         break
 
       case 'activities':

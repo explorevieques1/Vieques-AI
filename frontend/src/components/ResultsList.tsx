@@ -16,7 +16,8 @@ type Props = {
   onSelect: (p: Place) => void
   subcategories: Subcategory[]
   activeSub: string | null
-  onSelectSub: (slug: string) => void
+  /** `null` clears the filter — only reachable where the pick is optional. */
+  onSelectSub: (slug: string | null) => void
   sort: SortKey
   onSortChange: (s: SortKey) => void
   distances: Map<string, number>
@@ -92,6 +93,21 @@ function ResultsList({
       {subcategories.length > 0 && (
         <div className="scrollbar-thin shrink-0 overflow-x-auto px-4 pb-2">
           <div className="flex w-max gap-1.5 pb-2">
+            {/* Where the chips only filter (stays), the unfiltered list is a
+                real state the user started in — so it needs a chip to get back
+                to. Categories that gate on a pick have no such state. */}
+            {meta.optionalSubcategories && (
+              <button
+                onClick={() => onSelectSub(null)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  activeSub == null
+                    ? 'border border-primary/30 bg-primary/15 font-medium text-primary'
+                    : 'border border-white/8 bg-white/4 text-foreground hover:bg-white/8'
+                }`}
+              >
+                All
+              </button>
+            )}
             {subcategories.map((s) => (
               <button
                 key={s.slug}

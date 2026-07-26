@@ -117,6 +117,15 @@ export type CategoryMeta = {
    * Beaches load in one shot; the rest need a subcategory picked first.
    */
   hasSubcategories: boolean
+  /**
+   * Chips that filter an already-loaded list instead of gating it.
+   *
+   * `hasSubcategories` means "there is nothing to show until you pick one".
+   * Stays want the chip row without that bargain: the whole island's lodging is
+   * one request, so the panel opens with every property and the chips narrow
+   * it — with an "All" chip to widen it back (see ResultsList).
+   */
+  optionalSubcategories?: boolean
   /** Rendered instead of a list when there's no backend for this category yet. */
   comingSoon?: boolean
 }
@@ -130,10 +139,11 @@ export const CATEGORIES: CategoryMeta[] = [
   // the navigation. See the `activities` case in hooks/useCategoryPlaces.ts —
   // it takes the same "this sub has its own dataset" branch snorkelling does.
   { slug: 'activities', label: 'Activities', hasSubcategories: true },
-  // Lodging loads in one shot like beaches: there are ~6 properties
-  // island-wide, so `property_type` rides along on each row as a tag rather
-  // than becoming a chip row nobody needs to filter.
-  { slug: 'stays', label: 'Stays', hasSubcategories: false },
+  // Lodging loads in one shot like beaches — there are ~6 properties
+  // island-wide — but carries a chip row over the top of that list
+  // (stay_categories, 0028) so "we want an eco retreat" is one tap rather than
+  // a read of every card's tags.
+  { slug: 'stays', label: 'Stays', hasSubcategories: false, optionalSubcategories: true },
   { slug: 'services', label: 'Services', hasSubcategories: true },
   { slug: 'transportation', label: 'Transportation', hasSubcategories: true },
   { slug: 'essentials', label: 'Essentials', hasSubcategories: true },
