@@ -13,6 +13,7 @@ import {
   fetchSnorkelSpots,
   fetchTransportCategories,
   fetchTransportListings,
+  ApiError,
   type BeachFilters,
 } from '../lib/api'
 import {
@@ -36,6 +37,16 @@ type Result = {
   loading: boolean
   /** Set when snorkelling was requested without the entitlement for it. */
   locked: boolean
+  /**
+   * Whatever made the panel empty, if anything.
+   *
+   * The sidebars this hook replaced each rendered their own fetch error; the
+   * first version of this hook only console.error'd, so a 402 or a dead backend
+   * looked identical to "this category genuinely has nothing" — which is how a
+   * tier-gating bug on /api/restaurant-categories stayed invisible. Failures
+   * must reach the UI.
+   */
+  error: ApiError | Error | null
 }
 
 /**
@@ -58,12 +69,19 @@ export function useCategoryPlaces(
   // returns is then *derived* by comparing that tag to the current request, so
   // switching category shows an empty list on the very same render — no effect
   // that clears state one render late, and no flash of the old category's rows.
-  const [subCache, setSubCache] = useState<{ category: CategorySlug; rows: Subcategory[] } | null>(
-    null,
-  )
-  const [cache, setCache] = useState<{ key: string; rows: Place[] } | null>(null)
+  const [subCache, setSubCache] = useState<{
+    category: CategorySlug
+    rows: Subcategory[]
+    error: ApiError | Error | null
+  } | null>(null)
+  const [cache, setCache] = useState<{
+    key: string
+    rows: Place[]
+    error: ApiError | Error | null
+  } | null>(null)
 
-  const subcategories = category && subCache?.category === category ? subCache.rows : []
+  const subFresh = category != null && subCache?.category === category
+  const subcategories = subFresh ? subCache!.rows : []
 
   // Entitlement is known synchronously, so this is derived rather than state.
   const locked = category === 'activities' && subSlug === 'snorkeling' && !canSnorkel
@@ -79,6 +97,10 @@ export function useCategoryPlaces(
   const fresh = cache?.key === requestKey
   const places = shouldFetch && fresh ? cache!.rows : []
   const loading = shouldFetch && !fresh
+
+  // A failed subcategory fetch is the more fundamental problem — without the
+  // chips there is nothing to pick, so report it ahead of any listing error.
+  const error = (subFresh ? subCache!.error : null) ?? (fresh ? cache!.error : null)
 
   // --- subcategory list, once per category ---------------------------------
   useEffect(() => {
@@ -96,9 +118,13 @@ export function useCategoryPlaces(
     if (!load) return
     load()
       .then((rows: Subcategory[]) => {
-        if (!cancelled) setSubCache({ category, rows })
+        if (!cancelled) setSubCache({ category, rows, error: null })
       })
-      .catch((err: unknown) => console.error(`Failed to load ${category} categories:`, err))
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.error(`Failed to load ${category} categories:`, err)
+        setSubCache({ category, rows: [], error: err as Error })
+      })
     return () => {
       cancelled = true
     }
@@ -113,14 +139,14 @@ export function useCategoryPlaces(
 
     let cancelled = false
     const finish = (rows: Place[]) => {
-      if (!cancelled) setCache({ key: requestKey, rows })
+      if (!cancelled) setCache({ key: requestKey, rows, error: null })
     }
     const fail = (err: unknown) => {
       if (cancelled) return
       console.error(`Failed to load ${category}:`, err)
-      // Cache the empty result too — otherwise `loading` stays true forever on
-      // a failed request and the list spins with no explanation.
-      setCache({ key: requestKey, rows: [] })
+      // Cache the failure too — otherwise `loading` stays true forever on a
+      // failed request and the list spins with no explanation.
+      setCache({ key: requestKey, rows: [], error: err as Error })
     }
 
     switch (category) {
@@ -183,5 +209,5 @@ export function useCategoryPlaces(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, shouldFetch])
 
-  return { places, subcategories, loading, locked }
+  return { places, subcategories, loading, locked, error }
 }

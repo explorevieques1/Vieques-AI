@@ -426,7 +426,7 @@ app.get('/api/transport/:slug', requireAuth, requireTier(pool, 'transport'), asy
 
 
 // Restaurant categories for the sidebar
-app.get('/api/restaurant-categories', requireAuth, requireTier(pool, 'restaurant_preview'), async (_req, res) => {
+app.get('/api/restaurant-categories', requireAuth, requireTier(pool, ['restaurant_preview', 'restaurants']), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT slug, label FROM restaurant_categories ORDER BY sort_order'
@@ -438,7 +438,7 @@ app.get('/api/restaurant-categories', requireAuth, requireTier(pool, 'restaurant
 })
 
 // Listings for one restaurant category slug
-app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, 'restaurant_preview'), async (req, res) => {
+app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_preview', 'restaurants']), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.cuisine, l.price,

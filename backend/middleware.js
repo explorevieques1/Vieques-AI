@@ -49,7 +49,14 @@ export function requireEntitlement(pool) {
 //
 // Sets req.tier so handlers can trim their response for lower tiers (e.g.
 // /api/beaches returns name + coords only for 'free') instead of 402-ing.
+//
+// `feature` may be an array, in which case holding ANY of them passes. That is
+// needed wherever the free tier's preview-grade feature and the paid tiers'
+// full-fat one are separate slugs — FEATURES gives 'free' the slug
+// 'restaurant_preview' but every paid tier 'restaurants', and a flat
+// tierHas() check against either slug alone locks out half the customers.
 export function requireTier(pool, feature) {
+  const wanted = Array.isArray(feature) ? feature : [feature]
   return async (req, res, next) => {
     try {
       const { rows } = await pool.query(
@@ -59,13 +66,13 @@ export function requireTier(pool, feature) {
         [req.user.id],
       )
       const tier = bestTier(rows)
-      if (!tierHas(tier, feature)) {
+      if (!wanted.some((f) => tierHas(tier, f))) {
         // 402 Payment Required, with enough structure for the client to render
         // a targeted upsell rather than a generic "access denied".
         return res.status(402).json({
           error: 'Your plan does not include this feature.',
           code: 'UPGRADE_REQUIRED',
-          feature,
+          feature: wanted[0],
           tier,
         })
       }

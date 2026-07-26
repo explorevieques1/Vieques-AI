@@ -1,6 +1,7 @@
-import { X } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 
 import type { Subcategory } from '../hooks/useCategoryPlaces'
+import { ApiError, LANDING_URL } from '../lib/api'
 import { categoryMeta, type CategorySlug, type Place } from '../lib/place'
 import PlaceCard from './PlaceCard'
 import { Skeleton } from './ui/skeleton'
@@ -23,6 +24,8 @@ type Props = {
   onClose?: () => void
   /** Rendered above the list, e.g. the snorkelling upsell or tour toggle. */
   banner?: React.ReactNode
+  /** Surfaced in place of the empty state — never swallow a failed fetch. */
+  error?: ApiError | Error | null
 }
 
 /**
@@ -48,8 +51,10 @@ function ResultsList({
   distances,
   onClose,
   banner,
+  error,
 }: Props) {
   const meta = categoryMeta(category)
+  const upgradeable = error instanceof ApiError && error.isUpgradeable
 
   return (
     <>
@@ -107,7 +112,37 @@ function ResultsList({
             <Skeleton key={i} className="h-[72px] shrink-0 rounded-2xl" />
           ))}
 
-        {!loading && places.length === 0 && (
+        {!loading && error && (
+          <div
+            className={`rounded-2xl border px-3.5 py-3 text-sm ${
+              upgradeable
+                ? 'border-primary/30 bg-primary/10 text-foreground'
+                : 'border-destructive/30 bg-destructive/10 text-foreground'
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p>
+                  {upgradeable
+                    ? `${meta.label} aren't included in your current plan.`
+                    : `Couldn't load ${meta.label.toLowerCase()}.`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{error.message}</p>
+                {upgradeable && (
+                  <a
+                    href={`${LANDING_URL}/pricing`}
+                    className="mt-2 inline-block rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  >
+                    See plans
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && places.length === 0 && (
           <p className="px-1 py-8 text-center text-sm text-muted-foreground">
             {meta.comingSoon
               ? `${meta.label} are coming soon.`

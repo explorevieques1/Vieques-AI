@@ -70,8 +70,15 @@ export function makeMarkerEl(
   const size = selected ? 44 : 32
 
   // Outer wrapper — MapLibre owns its transform; we don't touch it.
+  //
+  // Do NOT set `position` here. MapLibre's `.maplibregl-marker` class applies
+  // `position: absolute`, and an inline `position: relative` outranks it — the
+  // marker then sits in normal flow while MapLibre keeps writing translate()
+  // to it, so pins visibly drift away from their coordinates as you zoom.
+  // The ring below still anchors correctly, because this element is absolutely
+  // positioned by that class and is therefore already a containing block.
   const outer = document.createElement('div')
-  outer.style.cssText = `width:${size}px;height:${size}px;cursor:pointer;position:relative;`
+  outer.style.cssText = `width:${size}px;height:${size}px;cursor:pointer;`
 
   if (selected) {
     // Expanding ring behind the badge. Its own element, because the badge

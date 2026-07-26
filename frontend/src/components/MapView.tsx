@@ -111,7 +111,7 @@ function MapView({
   const [snap, setSnap] = useState<string | number | null>(SHEET_PEEK)
   const [sheetHeight, setSheetHeight] = useState(0)
 
-  const { places: rawPlaces, subcategories, loading, locked } = useCategoryPlaces(
+  const { places: rawPlaces, subcategories, loading, locked, error } = useCategoryPlaces(
     category,
     subSlug,
     beachFilters,
@@ -524,6 +524,7 @@ function MapView({
       distances={distances}
       onClose={isMobile ? undefined : () => selectCategory(null)}
       banner={hasBanner ? banner : undefined}
+      error={error}
     />
   )
 

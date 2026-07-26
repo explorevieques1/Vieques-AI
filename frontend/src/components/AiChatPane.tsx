@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Send, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { sendAiChat, ApiError, LANDING_URL, type AiChatMessage, type AiPin } from '../lib/api'
 import { useEntitlement } from '../lib/entitlement'
@@ -58,14 +59,27 @@ function AiChatPane({ onClose, onPins }: Props) {
     }
   }
 
+  const prompts = [
+    'Where do I rent a car?',
+    'Find me a quiet beach',
+    'Where can I get seafood?',
+  ]
+
   return (
-    <aside className="absolute top-0 right-0 h-full w-full sm:w-96 z-30 bg-slate-900/97 backdrop-blur border-l border-slate-700 shadow-2xl flex flex-col pad-safe-bottom">
-      <div className="flex items-center justify-between p-4 border-b border-slate-800">
+    // A self-positioned floating panel rather than a ResponsivePanel: on phones
+    // that would render a vaul Drawer, and the map's results sheet is already
+    // one — two nested drawers fight over the same drag handling.
+    <aside
+      className="glass pointer-events-auto absolute inset-x-4 bottom-4 top-[9.5rem] z-40 flex flex-col
+                 overflow-hidden rounded-3xl shadow-2xl pad-safe-bottom
+                 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:top-[5.75rem] sm:w-[400px]"
+    >
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/8 p-4">
         <div>
-          <h2 className="text-base font-semibold text-white">
-            Ask <span className="text-cyan-400">Explore Vieques</span>
+          <h2 className="font-display text-xl leading-none tracking-tight">
+            Ask <span className="italic text-primary">Vieques</span>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
             {remaining > 0
               ? `${remaining} message${remaining === 1 ? '' : 's'} left`
               : 'No messages left'}
@@ -74,67 +88,85 @@ function AiChatPane({ onClose, onPins }: Props) {
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-white text-xl leading-none px-2 -mr-1"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-white/8 hover:text-foreground"
           aria-label="Close"
         >
-          ×
+          <X size={15} />
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div
+        ref={scrollRef}
+        className="scroll-contain no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+      >
         {messages.length === 0 && (
-          <div className="text-sm text-slate-400 space-y-2">
-            <p>Ask me anything about Vieques. For example:</p>
-            <ul className="space-y-1 text-slate-500">
-              <li>“Where do I rent a car?”</li>
-              <li>“Find me a quiet beach”</li>
-              <li>“Where can I get seafood?”</li>
-            </ul>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Ask me anything about Vieques. For example:
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {prompts.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setInput(p)}
+                  className="rounded-2xl border border-white/8 bg-white/3 px-3.5 py-2.5 text-left text-sm text-foreground/85 hover:bg-white/6 hover:text-foreground"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
         {messages.map((m, i) =>
           m.role === 'user' ? (
             <div
               key={i}
-              className="max-w-[85%] ml-auto rounded-lg px-3 py-2 text-sm bg-cyan-500 text-slate-900"
+              className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-sm text-primary-foreground"
             >
               {m.content}
             </div>
           ) : (
             <div
               key={i}
-              className="max-w-[90%] mr-auto rounded-lg px-3 py-2 text-sm bg-slate-800 text-slate-100 space-y-2
+              className="mr-auto max-w-[90%] space-y-2 rounded-2xl rounded-bl-md border border-white/8 bg-white/4 px-3.5 py-2.5 text-sm text-foreground
+                         [&_a]:text-primary [&_a]:underline
+                         [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-4
                          [&_p]:leading-relaxed
-                         [&_strong]:text-white [&_strong]:font-semibold
-                         [&_ul]:space-y-1 [&_ul]:list-disc [&_ul]:pl-4
-                         [&_ol]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-4
-                         [&_a]:text-cyan-400 [&_a]:underline
-                         [&_table]:hidden"
+                         [&_strong]:font-semibold [&_strong]:text-foreground
+                         [&_table]:hidden
+                         [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-4"
             >
               <ReactMarkdown>{m.content}</ReactMarkdown>
             </div>
           ),
         )}
+
         {loading && (
-          <div className="mr-auto bg-slate-800 text-slate-400 rounded-lg px-3 py-2 text-sm">
+          <div className="mr-auto rounded-2xl rounded-bl-md border border-white/8 bg-white/4 px-3.5 py-2.5 text-sm text-muted-foreground">
             Thinking…
           </div>
         )}
-        {error && <div className="text-xs text-red-300">{error}</div>}
+
+        {error && (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-foreground">
+            {error}
+          </div>
+        )}
 
         {outOfCredits && (
-          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-center">
-            <p className="text-sm font-semibold text-slate-100">
+          <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/12 to-accent-sky/5 p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">
               {tier === 'free' ? "That's your free trial" : 'Out of messages'}
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {tier === 'free'
                 ? 'Vacation includes 25 Ask AI messages, all snorkeling zones, and the Bio Bay timing guide.'
                 : 'Top up with a credit pack, or move up a plan for a bigger allowance.'}
             </p>
             <a
               href={`${LANDING_URL}/pricing`}
-              className="mt-3 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-900 hover:bg-cyan-400"
+              className="mt-3 inline-block rounded-xl bg-gradient-to-br from-primary to-accent-sky px-4 py-2 text-xs font-bold text-primary-foreground"
             >
               See plans
             </a>
@@ -142,22 +174,23 @@ function AiChatPane({ onClose, onPins }: Props) {
         )}
       </div>
 
-      <div className="p-3 border-t border-slate-800">
-        <div className="flex gap-2">
+      <div className="shrink-0 border-t border-white/8 p-3">
+        <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/4 py-1.5 pl-3.5 pr-1.5 focus-within:border-primary/40">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && send()}
             placeholder={remaining > 0 ? 'Ask about Vieques…' : 'Upgrade to keep asking'}
             disabled={remaining <= 0}
-            className="flex-1 px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
           />
           <button
             onClick={send}
             disabled={loading || !input.trim() || remaining <= 0}
-            className="px-4 py-2 text-sm rounded-lg bg-cyan-500 text-slate-900 font-medium hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Send"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent-sky text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Send
+            <Send size={15} />
           </button>
         </div>
       </div>
