@@ -57,10 +57,13 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "group/drawer-content fixed z-50 flex h-auto flex-col bg-card text-card-foreground",
+          "group/drawer-content fixed z-50 flex h-auto flex-col text-card-foreground",
+          // Frosted like every other floating map surface, so the sheet reads
+          // as part of the map rather than a page below it.
+          "glass",
           // Bottom sheet: rounded top, capped height, safe-area padding for the
           // iPhone home indicator.
-          "inset-x-0 bottom-0 mt-24 max-h-[85dvh] rounded-t-2xl border-t border-border pb-[env(safe-area-inset-bottom)]",
+          "inset-x-0 bottom-0 mt-24 max-h-[85dvh] rounded-t-3xl pb-[env(safe-area-inset-bottom)]",
           className,
         )}
         {...props}

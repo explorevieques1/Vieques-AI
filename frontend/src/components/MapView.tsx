@@ -1,119 +1,184 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
+
 import {
-  fetchBeaches,
-  fetchActivityListings,
-  fetchActivityCategories,
-  fetchServiceCategories,
-  fetchServiceListings,
-  fetchTransportListings,
-  fetchRestaurantListings,
   fetchDirections,
-  fetchEssentialListings,
-  fetchSnorkelSpots,
   fetchSnorkelZones,
-  type Beach,
-  type ActivityListing,
-  type BeachFilters,
-  type ServiceListing,
-  type TransportListing,
-  type RestaurantListing,
-  type EssentialListing,
-  type SnorkelSpot,
   type AiPin,
+  type BeachFilters,
   type DirectionsResult,
 } from '../lib/api'
-import type { CategorySlug } from './CategoryTabs'
-import DetailPanel from './DetailPanel'
-import SearchBar from './SearchBar'
-import CategoryListSidebar from './CategoryListSidebar'
-import TransportationSidebar from './TransportationSidebar'
-import RestaurantSidebar from './RestaurantSidebar'
-import EssentialsSidebar from './EssentialsSidebar'
-import TaxiListPanel from './TaxiListPanel'
-import CarRentalPanel from './CarRentalPanel'
-import BeachFilterPanel from './BeachFilterPanel'
-import { makeMarkerEl, BEACH_ICON, ACTIVITY_ICONS, ESSENTIAL_ICONS, DEFAULT_ICON } from '../lib/markerIcon'
+import {
+  isMappable,
+  categoryMeta,
+  type CategorySlug,
+  type Place,
+} from '../lib/place'
+import { makeMarkerEl } from '../lib/markerIcon'
+import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
-import RestaurantDetailPanel from './RestaurantDetailPanel'
+import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
 import { useIsMobile } from '../hooks/useIsMobile'
+import {
+  safeInsets,
+  useMapInsets,
+  DETAIL_PANEL_W,
+  RESULTS_PANEL_W,
+  SHEET_PEEK,
+} from '../hooks/useMapInsets'
 import { useFeature } from '../lib/entitlement'
+import BeachFilterPanel from './BeachFilterPanel'
+import MapSearchBar from './MapSearchBar'
+import MapSheet from './MapSheet'
+import MapTopBar from './MapTopBar'
+import PlaceDetailPanel from './PlaceDetailPanel'
+import ResultsList, { type SortKey } from './ResultsList'
 import UpsellOverlay from './UpsellOverlay'
+import { ResponsivePanel } from './ui/ResponsivePanel'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
-const KEY = import.meta.env.VITE_MAPTILER_KEY
 
-const STYLES = [
-  { label: 'Satellite', id: 'hybrid' },
-  { label: 'Streets', id: 'streets-v2' },
-  { label: 'Outdoor', id: 'outdoor-v2' },
-  { label: 'Basic', id: 'basic-v2' },
-] as const
-
-const styleUrl = (id: string) =>
-  `https://api.maptiler.com/maps/${id}/style.json?key=${KEY}`
+/** Great-circle distance in miles — only used to label result cards. */
+function milesBetween(a: [number, number], b: [number, number]): number {
+  const R = 3958.8
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(b[1] - a[1])
+  const dLon = toRad(b[0] - a[0])
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
 
 type Props = {
-  activeCategory: CategorySlug | null
   aiPins?: AiPin[]
   route?: DirectionsResult | null
   onRoute?: (r: DirectionsResult | null) => void
-  onCloseCategory?: () => void
+  onAskAi: () => void
+  aiOpen: boolean
+  onDirections: () => void
+  dirOpen: boolean
+  onProfile: () => void
+  profileOpen: boolean
 }
 
-function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Props) {
+/**
+ * The map screen: full-bleed MapLibre canvas with floating glass panels over it.
+ *
+ * Desktop lays results on the left and the selected place on the right, and the
+ * map pads its camera by both so the pin lands in the visible gap between them
+ * (see hooks/useMapInsets). Mobile stacks the same two views into one draggable
+ * sheet whose live height feeds the same padding, so the sheet never covers the
+ * pin and dragging it down re-centres.
+ */
+function MapView({
+  aiPins,
+  route,
+  onRoute,
+  onAskAi,
+  aiOpen,
+  onDirections,
+  dirOpen,
+  onProfile,
+  profileOpen,
+}: Props) {
   // Snorkeling is the Vacation-tier upsell (PRICING.md §4). Advisory only —
   // requireTier on the server and the RLS policy in 0022 are the real gates.
   const canSnorkel = useFeature('snorkel_zones')
+  const isMobile = useIsMobile()
+
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<maplibregl.Marker[]>([])
   const routeMarkersRef = useRef<maplibregl.Marker[]>([])
-  const [active, setActive] = useState<string>('streets-v2')
-  const [beaches, setBeaches] = useState<Beach[]>([])
-  const [selected, setSelected] = useState<Beach | null>(null)
+
+  const [styleId, setStyleId] = useState(DEFAULT_MAP_STYLE)
+  const [category, setCategory] = useState<CategorySlug | null>(null)
+  const [subSlug, setSubSlug] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Place | null>(null)
   const [beachFilters, setBeachFilters] = useState<BeachFilters>({})
   const [filterOpen, setFilterOpen] = useState(false)
-  const [activitySlug, setActivitySlug] = useState<string | null>(null)
-  const [serviceSlug, setServiceSlug] = useState<string | null>(null)
-  const [transportSlug, setTransportSlug] = useState<string | null>(null)
-  const [restaurantSlug, setRestaurantSlug] = useState<string | null>(null)
-  const [selectedRestaurant, setSelectedRestaurant] = useState<RestaurantListing | null>(null)
-  const [essentialSlug, setEssentialSlug] = useState<string | null>(null)
-  const [taxiDrivers, setTaxiDrivers] = useState<TransportListing[] | null>(null)
-  const [taxiLoading, setTaxiLoading] = useState(false)
-  const [selectedCarRental, setSelectedCarRental] = useState<TransportListing | null>(null)
+  const [sort, setSort] = useState<SortKey>('nearest')
+  const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
   const [snorkelLegend, setSnorkelLegend] = useState<
     { label: string | null; color: string | null; description: string | null }[]
   >([])
-  const [snorkelSpots, setSnorkelSpots] = useState<SnorkelSpot[]>([])
-  const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
-  const zonesShown = snorkelLegend.length > 0
-  const isMobile = useIsMobile()
+  const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
 
-  // Desktop: floating controls shift right to clear an open left sidebar (w-64
-  // = 16rem + gap). Mobile: sidebars are bottom sheets, so controls stay at the
-  // left edge.
-  const leftOffset = (open: boolean) => (!isMobile && open ? '17.5rem' : '1rem')
+  // Mobile sheet geometry. `sheetHeight` is the live pixel height reported by
+  // ResponsivePanel's ResizeObserver; it drives the map's bottom padding.
+  const [snap, setSnap] = useState<string | number | null>(SHEET_PEEK)
+  const [sheetHeight, setSheetHeight] = useState(0)
 
-  const sidebarOpen =
-    activeCategory === 'activities' ||
-    activeCategory === 'services' ||
-    activeCategory === 'transportation' ||
-    activeCategory === 'restaurants' ||
-    activeCategory === 'essentials'
+  const { places: rawPlaces, subcategories, loading, locked } = useCategoryPlaces(
+    category,
+    subSlug,
+    beachFilters,
+    canSnorkel,
+  )
 
-  // init map once — proven working init, unchanged
+  const snorkelling = category === 'activities' && subSlug === 'snorkeling'
+
+  // ---------------------------------------------------------------------------
+  //  Derived list: snorkel tour toggle, distance, sort
+  // ---------------------------------------------------------------------------
+
+  const distances = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!userLoc) return m
+    rawPlaces.forEach((p) => {
+      if (isMappable(p)) m.set(p.id, milesBetween(userLoc, [p.longitude, p.latitude]))
+    })
+    return m
+  }, [rawPlaces, userLoc])
+
+  const places = useMemo(() => {
+    let list = rawPlaces
+    if (snorkelling && tourFilter === 'tours') {
+      list = list.filter((p) => (p.raw as { offers_tours?: boolean }).offers_tours)
+    }
+    const sorted = [...list]
+    sorted.sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name)
+      const da = distances.get(a.id)
+      const db = distances.get(b.id)
+      // Without geolocation "nearest" has nothing to sort on — fall back to
+      // name so the order is at least stable and predictable.
+      if (da == null || db == null) return a.name.localeCompare(b.name)
+      return da - db
+    })
+    return sorted
+  }, [rawPlaces, snorkelling, tourFilter, sort, distances])
+
+  const resultsOpen = category != null
+  const detailOpen = selected != null
+  const insets = useMapInsets({
+    resultsOpen,
+    detailOpen,
+    sheetHeight: detailOpen || resultsOpen ? sheetHeight : 0,
+  })
+
+  /** Clamp the inset box to the current canvas before handing it to MapLibre. */
+  const padding = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return insets
+    const c = map.getCanvas()
+    return safeInsets(insets, c.clientWidth, c.clientHeight)
+  }, [insets])
+
+  // ---------------------------------------------------------------------------
+  //  Map lifecycle
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: styleUrl('streets-v2'),
+      style: styleUrl(DEFAULT_MAP_STYLE),
       center: VIEQUES_CENTER,
       zoom: 12,
     })
-    map.addControl(new maplibregl.NavigationControl(), 'top-right')
     map.on('load', () => map.resize())
     const t = setTimeout(() => map.resize(), 200)
     mapRef.current = map
@@ -124,12 +189,159 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
     }
   }, [])
 
+  const changeStyle = (id: string) => {
+    if (!mapRef.current || id === styleId) return
+    mapRef.current.setStyle(styleUrl(id))
+    setStyleId(id)
+  }
+
+  // Ask for location once, opportunistically. Denial is fine — distance labels
+  // simply don't render rather than showing a made-up number.
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLoc([pos.coords.longitude, pos.coords.latitude]),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
+    )
+  }, [])
+
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
   }
 
-  // Render pins returned by the AI assistant. Different colors per kind.
+  // ---------------------------------------------------------------------------
+  //  Selection
+  // ---------------------------------------------------------------------------
+
+  const selectPlace = useCallback(
+    (p: Place) => {
+      setSelected(p)
+      setSnap(SHEET_PEEK)
+      const map = mapRef.current
+      if (!map || !isMappable(p)) return
+      map.flyTo({
+        center: [p.longitude, p.latitude],
+        zoom: 15,
+        speed: 1.2,
+        padding: padding(),
+      })
+      // Snorkel spots carry zone polygons; drawing them is the point of the
+      // Vacation tier, so load them as soon as one is picked.
+      if (p.kind === 'snorkel') {
+        fetchSnorkelZones((p.raw as { id: string }).id)
+          .then((fc) => {
+            if (!mapRef.current) return
+            drawSnorkelZones(mapRef.current, fc)
+            setSnorkelLegend(
+              fc.features.map((f) => ({
+                label: f.properties.label,
+                color: f.properties.color,
+                description: f.properties.description,
+              })),
+            )
+          })
+          .catch((err) => console.error('Failed to load zones:', err))
+      }
+    },
+    [padding],
+  )
+
+  const clearSelection = useCallback(() => {
+    setSelected(null)
+    setSnap(SHEET_PEEK)
+    const map = mapRef.current
+    if (map) {
+      removeSnorkelZones(map)
+      setSnorkelLegend([])
+    }
+  }, [])
+
+  /**
+   * Switching top-level category resets everything scoped to the old one.
+   *
+   * Done in the event handler rather than an effect on `category`: the reset is
+   * a consequence of the click, not a synchronisation with anything external,
+   * and an effect would render one frame of the new category holding the old
+   * category's selection.
+   */
+  const selectCategory = useCallback(
+    (slug: CategorySlug | null) => {
+      setCategory(slug)
+      setSubSlug(null)
+      setSelected(null)
+      setSnap(SHEET_PEEK)
+      setTourFilter('all')
+      setSnorkelLegend([])
+      const map = mapRef.current
+      if (map) removeSnorkelZones(map)
+      if (slug !== 'beaches') {
+        setBeachFilters({})
+        setFilterOpen(false)
+      }
+    },
+    [],
+  )
+
+  // ---------------------------------------------------------------------------
+  //  Markers — one effect for every category
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    // AI pins own the map while they're up; don't fight them.
+    if (aiPins && aiPins.length > 0) return
+
+    clearMarkers()
+    places.filter(isMappable).forEach((p) => {
+      const el = makeMarkerEl(p.icon, p.id === selected?.id)
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([p.longitude, p.latitude])
+        .addTo(map)
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        selectPlace(p)
+      })
+      markersRef.current.push(marker)
+    })
+  }, [places, selected?.id, aiPins, selectPlace])
+
+  // Frame the whole result set when the list changes (but not when the user is
+  // merely picking rows out of it — flyTo already handled that).
+  const framedKey = useRef<string>('')
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || (aiPins && aiPins.length > 0)) return
+    const mappable = places.filter(isMappable)
+    const key = `${category}:${subSlug}:${mappable.map((p) => p.id).join(',')}`
+    if (key === framedKey.current) return
+    framedKey.current = key
+    if (mappable.length === 0) return
+    const bounds = new maplibregl.LngLatBounds()
+    mappable.forEach((p) => bounds.extend([p.longitude, p.latitude]))
+    map.fitBounds(bounds, { padding: padding(), maxZoom: 14 })
+  }, [places, category, subSlug, aiPins, padding])
+
+  // Re-centre when the chrome moves: a panel opens/closes, or the mobile sheet
+  // snaps to a new height. This single effect is the whole "swipe down and the
+  // pin comes back" behaviour.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const pad = padding()
+    if (selected && isMappable(selected)) {
+      map.easeTo({ center: [selected.longitude, selected.latitude], padding: pad, duration: 400 })
+    } else {
+      map.easeTo({ padding: pad, duration: 400 })
+    }
+    // `selected` is intentionally not a dep: selecting already flies the camera
+    // in selectPlace, and re-running here would double-animate it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [padding])
+
+  // Pins returned by the AI assistant. Different colors per kind.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !aiPins || aiPins.length === 0) return
@@ -153,615 +365,301 @@ function MapView({ activeCategory, aiPins, route, onRoute, onCloseCategory }: Pr
       markersRef.current.push(marker)
       bounds.extend([p.longitude, p.latitude])
     })
-    if (aiPins.length) map.fitBounds(bounds, { padding: 120, maxZoom: 15 })
+    map.fitBounds(bounds, { padding: padding(), maxZoom: 15 })
+    // padding is deliberately omitted: re-framing AI pins every time a panel
+    // moves would yank the camera away from what the user is reading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiPins])
-
-  const selectBeach = (b: Beach) => {
-    setSelected(b)
-    mapRef.current?.flyTo({ center: [b.longitude, b.latitude], zoom: 15, speed: 1.2 })
-  }
-
-  // reset everything when the top-level category changes
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    clearMarkers()
-    removeSnorkelZones(map)
-    setSnorkelLegend([])
-    setSnorkelSpots([])
-    setTourFilter('all')
-    setSelected(null)
-    setBeaches([])
-    setActivitySlug(null)
-    setServiceSlug(null)
-    setTransportSlug(null)
-    setRestaurantSlug(null)
-    setSelectedRestaurant(null)
-    setEssentialSlug(null)
-    setTaxiDrivers(null)
-    setSelectedCarRental(null)
-    if (activeCategory !== 'beaches') {
-      setBeachFilters({})
-      setFilterOpen(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory])
-
-  // Load + plot beaches; re-runs when filters change.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || activeCategory !== 'beaches') return
-    let cancelled = false
-    clearMarkers()
-    setSelected(null)
-    fetchBeaches(beachFilters)
-      .then((data) => {
-        if (cancelled || !mapRef.current) return
-        setBeaches(data)
-        const bounds = new maplibregl.LngLatBounds()
-        data.forEach((b) => {
-          const el = makeMarkerEl(BEACH_ICON)
-          const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([b.longitude, b.latitude])
-            .addTo(map)
-          el.addEventListener('click', (e) => {
-            e.stopPropagation()
-            selectBeach(b)
-          })
-          markersRef.current.push(marker)
-          bounds.extend([b.longitude, b.latitude])
-        })
-        if (data.length) map.fitBounds(bounds, { padding: 80, maxZoom: 14 })
-      })
-      .catch((err) => console.error('Failed to load beaches:', err))
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, beachFilters])
-
-  // when an activity is picked in the sidebar, drop its pins
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !activitySlug) return
-    clearMarkers()
-    removeSnorkelZones(map)
-    setSnorkelLegend([])
-
-    // --- Snorkeling: load spots into state; a separate effect plots them ---
-    if (activitySlug === 'snorkeling') {
-      // Vacation and up (PRICING.md §4). Skip the fetch entirely for lower
-      // tiers — the server would 402 anyway, and an avoidable failed request
-      // just puts a red line in the console. The UI shows an upsell instead;
-      // this check is convenience, the real gate is requireTier server-side.
-      if (!canSnorkel) {
-        setSnorkelSpots([])
-        return
-      }
-      let cancelled = false
-      fetchSnorkelSpots()
-        .then((spots: SnorkelSpot[]) => {
-          if (cancelled) return
-          setSnorkelSpots(spots)
-        })
-        .catch((err) => console.error('Failed to load snorkel spots:', err))
-      return () => {
-        cancelled = true
-      }
-    }
-
-    let cancelled = false
-    fetchActivityListings(activitySlug)
-      .then((items: ActivityListing[]) => {
-        if (cancelled || !mapRef.current) return
-        const withCoords = items.filter((i) => i.latitude != null && i.longitude != null)
-        const bounds = new maplibregl.LngLatBounds()
-        withCoords.forEach((i) => {
-          const style = ACTIVITY_ICONS[activitySlug] ?? ACTIVITY_ICONS['adventures']
-          const marker = new maplibregl.Marker({ element: makeMarkerEl(style), anchor: 'center' })
-            .setLngLat([i.longitude as number, i.latitude as number])
-            .setPopup(
-              new maplibregl.Popup({ offset: 24 }).setHTML(
-                `<div style="font-family:system-ui;color:#e2e8f0;max-width:220px">
-                   <div style="font-weight:600;font-size:14px">${i.name}</div>
-                   ${i.phones?.length ? `<div style="font-size:12px;color:#94a3b8">${i.phones.join(', ')}</div>` : ''}
-                   ${i.description ? `<div style="margin-top:6px;font-size:12px">${i.description}</div>` : ''}
-                 </div>`,
-              ),
-            )
-            .addTo(map)
-          markersRef.current.push(marker)
-          bounds.extend([i.longitude as number, i.latitude as number])
-        })
-        if (withCoords.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
-      })
-      .catch((err) => console.error('Failed to load activity listings:', err))
-
-    return () => {
-      cancelled = true
-    }
-    // canSnorkel is a dep so the zones load immediately after an upgrade,
-    // without needing a page reload.
-  }, [activitySlug, canSnorkel])
-
-  // Plot snorkel markers from state, re-filtering when the toggle changes.
-  // Hidden once a spot's zones are shown (zonesShown).
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || activitySlug !== 'snorkeling') return
-    if (zonesShown) return // keep current view while zones are displayed
-
-    clearMarkers()
-    const visible =
-      tourFilter === 'tours' ? snorkelSpots.filter((s) => s.offers_tours) : snorkelSpots
-
-    const bounds = new maplibregl.LngLatBounds()
-    visible.forEach((sp) => {
-      const el = makeMarkerEl(ACTIVITY_ICONS['snorkeling'])
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([sp.longitude, sp.latitude])
-        .addTo(map)
-      el.addEventListener('click', (e) => {
-        e.stopPropagation()
-        map.flyTo({ center: [sp.longitude, sp.latitude], zoom: 15, speed: 1.2 })
-        fetchSnorkelZones(sp.id)
-          .then((fc) => {
-            if (!mapRef.current) return
-            drawSnorkelZones(map, fc)
-            setSnorkelLegend(
-              fc.features.map((f) => ({
-                label: f.properties.label,
-                color: f.properties.color,
-                description: f.properties.description,
-              })),
-            )
-          })
-          .catch((err) => console.error('Failed to load zones:', err))
-      })
-      markersRef.current.push(marker)
-      bounds.extend([sp.longitude, sp.latitude])
-    })
-    if (visible.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snorkelSpots, tourFilter, activitySlug, zonesShown])
-
-  // Plot service listings (only mappable ones) when a service is selected
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !serviceSlug) return
-    clearMarkers()
-    let cancelled = false
-    fetchServiceListings(serviceSlug)
-      .then((items: ServiceListing[]) => {
-        if (cancelled || !mapRef.current) return
-        const located = items.filter(
-          (i) => i.has_location && i.latitude != null && i.longitude != null,
-        )
-        const bounds = new maplibregl.LngLatBounds()
-        located.forEach((i) => {
-          const marker = new maplibregl.Marker({ color: '#8b5cf6', anchor: 'center' })
-            .setLngLat([i.longitude as number, i.latitude as number])
-            .setPopup(
-              new maplibregl.Popup({ offset: 24 }).setHTML(
-                `<div style="font-family:system-ui;color:#e2e8f0;max-width:220px">
-                   <div style="font-weight:600;font-size:14px">${i.name}</div>
-                   ${i.phones?.length ? `<div style="font-size:12px;color:#94a3b8">${i.phones.join(', ')}</div>` : ''}
-                   ${i.address ? `<div style="margin-top:6px;font-size:12px">${i.address}</div>` : ''}
-                 </div>`,
-              ),
-            )
-            .addTo(map)
-          markersRef.current.push(marker)
-          bounds.extend([i.longitude as number, i.latitude as number])
-        })
-        if (located.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
-      })
-      .catch((err) => console.error('Failed to load service listings:', err))
-    return () => {
-      cancelled = true
-    }
-  }, [serviceSlug])
-
-  // Load transportation for the selected type.
-  // Non-physical (taxis) -> list pane. Physical -> map pins whose click opens
-  // the car-rental detail panel.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !transportSlug) return
-    clearMarkers()
-    setTaxiDrivers(null)
-    setSelectedCarRental(null)
-
-    let cancelled = false
-
-    if (transportSlug === 'taxis') {
-      setTaxiLoading(true)
-      fetchTransportListings('taxis')
-        .then((items) => {
-          if (cancelled) return
-          setTaxiDrivers(items)
-          setTaxiLoading(false)
-        })
-        .catch((err) => {
-          console.error('Failed to load taxis:', err)
-          setTaxiLoading(false)
-        })
-      return () => {
-        cancelled = true
-      }
-    }
-
-    // physical categories -> pins
-    fetchTransportListings(transportSlug)
-      .then((items: TransportListing[]) => {
-        if (cancelled || !mapRef.current) return
-        const located = items.filter(
-          (i) => i.has_location && i.latitude != null && i.longitude != null,
-        )
-        const bounds = new maplibregl.LngLatBounds()
-        located.forEach((i) => {
-          const marker = new maplibregl.Marker({ color: '#0ea5e9', anchor: 'center' })
-            .setLngLat([i.longitude as number, i.latitude as number])
-            .addTo(map)
-          const el = marker.getElement()
-          el.style.cursor = 'pointer'
-          el.addEventListener('click', (e) => {
-            e.stopPropagation()
-            map.flyTo({ center: [i.longitude as number, i.latitude as number], zoom: 15, speed: 1.2 })
-            setSelectedCarRental(i)
-          })
-          markersRef.current.push(marker)
-          bounds.extend([i.longitude as number, i.latitude as number])
-        })
-        if (located.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
-      })
-      .catch((err) => console.error('Failed to load transport listings:', err))
-    return () => {
-      cancelled = true
-    }
-  }, [transportSlug])
-
-  // Plot restaurant listings (mappable ones) when a category is selected
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !restaurantSlug) return
-    clearMarkers()
-    setSelectedRestaurant(null)
-    let cancelled = false
-    fetchRestaurantListings(restaurantSlug)
-      .then((items: RestaurantListing[]) => {
-        if (cancelled || !mapRef.current) return
-        const located = items.filter(
-          (i) => i.has_location && i.latitude != null && i.longitude != null,
-        )
-        const bounds = new maplibregl.LngLatBounds()
-        located.forEach((i) => {
-          const marker = new maplibregl.Marker({ color: '#f97316', anchor: 'center' })
-            .setLngLat([i.longitude as number, i.latitude as number])
-            .addTo(map)
-          const el = marker.getElement()
-          el.style.cursor = 'pointer'
-          el.addEventListener('click', (e) => {
-            e.stopPropagation()
-            map.flyTo({ center: [i.longitude as number, i.latitude as number], zoom: 15, speed: 1.2 })
-            setSelectedRestaurant(i)
-          })
-          markersRef.current.push(marker)
-          bounds.extend([i.longitude as number, i.latitude as number])
-        })
-        if (located.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
-      })
-      .catch((err) => console.error('Failed to load restaurants:', err))
-    return () => {
-      cancelled = true
-    }
-  }, [restaurantSlug])
-
-  // Restaurant "Get Directions": route to it. We use the restaurant name as the
-  // destination; the from-point defaults to a central island landmark for now.
-  const handleRestaurantDirections = (r: RestaurantListing) => {
-    // Use the ferry terminal area as a sensible default origin on the island.
-    fetchDirections('Vieques Ferry Terminal', r.name)
-      .then((res) => {
-        onRoute?.(res)
-        setSelectedRestaurant(null)
-      })
-      .catch((err) => {
-        // Fallback: if name resolution fails, just open Google Maps for the spot.
-        console.error('Directions failed:', err)
-        if (r.latitude != null && r.longitude != null) {
-          window.open(
-            `https://www.google.com/maps/dir/?api=1&destination=${r.latitude},${r.longitude}`,
-            '_blank',
-          )
-        }
-      })
-  }
 
   // Draw the directions route when one is provided; clear it when null.
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    if (route) {
-      drawRoute(map, route, routeMarkersRef.current)
-    } else {
-      removeRoute(map, routeMarkersRef.current)
-    }
+    if (route) drawRoute(map, route, routeMarkersRef.current)
+    else removeRoute(map, routeMarkersRef.current)
   }, [route])
 
-  // Plot essential-service pins (emoji markers) when a category is selected
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !essentialSlug) return
-    clearMarkers()
-    let cancelled = false
-    fetchEssentialListings(essentialSlug)
-      .then((items: EssentialListing[]) => {
-        if (cancelled || !mapRef.current) return
-        const style = ESSENTIAL_ICONS[essentialSlug] || DEFAULT_ICON
-        const located = items.filter(
-          (i) => i.has_location && i.latitude != null && i.longitude != null,
-        )
-        const bounds = new maplibregl.LngLatBounds()
-        located.forEach((i) => {
-          const el = makeMarkerEl(style)
-          const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-            .setLngLat([i.longitude as number, i.latitude as number])
-            .setPopup(
-              new maplibregl.Popup({ offset: 24 }).setHTML(
-                `<div style="font-family:system-ui;color:#e2e8f0;max-width:220px">
-                   <div style="font-weight:600;font-size:14px">${i.name}</div>
-                   ${i.address ? `<div style="margin-top:4px;font-size:12px;color:#94a3b8">${i.address}</div>` : ''}
-                   ${i.hours ? `<div style="margin-top:4px;font-size:12px">${i.hours}</div>` : ''}
-                   ${i.phones?.length ? `<div style="margin-top:4px;font-size:12px;color:#94a3b8">${i.phones.join(', ')}</div>` : ''}
-                 </div>`,
-              ),
-            )
-            .addTo(map)
-          markersRef.current.push(marker)
-          bounds.extend([i.longitude as number, i.latitude as number])
-        })
-        if (located.length) map.fitBounds(bounds, { padding: 100, maxZoom: 14 })
+  /**
+   * In-app routing for places we can name to the backend geocoder. The origin
+   * defaults to the ferry terminal — the island's arrival point. Falls back to
+   * Google Maps if name resolution fails.
+   */
+  const handleDirections = (p: Place) => {
+    if (!onRoute || !isMappable(p)) return
+    fetchDirections('Vieques Ferry Terminal', p.name)
+      .then((res) => {
+        onRoute(res)
+        clearSelection()
       })
-      .catch((err) => console.error('Failed to load essentials:', err))
-    return () => {
-      cancelled = true
-    }
-  }, [essentialSlug])
-
-  const changeStyle = (id: string) => {
-    if (!mapRef.current || id === active) return
-    mapRef.current.setStyle(styleUrl(id))
-    setActive(id)
+      .catch((err) => {
+        console.error('Directions failed:', err)
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&destination=${p.latitude},${p.longitude}`,
+          '_blank',
+        )
+      })
   }
 
-  return (
-    <div className="absolute inset-0">
-      <div ref={mapContainer} style={{ position: 'absolute', inset: 0 }} />
+  // ---------------------------------------------------------------------------
+  //  Render
+  // ---------------------------------------------------------------------------
 
-      {/* When a right-side detail panel is open, shift the map's top-right
-          controls (zoom/nav) left by the panel width so they stay visible. */}
-      {selectedRestaurant && (
-        <style>{`
-          .maplibregl-ctrl-top-right { transform: translateX(-24rem); transition: transform 0.2s; }
-          @media (max-width: 640px) { .maplibregl-ctrl-top-right { transform: none; } }
-        `}</style>
-      )}
+  const activeFilters = useMemo(() => {
+    const chips: { key: string; label: string; onRemove: () => void }[] = []
+    beachFilters.type?.forEach((t) =>
+      chips.push({
+        key: `type:${t}`,
+        label: t,
+        onRemove: () =>
+          setBeachFilters((f) => ({ ...f, type: f.type?.filter((x) => x !== t) })),
+      }),
+    )
+    if (beachFilters.water)
+      chips.push({
+        key: 'water',
+        label: beachFilters.water,
+        onRemove: () => setBeachFilters((f) => ({ ...f, water: undefined })),
+      })
+    beachFilters.facilities?.forEach((t) =>
+      chips.push({
+        key: `fac:${t}`,
+        label: t,
+        onRemove: () =>
+          setBeachFilters((f) => ({ ...f, facilities: f.facilities?.filter((x) => x !== t) })),
+      }),
+    )
+    if (typeof beachFilters.refuge === 'boolean')
+      chips.push({
+        key: 'refuge',
+        label: beachFilters.refuge ? 'In refuge' : 'Outside refuge',
+        onRemove: () => setBeachFilters((f) => ({ ...f, refuge: undefined })),
+      })
+    return chips
+  }, [beachFilters])
 
-      {/* Beach search — only on beaches, top-left, shifts right if a sidebar is open */}
-      {beaches.length > 0 && (
-        <div
-          className="absolute top-4 z-10 pointer-events-auto transition-all"
-          style={{ left: leftOffset(sidebarOpen) }}
-        >
-          <SearchBar items={beaches} onSelect={selectBeach} placeholder="Search beaches…" />
-        </div>
-      )}
+  const searchBar = (
+    <MapSearchBar
+      places={places}
+      onSelect={selectPlace}
+      placeholder={
+        category ? `Search ${categoryMeta(category).label.toLowerCase()}…` : 'Search the island…'
+      }
+      styleId={styleId}
+      onStyleChange={changeStyle}
+      onOpenFilters={category === 'beaches' ? () => setFilterOpen((v) => !v) : undefined}
+      filtersOpen={filterOpen}
+      activeFilters={activeFilters}
+    />
+  )
 
-      {/* Beach filters button — shows whenever Beaches is active */}
-      {activeCategory === 'beaches' && (
-        <button
-          onClick={() => setFilterOpen((v) => !v)}
-          className={`absolute z-20 px-4 py-2 text-sm rounded-full shadow-lg transition-colors ${
-            filterOpen || Object.keys(beachFilters).length > 0
-              ? 'bg-primary text-primary-foreground font-medium'
-              : 'bg-card/85 backdrop-blur border border-border text-foreground hover:bg-accent'
-          }`}
-          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
-        >
-          Filters{Object.keys(beachFilters).length > 0 ? ' ●' : ''}
-        </button>
-      )}
-
-      {activeCategory === 'beaches' && filterOpen && (
-        <BeachFilterPanel
-          filters={beachFilters}
-          onChange={setBeachFilters}
-          onClose={() => setFilterOpen(false)}
-        />
-      )}
-
-      {/* Style switcher — top-left area, clear of the top-right zoom controls,
-          shifts right when the activities sidebar is open */}
-      <div
-        className="absolute z-10 flex gap-1 rounded-lg bg-card/80 p-1 backdrop-blur border border-border shadow-lg transition-all max-w-[calc(100vw-2rem)] overflow-x-auto"
-        style={
-          isMobile
-            ? {
-                bottom: 'calc(env(safe-area-inset-bottom) + 1rem)',
-                left: '1rem',
-              }
-            : {
-                top: '1rem',
-                left: sidebarOpen
-                  ? '17.5rem'
-                  : beaches.length > 0
-                    ? '22rem'
-                    : '1rem',
-              }
-        }
-      >
-        {STYLES.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => changeStyle(s.id)}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
-              active === s.id
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* activities sidebar */}
-      {activeCategory === 'activities' && (
-        <CategoryListSidebar
-          title="Activities"
-          subtitle="Pick one to see it on the map"
-          searchPlaceholder="Search activities…"
-          fetchItems={fetchActivityCategories}
-          activeSlug={activitySlug}
-          onSelect={setActivitySlug}
-          onClose={() => onCloseCategory?.()}
-        />
-      )}
-
-      {/* restaurants sidebar */}
-      {activeCategory === 'restaurants' && (
-        <RestaurantSidebar
-          activeSlug={restaurantSlug}
-          onSelect={setRestaurantSlug}
-          onClose={() => onCloseCategory?.()}
-        />
-      )}
-
-      {/* essentials sidebar */}
-      {activeCategory === 'essentials' && (
-        <EssentialsSidebar
-          activeSlug={essentialSlug}
-          onSelect={setEssentialSlug}
-          onClose={() => onCloseCategory?.()}
-        />
-      )}
-
-      {/* services sidebar */}
-      {activeCategory === 'services' && (
-        <CategoryListSidebar
-          title="Services"
-          subtitle="Pick a service to see providers"
-          searchPlaceholder="Search services…"
-          fetchItems={fetchServiceCategories}
-          activeSlug={serviceSlug}
-          onSelect={setServiceSlug}
-          onClose={() => onCloseCategory?.()}
-        />
-      )}
-
-      {/* transportation sidebar */}
-      {activeCategory === 'transportation' && (
-        <TransportationSidebar
-          activeSlug={transportSlug}
-          onSelect={(slug) => setTransportSlug(slug)}
-          onClose={() => onCloseCategory?.()}
-        />
-      )}
-
-      {/* taxi driver list pane (non-physical) */}
-      {activeCategory === 'transportation' && transportSlug === 'taxis' && taxiDrivers && (
-        <TaxiListPanel
-          drivers={taxiDrivers}
-          loading={taxiLoading}
-          onClose={() => setTransportSlug(null)}
-        />
-      )}
-
-      {/* car rental detail panel (physical, on pin click) */}
-      <CarRentalPanel
-        company={selectedCarRental}
-        onClose={() => setSelectedCarRental(null)}
-      />
-
-      {/* Snorkeling is Vacation-tier. Show the lock rather than hiding the
+  const banner = (
+    <>
+      {/* Snorkelling is Vacation-tier. Show the lock rather than hiding the
           category: a feature the user never sees is a feature they never buy.
           See PRICING.md §4.1. */}
-      {activitySlug === 'snorkeling' && !canSnorkel && (
-        <div
-          className="absolute z-20 w-72"
-          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
-        >
-          <UpsellOverlay
-            feature="snorkel_zones"
-            title="Snorkeling zone maps"
-            blurb="See every snorkeling zone, where to enter the water, depth and difficulty — plus the Bio Bay moon-phase guide."
-          />
+      {snorkelling && locked && (
+        <UpsellOverlay
+          feature="snorkel_zones"
+          title="Snorkeling zone maps"
+          blurb="See every snorkeling zone, where to enter the water, depth and difficulty — plus the Bio Bay moon-phase guide."
+        />
+      )}
+      {snorkelling && !locked && (
+        <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
+          {(['all', 'tours'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setTourFilter(f)}
+              className={`flex-1 rounded-xl py-1.5 text-xs transition-colors ${
+                tourFilter === f
+                  ? 'bg-primary font-semibold text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f === 'all' ? 'Go Yourself' : 'Book a Tour'}
+            </button>
+          ))}
         </div>
       )}
-
-      {/* snorkel Go Yourself / Book a Tour toggle — only before zones are shown */}
-      {activitySlug === 'snorkeling' && canSnorkel && !zonesShown && (
-        <div
-          className="absolute z-20 flex gap-1 rounded-lg bg-card/85 backdrop-blur border border-border shadow-lg p-1"
-          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
-        >
-          <button
-            onClick={() => setTourFilter('all')}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-              tourFilter === 'all'
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            Go Yourself
-          </button>
-          <button
-            onClick={() => setTourFilter('tours')}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-              tourFilter === 'tours'
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            }`}
-          >
-            Book a Tour
-          </button>
-        </div>
-      )}
-
-      {/* snorkel legend — sits under the style toggles, right of the sidebar */}
       {snorkelLegend.length > 0 && (
-        <div
-          className="absolute z-20 w-64 max-w-[calc(100vw-2rem)] rounded-lg bg-card/90 backdrop-blur border border-border shadow-xl p-3"
-          style={{ top: '4rem', left: leftOffset(sidebarOpen) }}
-        >
-          <div className="text-xs font-semibold text-foreground mb-2">Snorkel zones</div>
+        <div className="rounded-2xl border border-white/6 bg-white/3 p-3">
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Snorkel zones
+          </div>
           <ul className="space-y-1.5">
             {snorkelLegend.map((z, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span
-                  className="mt-0.5 inline-block w-3 h-3 rounded-sm border border-white/40 shrink-0"
+                  className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
                   style={{ background: z.color ?? '#3b82f6' }}
                 />
                 <span>
-                  <span className="text-foreground font-medium">{z.label}</span>
-                  {z.description ? <span className="block text-muted-foreground">{z.description}</span> : null}
+                  <span className="font-medium text-foreground">{z.label}</span>
+                  {z.description && <span className="block">{z.description}</span>}
                 </span>
               </li>
             ))}
           </ul>
         </div>
       )}
+    </>
+  )
+  const hasBanner = snorkelling || snorkelLegend.length > 0
 
-      {/* beach detail panel */}
-      <DetailPanel beach={selected} onClose={() => setSelected(null)} />
+  const results = category && (
+    <ResultsList
+      category={category}
+      places={places}
+      loading={loading}
+      selectedId={selected?.id ?? null}
+      onSelect={selectPlace}
+      subcategories={subcategories}
+      activeSub={subSlug}
+      onSelectSub={(s) => {
+        setSubSlug(s)
+        clearSelection()
+      }}
+      sort={sort}
+      onSortChange={setSort}
+      distances={distances}
+      onClose={isMobile ? undefined : () => selectCategory(null)}
+      banner={hasBanner ? banner : undefined}
+    />
+  )
 
-      {/* restaurant detail panel (Google Maps style) */}
-      <RestaurantDetailPanel
-        restaurant={selectedRestaurant}
-        onClose={() => setSelectedRestaurant(null)}
-        onGetDirections={handleRestaurantDirections}
+  return (
+    <div className="absolute inset-0">
+      <div ref={mapContainer} style={{ position: 'absolute', inset: 0 }} />
+
+      <MapTopBar
+        active={category}
+        onSelect={selectCategory}
+        onAskAi={onAskAi}
+        aiOpen={aiOpen}
+        onDirections={onDirections}
+        dirOpen={dirOpen}
+        onProfile={onProfile}
+        profileOpen={profileOpen}
       />
+
+      {isMobile ? (
+        <>
+          {/* Search floats above the sheet on phones — it belongs to the map,
+              not to the results, and must stay reachable at any snap height. */}
+          {category && (
+            <div className="absolute inset-x-4 top-[9.5rem] z-20">
+              <div className="glass rounded-3xl p-3">{searchBar}</div>
+            </div>
+          )}
+          {category && (
+            <MapSheet
+              title={selected?.name ?? categoryMeta(category).label}
+              snap={snap}
+              onSnapChange={setSnap}
+              onHeightChange={setSheetHeight}
+              onClose={() => (selected ? clearSelection() : selectCategory(null))}
+            >
+              {selected ? (
+                <PlaceDetailPanel
+                  place={selected}
+                  onClose={() => selectCategory(null)}
+                  onBack={clearSelection}
+                  onGetDirections={onRoute ? handleDirections : undefined}
+                />
+              ) : (
+                results
+              )}
+            </MapSheet>
+          )}
+        </>
+      ) : (
+        <>
+          {category && (
+            <ResponsivePanel
+              variant="floating"
+              side="left"
+              title={categoryMeta(category).label}
+              desktopWidth="sm:w-[344px]"
+              onClose={() => selectCategory(null)}
+            >
+              <div className="shrink-0 border-b border-white/8 p-4">{searchBar}</div>
+              {results}
+            </ResponsivePanel>
+          )}
+
+          {selected && (
+            <ResponsivePanel
+              variant="floating"
+              side="right"
+              title={selected.name}
+              desktopWidth="sm:w-[400px]"
+              onClose={clearSelection}
+            >
+              <PlaceDetailPanel
+                place={selected}
+                onClose={clearSelection}
+                onGetDirections={onRoute ? handleDirections : undefined}
+              />
+            </ResponsivePanel>
+          )}
+        </>
+      )}
+
+      {/* Zoom / recentre, tucked clear of the detail panel. */}
+      <div
+        className="absolute z-10 flex flex-col gap-2"
+        style={{
+          bottom: isMobile ? `calc(${sheetHeight}px + 1rem)` : '1.25rem',
+          right: !isMobile && detailOpen ? `${DETAIL_PANEL_W + 40}px` : '1.25rem',
+        }}
+      >
+        <div className="glass flex flex-col rounded-2xl p-1">
+          <button
+            onClick={() => mapRef.current?.zoomIn()}
+            aria-label="Zoom in"
+            className="grid h-10 w-10 place-items-center rounded-xl text-foreground hover:bg-white/8"
+          >
+            +
+          </button>
+          <div className="mx-2 h-px bg-white/8" />
+          <button
+            onClick={() => mapRef.current?.zoomOut()}
+            aria-label="Zoom out"
+            className="grid h-10 w-10 place-items-center rounded-xl text-foreground hover:bg-white/8"
+          >
+            −
+          </button>
+        </div>
+        <button
+          onClick={() =>
+            mapRef.current?.easeTo({
+              center: userLoc ?? VIEQUES_CENTER,
+              zoom: userLoc ? 14 : 12,
+              padding: padding(),
+            })
+          }
+          aria-label="Recentre map"
+          className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground hover:bg-white/8"
+        >
+          ◎
+        </button>
+      </div>
+
+      {/* Scale / attribution strip. */}
+      <div
+        className="glass pointer-events-none absolute bottom-5 z-10 hidden items-center gap-2.5 rounded-xl px-3 py-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground sm:flex"
+        style={{ left: resultsOpen ? `${RESULTS_PANEL_W + 40}px` : '1.25rem' }}
+      >
+        © Explore Vieques · MapTiler · OpenStreetMap
+      </div>
+
+      {category === 'beaches' && filterOpen && (
+        <BeachFilterPanel
+          filters={beachFilters}
+          onChange={setBeachFilters}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
     </div>
   )
 }

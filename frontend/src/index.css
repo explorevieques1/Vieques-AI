@@ -3,6 +3,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource/instrument-serif";
+@import "@fontsource/instrument-serif/400-italic.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -14,6 +17,14 @@ html, body, #root {
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
+  /* Display serif for place titles, mono for the uppercase micro-labels
+     ("WATER", "RESULTS · 18 BEACHES"). Both are part of the map redesign's
+     type system — see the mockups in the repo root. */
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-accent-sky: var(--accent-sky);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -81,6 +92,9 @@ html, body, #root {
   --chart-4: oklch(0.75 0.14 85);
   --chart-5: oklch(0.66 0.2 25);
   --radius: 0.75rem;
+  --accent-sky: oklch(0.62 0.14 233);
+  --glass: oklch(1 0 0 / 82%);
+  --glass-border: oklch(0.21 0.03 245 / 10%);
   --sidebar: oklch(0.98 0.008 220);
   --sidebar-foreground: oklch(0.21 0.03 245);
   --sidebar-primary: oklch(0.68 0.13 205);
@@ -91,38 +105,46 @@ html, body, #root {
   --sidebar-ring: oklch(0.68 0.13 205);
 }
 
+/* Deep-sea night. Keyed to the map redesign mockups: near-black navy canvas
+   (#06101c), frosted panels over it (#0b1220 @ ~82%), teal primary (#5eead4)
+   with a sky-blue secondary accent (#38bdf8) for the second tag colour. */
 .dark {
-  --background: oklch(0.19 0.03 245);
-  --foreground: oklch(0.97 0.005 220);
-  --card: oklch(0.23 0.035 245);
-  --card-foreground: oklch(0.97 0.005 220);
-  --popover: oklch(0.23 0.035 245);
-  --popover-foreground: oklch(0.97 0.005 220);
-  --primary: oklch(0.78 0.13 200);
-  --primary-foreground: oklch(0.2 0.03 245);
-  --secondary: oklch(0.3 0.03 245);
-  --secondary-foreground: oklch(0.97 0.005 220);
-  --muted: oklch(0.3 0.03 245);
-  --muted-foreground: oklch(0.72 0.02 230);
-  --accent: oklch(0.34 0.05 215);
-  --accent-foreground: oklch(0.97 0.005 220);
+  --background: oklch(0.14 0.025 250);
+  --foreground: oklch(0.93 0.012 250);
+  --card: oklch(0.18 0.028 256);
+  --card-foreground: oklch(0.93 0.012 250);
+  --popover: oklch(0.18 0.028 256);
+  --popover-foreground: oklch(0.93 0.012 250);
+  --primary: oklch(0.87 0.126 175);
+  --primary-foreground: oklch(0.14 0.025 250);
+  --secondary: oklch(0.26 0.03 250);
+  --secondary-foreground: oklch(0.93 0.012 250);
+  --muted: oklch(0.26 0.03 250);
+  --muted-foreground: oklch(0.68 0.03 258);
+  --accent: oklch(0.3 0.045 220);
+  --accent-foreground: oklch(0.93 0.012 250);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.78 0.13 200);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.87 0.126 175);
+  --accent-sky: oklch(0.75 0.13 233);
+  /* Frosted panel fill + hairline. Alpha is deliberate — `.glass` blurs
+     whatever map tiles sit behind it. */
+  --glass: oklch(0.17 0.028 258 / 82%);
+  --glass-border: oklch(1 0 0 / 10%);
   --chart-1: oklch(0.78 0.13 200);
   --chart-2: oklch(0.66 0.12 235);
   --chart-3: oklch(0.74 0.15 160);
   --chart-4: oklch(0.78 0.14 85);
   --chart-5: oklch(0.7 0.2 25);
-  --sidebar: oklch(0.21 0.032 245);
-  --sidebar-foreground: oklch(0.97 0.005 220);
-  --sidebar-primary: oklch(0.78 0.13 200);
-  --sidebar-primary-foreground: oklch(0.2 0.03 245);
-  --sidebar-accent: oklch(0.34 0.05 215);
-  --sidebar-accent-foreground: oklch(0.97 0.005 220);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.78 0.13 200);
+  --sidebar: oklch(0.17 0.028 258);
+  --sidebar-foreground: oklch(0.93 0.012 250);
+  --sidebar-primary: oklch(0.87 0.126 175);
+  --sidebar-primary-foreground: oklch(0.14 0.025 250);
+  --sidebar-accent: oklch(0.3 0.045 220);
+  --sidebar-accent-foreground: oklch(0.93 0.012 250);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.87 0.126 175);
 }
 
 @layer base {
@@ -177,5 +199,40 @@ html, body, #root {
   .scroll-contain {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+  }
+  /* The frosted panel treatment shared by every floating map surface — top
+     bar, search stack, results list, detail panel, map controls. Defined once
+     so the look can be retuned in one place. */
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    /* Via @apply rather than a hand-written `backdrop-filter`: writing the
+       property and its -webkit- prefix by hand collapses to prefix-only after
+       minification, which loses the blur in Chrome and Firefox. Tailwind's
+       utility emits both correctly. */
+    @apply backdrop-blur-xl backdrop-saturate-150;
+  }
+  /* Chip rows and the results list scroll horizontally/vertically without a
+     visible bar — the panels are small and a scrollbar reads as chrome. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Pulse ring behind the selected map marker. Lives here rather than inline
+   because lib/markerIcon.ts builds marker DOM imperatively and MapLibre owns
+   the outer element's `transform` — the animation must sit on an inner node. */
+@keyframes marker-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
   }
 }

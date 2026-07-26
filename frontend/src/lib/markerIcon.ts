@@ -62,21 +62,45 @@ export const SERVICE_ICONS: Record<string, MarkerStyle> = {
 // Fallback used when a slug has no specific icon.
 export const DEFAULT_ICON: MarkerStyle = { emoji: '📍', color: '#a855f7' }
 
-export function makeMarkerEl({ emoji, color }: MarkerStyle): HTMLDivElement {
+export function makeMarkerEl(
+  { emoji, color }: MarkerStyle,
+  /** Selected pins get the larger teal badge + pulse ring from the mockups. */
+  selected = false,
+): HTMLDivElement {
+  const size = selected ? 44 : 32
+
   // Outer wrapper — MapLibre owns its transform; we don't touch it.
   const outer = document.createElement('div')
-  outer.style.cssText = 'width:32px;height:32px;cursor:pointer;'
+  outer.style.cssText = `width:${size}px;height:${size}px;cursor:pointer;position:relative;`
+
+  if (selected) {
+    // Expanding ring behind the badge. Its own element, because the badge
+    // needs a separate (hover) transform and MapLibre already claimed the
+    // outer one — three nodes, three independent transforms.
+    const ring = document.createElement('div')
+    ring.style.cssText = `
+      position:absolute;inset:-6px;border-radius:50%;
+      background:${color};pointer-events:none;
+      animation:marker-pulse 2s ease-out infinite;
+    `
+    outer.appendChild(ring)
+  }
 
   // Inner badge — all visual styling + hover scale lives here.
   const inner = document.createElement('div')
   inner.style.cssText = `
-    width:32px;height:32px;box-sizing:border-box;
+    position:relative;
+    width:${size}px;height:${size}px;box-sizing:border-box;
     display:flex;align-items:center;justify-content:center;
     background:${color};
-    border:2px solid white;
+    border:2px solid ${selected ? 'rgba(255,255,255,0.9)' : 'white'};
     border-radius:50%;
-    box-shadow:0 1px 4px rgba(0,0,0,0.4);
-    font-size:16px;line-height:1;
+    box-shadow:${
+      selected
+        ? `0 8px 24px ${color}80, 0 2px 6px rgba(0,0,0,0.5)`
+        : '0 1px 4px rgba(0,0,0,0.4)'
+    };
+    font-size:${selected ? 22 : 16}px;line-height:1;
     transition:transform 0.1s;
   `
   inner.textContent = emoji
