@@ -2,6 +2,8 @@ USED FO RMAKING AMIGRATION TO THE DATABASE AFTER ADDING A FEATURE
 
 cp ~/Downloads/0006_snorkel_tours.sql ~/Desktop/Vieques\ AI/db/migrations/
 
+cd "/home/giancarlo/Desktop/Vieques AI" && git push origin main
+
 
 cd ~/Desktop/Vieques\ AI/db/scripts
 bash 03_migrate.sh

@@ -42,6 +42,7 @@ function App() {
                         flex items-center justify-between gap-4">
           {/* Brand */}
           <div className="flex items-center gap-2.5 min-w-0">
+            <img src="/logo.svg" alt="" className="h-7 w-7 sm:h-8 sm:w-8 rounded-md shrink-0" />
             <h1 className="text-base sm:text-lg font-bold tracking-tight whitespace-nowrap">
               Explore <span className="text-cyan-400">Vieques</span>
             </h1>

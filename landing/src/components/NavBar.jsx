@@ -34,7 +34,7 @@ export default function NavBar() {
   return (
     <header className="nav">
       <a href="#top" className="brand-mark">
-        <span className="brand-tile" aria-hidden="true">EV</span>
+        <img src="/logo.svg" className="brand-tile" alt="" width="44" height="44" />
         <span className="brand-wrap">
           <span className="brand-name">EXPLORE <span>VIEQUES</span></span>
           <span className="brand-sub">AI ISLAND GUIDE</span>

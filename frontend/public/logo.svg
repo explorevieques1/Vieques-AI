@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38d9e8"/>
+      <stop offset="0.55" stop-color="#0e8fb0"/>
+      <stop offset="1" stop-color="#0b2f45"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="256" y1="120" x2="256" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e6fbff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sea)"/>
+  <g stroke="#ffffff" stroke-opacity="0.22" stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M96 388 q40 -30 80 0 t80 0 t80 0 t80 0"/>
+    <path d="M120 430 q36 -26 72 0 t72 0 t72 0" stroke-opacity="0.14"/>
+  </g>
+  <path fill="url(#pin)" d="M256 120c-62 0-112 50-112 112 0 78 96 152 108 161a6 6 0 0 0 8 0c12-9 108-83 108-161 0-62-50-112-112-112z"/>
+  <circle cx="256" cy="228" r="46" fill="#0e8fb0"/>
+</svg>

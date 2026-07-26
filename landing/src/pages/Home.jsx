@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import NavBar from '../components/NavBar.jsx'
+import IOSPhoneFrame from '../components/IOSPhoneFrame.jsx'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -69,34 +70,35 @@ export default function Home() {
             </div>
           </div>
 
-          {/* phone mockup: pure CSS/HTML, no external frame lib */}
-          <div className="phone">
-            <div className="phone-screen">
-              <div className="phone-bar"><span>9:41</span><span>▮▮▮ ⌁</span></div>
-              <div className="phone-head">
-                <strong style={{ fontFamily: 'var(--font-head)', fontSize: '13px' }}>Vieques <span style={{ color: 'var(--accent)' }}>AI</span></strong>
-                <div className="seg"><span className="on">Street</span><span>Satellite</span></div>
+          {/* phone mockup: real iPhone bezel component, app screen as children */}
+          <div className="phone-wrap">
+            <IOSPhoneFrame width={272} theme="dark">
+              <div className="app-screen">
+                <div className="phone-head">
+                  <strong style={{ fontFamily: 'var(--font-head)', fontSize: '13px' }}>Vieques <span style={{ color: 'var(--accent)' }}>AI</span></strong>
+                  <div className="seg"><span className="on">Street</span><span>Satellite</span></div>
+                </div>
+                <div className="chips">
+                  <span className="chip on">All</span><span className="chip">🏖️ Beaches</span><span className="chip">🍽️ Food</span>
+                </div>
+                <div className="map-area">
+                  <div className="pin" style={{ left: '18%', top: '46%', animationDelay: '.15s' }}>🏖️</div>
+                  <div className="pin" style={{ left: '44%', top: '28%', animationDelay: '.3s' }}>🍽️</div>
+                  <div className="pin" style={{ left: '66%', top: '52%', animationDelay: '.45s' }}>🐢</div>
+                  <div className="pin" style={{ left: '80%', top: '30%', animationDelay: '.6s' }}>✨</div>
+                  <div className="pin" style={{ left: '33%', top: '70%', animationDelay: '.75s' }}>🛻</div>
+                </div>
+                <div className="chat">
+                  <q>Where can I swim with turtles?</q>
+                  <p>Try <b>Playa la Chiva</b> — calm water and a mapped snorkeling zone where turtles feed. <b>Showing 3 pins →</b></p>
+                </div>
+                <div className="ask">
+                  <span style={{ color: 'var(--accent)' }}>✦</span>
+                  <input placeholder="Ask the island anything…" aria-label="Ask the island anything" />
+                  <span className="send">↑</span>
+                </div>
               </div>
-              <div className="chips">
-                <span className="chip on">All</span><span className="chip">🏖️ Beaches</span><span className="chip">🍽️ Food</span>
-              </div>
-              <div className="map-area">
-                <div className="pin" style={{ left: '18%', top: '46%', animationDelay: '.15s' }}>🏖️</div>
-                <div className="pin" style={{ left: '44%', top: '28%', animationDelay: '.3s' }}>🍽️</div>
-                <div className="pin" style={{ left: '66%', top: '52%', animationDelay: '.45s' }}>🐢</div>
-                <div className="pin" style={{ left: '80%', top: '30%', animationDelay: '.6s' }}>✨</div>
-                <div className="pin" style={{ left: '33%', top: '70%', animationDelay: '.75s' }}>🛻</div>
-              </div>
-              <div className="chat">
-                <q>Where can I swim with turtles?</q>
-                <p>Try <b>Playa la Chiva</b> — calm water and a mapped snorkeling zone where turtles feed. <b>Showing 3 pins →</b></p>
-              </div>
-              <div className="ask">
-                <span style={{ color: 'var(--accent)' }}>✦</span>
-                <input placeholder="Ask the island anything…" aria-label="Ask the island anything" />
-                <span className="send">↑</span>
-              </div>
-            </div>
+            </IOSPhoneFrame>
           </div>
         </div>
       </header>
