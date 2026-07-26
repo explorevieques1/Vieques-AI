@@ -611,7 +611,7 @@ async function tripadvisorGet(path, params) {
  * API terms require displaying their rating image and linking back to the
  * listing wherever the content appears.
  */
-function shapeTripadvisor(details, photos) {
+function shapeTripadvisor(details, photos, reviews) {
   return {
     location_id: details.location_id,
     name: details.name,
@@ -635,6 +635,21 @@ function shapeTripadvisor(details, photos) {
         credit: p.source?.name || null,
       }))
       .filter((p) => p.large || p.thumbnail),
+    // Free tier returns at most 5 reviews and does not page. `url` is required:
+    // the licence permits showing review text only alongside a link to that
+    // review on Tripadvisor.
+    reviews: (reviews || [])
+      .map((r) => ({
+        id: String(r.id),
+        title: r.title || null,
+        text: r.text || null,
+        rating: r.rating != null ? Number(r.rating) : null,
+        published_date: r.published_date || null,
+        trip_type: r.trip_type || null,
+        url: r.url || null,
+        author: r.user?.username || null,
+      }))
+      .filter((r) => r.text),
   }
 }
 
@@ -700,16 +715,25 @@ app.get('/api/stays/:id/tripadvisor', requireAuth, requireTier(pool, 'stays'), a
       return res.status(502).json({ error: 'Tripadvisor is unavailable right now.' })
     }
 
-    // Photos are a nice-to-have; losing them must not lose the rating too.
-    let photos = []
-    try {
-      const p = await tripadvisorGet(`/location/${locationId}/photos`, { limit: '5', language: 'en' })
-      photos = p.data ?? []
-    } catch (e) {
-      console.error('Tripadvisor photos failed (continuing without them):', e.message)
-    }
+    // Photos and reviews are nice-to-haves; losing either must not lose the
+    // rating too. Fetched in parallel — they are independent calls and the
+    // panel waits on both, so serialising them just doubles the latency.
+    const [photos, reviews] = await Promise.all(
+      ['photos', 'reviews'].map(async (kind) => {
+        try {
+          const r = await tripadvisorGet(`/location/${locationId}/${kind}`, {
+            limit: '5',
+            language: 'en',
+          })
+          return r.data ?? []
+        } catch (e) {
+          console.error(`Tripadvisor ${kind} failed (continuing without them):`, e.message)
+          return []
+        }
+      }),
+    )
 
-    const payload = shapeTripadvisor(details, photos)
+    const payload = shapeTripadvisor(details, photos, reviews)
 
     await pool.query(
       `INSERT INTO tripadvisor_cache (location_id, payload, fetched_at)

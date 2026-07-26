@@ -61,7 +61,8 @@ function TripadvisorBlock({ place }: { place: Place }) {
 
   if (!info || info.rating == null) return null
 
-  const photo = info.photos[0]
+  const photos = info.photos.filter((p) => p.large || p.thumbnail)
+  const reviews = info.reviews ?? []
 
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border border-white/8 bg-white/3">
@@ -116,21 +117,89 @@ function TripadvisorBlock({ place }: { place: Place }) {
         </div>
       )}
 
-      {photo?.large && (
-        <figure className="border-t border-white/6">
-          <img
-            src={photo.large}
-            alt={photo.caption ?? `${info.name} on Tripadvisor`}
-            className="h-32 w-full object-cover"
-            loading="lazy"
-          />
-          {/* Photo credit is a licence term, not a caption nicety. */}
-          {(photo.credit || photo.caption) && (
-            <figcaption className="px-3.5 py-2 text-[10px] text-muted-foreground">
-              {[photo.caption, photo.credit && `© ${photo.credit}`].filter(Boolean).join(' · ')}
-            </figcaption>
-          )}
-        </figure>
+      {photos.length > 0 && (
+        <div className="border-t border-white/6">
+          {/* A scroll strip rather than a grid: the free tier returns at most
+              five photos and the panel is narrow, so a grid would either crop
+              them to postage stamps or push the reviews off the screen. */}
+          <div className="flex snap-x gap-1.5 overflow-x-auto p-1.5">
+            {photos.map((p, i) => (
+              <img
+                key={p.large ?? p.thumbnail ?? i}
+                src={p.large ?? p.thumbnail ?? ''}
+                alt={p.caption ?? `${info.name} on Tripadvisor`}
+                title={[p.caption, p.credit && `© ${p.credit}`].filter(Boolean).join(' · ')}
+                className="h-24 w-36 shrink-0 snap-start rounded-xl object-cover"
+                loading="lazy"
+              />
+            ))}
+          </div>
+          {/* Photo credit is a licence term, not a caption nicety. Collapsed to
+              one line for the strip; each image carries its own in `title`. */}
+          <div className="px-3.5 pb-2 text-[10px] text-muted-foreground">
+            Photos ©{' '}
+            {[...new Set(photos.map((p) => p.credit).filter(Boolean))].join(', ') || 'Tripadvisor'}
+          </div>
+        </div>
+      )}
+
+      {reviews.length > 0 && (
+        <div className="border-t border-white/6 px-3.5 py-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Recent reviews
+          </div>
+
+          <ul className="mt-2.5 space-y-2.5">
+            {reviews.slice(0, 3).map((r) => (
+              <li key={r.id} className="rounded-xl border border-white/6 bg-white/3 px-3 py-2.5">
+                <div className="flex items-baseline gap-2">
+                  {r.rating != null && (
+                    <span className="shrink-0 text-[11px] font-semibold text-primary">
+                      {r.rating}/5
+                    </span>
+                  )}
+                  {r.title && (
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
+                      {r.title}
+                    </span>
+                  )}
+                </div>
+
+                {r.text && (
+                  <p className="mt-1 text-[12px] leading-snug text-muted-foreground">
+                    {/* Truncated in JS rather than with line-clamp so the "read
+                        the rest on Tripadvisor" link is always the way to the
+                        full text — which is also how the licence wants it. */}
+                    {r.text.length > 180 ? `${r.text.slice(0, 180).trimEnd()}…` : r.text}
+                  </p>
+                )}
+
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  {r.author && <span className="truncate">{r.author}</span>}
+                  {r.published_date && (
+                    <span className="shrink-0">
+                      {new Date(r.published_date).toLocaleDateString(undefined, {
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  )}
+                  {r.url && (
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-auto flex shrink-0 items-center gap-1 hover:text-primary"
+                    >
+                      Read on Tripadvisor
+                      <ExternalLink size={9} />
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   )

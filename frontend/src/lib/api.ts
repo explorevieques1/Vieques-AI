@@ -470,6 +470,18 @@ export type TripadvisorInfo = {
   rating_image_url: string | null
   awards: string[]
   photos: { thumbnail: string | null; large: string | null; caption: string | null; credit: string | null }[]
+  /** At most 5 — the free tier's hard cap, with no paging. Each carries a `url`
+   *  back to the review, which the licence requires wherever the text appears. */
+  reviews: {
+    id: string
+    title: string | null
+    text: string | null
+    rating: number | null
+    published_date: string | null
+    trip_type: string | null
+    url: string | null
+    author: string | null
+  }[]
   fetched_at: string
 }
 
