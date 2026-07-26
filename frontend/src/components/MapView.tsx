@@ -34,11 +34,23 @@ import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
+import TripadvisorBlock from './TripadvisorBlock'
 import ResultsList, { type SortKey } from './ResultsList'
 import UpsellOverlay from './UpsellOverlay'
 import { ResponsivePanel } from './ui/ResponsivePanel'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
+
+/**
+ * The kind-specific block for the detail panel, if that kind has one.
+ *
+ * Defined once and passed to both call sites (desktop panel + mobile sheet) —
+ * they render the same panel, so anything added to one and not the other is a
+ * bug that only shows up at one viewport width.
+ */
+function detailExtra(place: Place): React.ReactNode {
+  return place.kind === 'stay' ? <TripadvisorBlock place={place} /> : null
+}
 
 /** Great-circle distance in miles — only used to label result cards. */
 function milesBetween(a: [number, number], b: [number, number]): number {
@@ -646,6 +658,7 @@ function MapView({
                   onClose={() => selectCategory(null)}
                   onBack={clearSelection}
                   onGetDirections={onRoute ? handleDirections : undefined}
+                  extra={detailExtra(selected)}
                 />
               ) : (
                 results
@@ -680,6 +693,7 @@ function MapView({
                 place={selected}
                 onClose={clearSelection}
                 onGetDirections={onRoute ? handleDirections : undefined}
+                extra={detailExtra(selected)}
               />
             </ResponsivePanel>
           )}

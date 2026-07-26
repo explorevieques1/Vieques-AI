@@ -19,6 +19,17 @@ type Props = {
   onBack?: () => void
   /** In-app routing. When absent the primary action links to Google Maps. */
   onGetDirections?: (p: Place) => void
+  /**
+   * Kind-specific content, rendered between the description and the contact
+   * rows — currently the Tripadvisor card on stays.
+   *
+   * A slot rather than a `place.kind === 'stay'` branch in here, because this
+   * panel's whole point is that it knows nothing about categories: adding one
+   * should mean writing an adapter in lib/place.ts and nothing else. Only the
+   * caller knows a stay from a beach, so only the caller decides what extra
+   * goes in.
+   */
+  extra?: React.ReactNode
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -69,8 +80,15 @@ function ContactRow({
  * Everything rendered here comes off the `Place` view model, so adding a
  * category means writing an adapter in lib/place.ts and nothing else.
  */
-function PlaceDetailPanel({ place, onClose, onBack, onGetDirections }: Props) {
+function PlaceDetailPanel({ place, onClose, onBack, onGetDirections, extra }: Props) {
   const mappable = isMappable(place)
+
+  // Stays are the first listing type with a real photo column. Everything else
+  // still falls through to the striped placeholder below.
+  const heroImage =
+    place.kind === 'stay' ? (place.raw as { images?: string[] }).images?.[0] ?? null : null
+  const heroCredit =
+    place.kind === 'stay' ? (place.raw as { image_credit?: string | null }).image_credit : null
   const gmaps = mappable
     ? `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`
     : null
@@ -90,19 +108,32 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections }: Props) {
 
   return (
     <>
-      {/* Hero. No photo column exists in any listing table yet, so this is the
-          placeholder treatment from the mockups rather than a broken <img>. */}
+      {/* Hero. Most listing tables still have no photo column, so the striped
+          placeholder from the mockups stands in rather than a broken <img>. */}
       <div className="relative mx-4 mt-4 h-44 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e]">
-        <div
-          className="absolute inset-0 opacity-60"
-          style={{
-            backgroundImage:
-              'repeating-linear-gradient(135deg, rgba(94,234,212,.07) 0 12px, rgba(94,234,212,.02) 12px 24px)',
-          }}
-        />
-        <div className="absolute inset-0 grid place-items-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/30">
-          {place.icon.emoji} {place.kind} photo
-        </div>
+        {heroImage ? (
+          <>
+            <img src={heroImage} alt={place.name} className="h-full w-full object-cover" />
+            {heroCredit && (
+              <div className="absolute bottom-0 right-0 bg-black/55 px-2 py-1 text-[10px] text-white/70">
+                © {heroCredit}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div
+              className="absolute inset-0 opacity-60"
+              style={{
+                backgroundImage:
+                  'repeating-linear-gradient(135deg, rgba(94,234,212,.07) 0 12px, rgba(94,234,212,.02) 12px 24px)',
+              }}
+            />
+            <div className="absolute inset-0 grid place-items-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/30">
+              {place.icon.emoji} {place.kind} photo
+            </div>
+          </>
+        )}
 
         <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
           {onBack ? (
@@ -186,6 +217,8 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections }: Props) {
             {place.description}
           </p>
         )}
+
+        {extra}
 
         {(contact.address || contact.hours || contact.phones?.length || contact.website ||
           contact.email) && (

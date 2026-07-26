@@ -394,6 +394,97 @@ export async function fetchRestaurantListings(slug: string): Promise<RestaurantL
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+//  Stays
+// ---------------------------------------------------------------------------
+
+export type StayListing = {
+  id: string
+  name: string
+  local_name: string | null
+  description: string | null
+  property_type: string | null
+  sleeps: number | null
+  bedrooms: number | null
+  bathrooms: number | null
+  unit_count: number | null
+  price_band: string | null
+  nightly_min: number | null
+  nightly_max: number | null
+  price_note: string | null
+  min_nights: number | null
+  currency: string
+  check_in: string | null
+  check_out: string | null
+  pets_allowed: boolean | null
+  accessible: boolean | null
+  amenities: string[]
+  phones: string[]
+  email: string | null
+  website: string | null
+  booking_url: string | null
+  hours: string | null
+  images: string[]
+  image_credit: string | null
+  latitude: number | null
+  longitude: number | null
+  has_location: boolean
+  address: string | null
+  location_area: string | null
+  location_precision: string | null
+  directions_note: string | null
+}
+
+/**
+ * All lodging in one call — there are only ~6 properties island-wide, so unlike
+ * restaurants there is no subcategory to pick first.
+ *
+ * Uses `raise` rather than a bare Error so a free-tier 402 arrives as an
+ * ApiError with code 'UPGRADE_REQUIRED' and ResultsList can render the upsell.
+ */
+export async function fetchStays(): Promise<StayListing[]> {
+  const res = await apiFetch(`/api/stays`)
+  if (!res.ok) await raise(res, 'Stays failed')
+  return res.json()
+}
+
+/**
+ * Tripadvisor content for one stay, already projected server-side.
+ *
+ * `rating_image_url` and `web_url` are not optional garnish: the Content API
+ * licence requires displaying Tripadvisor's own rating image and linking back
+ * to the listing wherever their content appears. Same for `photos[].credit`.
+ */
+export type TripadvisorInfo = {
+  location_id: string
+  name: string
+  /** Tripadvisor's own coordinates for the listing. Not necessarily the same
+   *  point as `stay_listings.latitude` — see db/scripts/sync_tripadvisor_coords.mjs. */
+  latitude: number | null
+  longitude: number | null
+  rating: number | null
+  num_reviews: number | null
+  ranking_string: string | null
+  price_level: string | null
+  web_url: string | null
+  rating_image_url: string | null
+  awards: string[]
+  photos: { thumbnail: string | null; large: string | null; caption: string | null; credit: string | null }[]
+  fetched_at: string
+}
+
+/**
+ * Null means "no Tripadvisor block for this property" — either it has no
+ * listing (204) or the upstream is unreachable. Both are normal states the
+ * panel renders around, so neither throws.
+ */
+export async function fetchStayTripadvisor(stayId: string): Promise<TripadvisorInfo | null> {
+  const res = await apiFetch(`/api/stays/${stayId}/tripadvisor`)
+  if (res.status === 204) return null
+  if (!res.ok) return null
+  return res.json()
+}
+
 export type AiPin = {
   id: string
   name: string

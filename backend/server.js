@@ -12,9 +12,11 @@
 //    • CORS policy          — who is allowed to call this API
 //    • Postgres pool         — the single shared DB connection pool
 //    • Stripe webhook mount   — raw-body route, registered before express.json()
-//    • Content routes         — beaches, restaurants, activities, transport,
-//                               services, essentials, snorkel spots, hiking
-//                               trails (read-only)
+//    • Content routes         — beaches, restaurants, stays, activities,
+//                               transport, services, essentials, snorkel spots,
+//                               hiking trails (read-only)
+//    • Tripadvisor route      — /api/stays/:id/tripadvisor, a cached proxy for
+//                               lodging ratings/photos (key stays server-side)
 //    • Payment routes         — /api/checkout, /api/entitlement (see payments.js)
 //    • AI chat route          — /api/ai/chat, a Claude tool-use loop (see aiTools.js)
 //    • Directions route       — /api/directions, fuzzy place match + OSRM routing
@@ -527,6 +529,199 @@ app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_pr
     // "Restaurant profiles — 3 preview"). Paid tiers get the full list.
     res.json(tierHas(req.tier, 'restaurants') ? rows : rows.slice(0, 3))
   } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+
+// ============================================================================
+//  STAYS — lodging listings + their Tripadvisor enrichment
+// ============================================================================
+//  Two routes with deliberately different gates:
+//
+//    GET /api/stays                  → stay_preview (free) or stays (paid)
+//    GET /api/stays/:id/tripadvisor  → stays only
+//
+//  The free tier gets a 3-property taste of the list but no Tripadvisor
+//  content at all. That is not only a paywall line: every uncached call to
+//  the Content API costs quota, and spending it on users who cannot see the
+//  full list is the wrong trade.
+// ============================================================================
+
+// All lodging in one shot — there are ~6 properties island-wide, so unlike
+// restaurants there is no subcategory to pick first (see lib/place.ts).
+app.get('/api/stays', requireAuth, requireTier(pool, ['stay_preview', 'stays']), async (req, res) => {
+  try {
+    // NOTE: tripadvisor_location_id is deliberately NOT selected. It is a
+    // server-side join key; keeping it off the wire means the enrichment route
+    // resolves it from our own row and enforces its own tier gate, rather than
+    // trusting an id the browser hands back.
+    const { rows } = await pool.query(
+      `SELECT id, name, local_name, description, property_type,
+              sleeps, bedrooms, bathrooms, unit_count,
+              price_band, nightly_min, nightly_max, price_note, min_nights, currency,
+              check_in, check_out, pets_allowed, accessible, amenities,
+              phones, email, website, booking_url, hours, images, image_credit,
+              latitude, longitude, has_location,
+              address, location_area, location_precision, directions_note
+         FROM stay_listings
+        WHERE is_active = true
+        ORDER BY name`
+    )
+    res.json(tierHas(req.tier, 'stays') ? rows : rows.slice(0, 3))
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+const TA_BASE = 'https://api.content.tripadvisor.com/api/v1'
+/** Tripadvisor's licence permits only short-term caching; 24h is also a sane
+ *  refresh rate for a rating that moves a few reviews a week. */
+const TA_CACHE_TTL_HOURS = 24
+
+/** One Content API GET. Returns parsed JSON, or throws with the status. */
+async function tripadvisorGet(path, params) {
+  const url = new URL(`${TA_BASE}${path}`)
+  url.searchParams.set('key', process.env.TRIPADVISOR_API_KEY || '')
+  for (const [k, v] of Object.entries(params || {})) url.searchParams.set(k, v)
+
+  const res = await fetch(url, {
+    headers: {
+      accept: 'application/json',
+      // The key may be restricted by HTTP referer rather than by IP — which is
+      // the only workable option on a host without a stable egress IP, as
+      // Railway is. Harmless when the key uses an IP allowlist instead.
+      ...(process.env.TRIPADVISOR_REFERER ? { Referer: process.env.TRIPADVISOR_REFERER } : {}),
+    },
+  })
+  if (!res.ok) {
+    const err = new Error(`Tripadvisor ${res.status}: ${await res.text()}`)
+    err.status = res.status
+    throw err
+  }
+  return res.json()
+}
+
+/**
+ * Project Tripadvisor's response down to what the panel renders.
+ *
+ * Never pass their raw JSON through: it is large, it changes shape between
+ * location types, and the client would then depend on fields we never agreed
+ * to. `rating_image_url` and `web_url` are not optional extras — the Content
+ * API terms require displaying their rating image and linking back to the
+ * listing wherever the content appears.
+ */
+function shapeTripadvisor(details, photos) {
+  return {
+    location_id: details.location_id,
+    name: details.name,
+    // Tripadvisor sends every number as a string ("4.9", "236", "18.097452").
+    // Number() at the boundary so the client never has to remember that.
+    latitude: details.latitude != null ? Number(details.latitude) : null,
+    longitude: details.longitude != null ? Number(details.longitude) : null,
+    rating: details.rating != null ? Number(details.rating) : null,
+    num_reviews: details.num_reviews != null ? Number(details.num_reviews) : null,
+    ranking_string: details.ranking_data?.ranking_string ?? null,
+    price_level: details.price_level ?? null,
+    web_url: details.web_url ?? null,
+    rating_image_url: details.rating_image_url ?? null,
+    awards: (details.awards || []).slice(0, 2).map((a) => a.display_name).filter(Boolean),
+    photos: (photos || [])
+      .map((p) => ({
+        thumbnail: p.images?.thumbnail?.url ?? null,
+        large: p.images?.large?.url ?? p.images?.original?.url ?? null,
+        caption: p.caption || null,
+        // Attribution is a licence requirement, not decoration.
+        credit: p.source?.name || null,
+      }))
+      .filter((p) => p.large || p.thumbnail),
+  }
+}
+
+// GET /api/stays/:id/tripadvisor — live rating, reviews and photos for one stay.
+//
+// Returns 204 when the property has no Tripadvisor listing (a rental
+// collective generally does not). That is a normal state, not an error: the
+// client renders the panel without the Tripadvisor block.
+app.get('/api/stays/:id/tripadvisor', requireAuth, requireTier(pool, 'stays'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT tripadvisor_location_id FROM stay_listings WHERE id = $1 AND is_active = true',
+      [req.params.id]
+    )
+    if (!rows.length) return res.status(404).json({ error: 'No such stay.' })
+
+    const locationId = rows[0].tripadvisor_location_id
+    if (!locationId) return res.status(204).end()
+
+    // --- cache read -------------------------------------------------------
+    const cached = await pool.query(
+      `SELECT payload, fetched_at,
+              fetched_at > now() - ($2 || ' hours')::interval AS fresh
+         FROM tripadvisor_cache WHERE location_id = $1`,
+      [locationId, String(TA_CACHE_TTL_HOURS)]
+    )
+    if (cached.rows.length && cached.rows[0].fresh) {
+      return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
+    }
+
+    if (!process.env.TRIPADVISOR_API_KEY) {
+      // Serve stale rather than nothing when the key is missing entirely.
+      if (cached.rows.length) {
+        return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
+      }
+      return res.status(204).end()
+    }
+
+    // --- upstream ---------------------------------------------------------
+    let details
+    try {
+      details = await tripadvisorGet(`/location/${locationId}/details`, {
+        language: 'en',
+        currency: 'USD',
+      })
+    } catch (e) {
+      if (e.status === 403) {
+        console.error(
+          'Tripadvisor 403 — the caller is denied at their gateway. This is ' +
+            'almost always the key\'s IP/referer allowlist (set TRIPADVISOR_REFERER, ' +
+            'or add the host IP in the Content API portal) or a key that is not ' +
+            'Active. It is NOT a bad location_id.',
+          e.message
+        )
+      } else {
+        console.error('Tripadvisor details failed:', e.message)
+      }
+      // A stale cache entry beats a blank panel — a day-old rating is still
+      // worth more to a traveller than an error state.
+      if (cached.rows.length) {
+        return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
+      }
+      return res.status(502).json({ error: 'Tripadvisor is unavailable right now.' })
+    }
+
+    // Photos are a nice-to-have; losing them must not lose the rating too.
+    let photos = []
+    try {
+      const p = await tripadvisorGet(`/location/${locationId}/photos`, { limit: '5', language: 'en' })
+      photos = p.data ?? []
+    } catch (e) {
+      console.error('Tripadvisor photos failed (continuing without them):', e.message)
+    }
+
+    const payload = shapeTripadvisor(details, photos)
+
+    await pool.query(
+      `INSERT INTO tripadvisor_cache (location_id, payload, fetched_at)
+            VALUES ($1, $2, now())
+       ON CONFLICT (location_id)
+       DO UPDATE SET payload = EXCLUDED.payload, fetched_at = now()`,
+      [locationId, payload]
+    )
+
+    res.json({ ...payload, fetched_at: new Date().toISOString() })
+  } catch (e) {
+    console.error('Stay Tripadvisor error:', e)
     res.status(500).json({ error: e.message })
   }
 })
