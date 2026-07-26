@@ -20,8 +20,7 @@ type Props = {
   /** In-app routing. When absent the primary action links to Google Maps. */
   onGetDirections?: (p: Place) => void
   /**
-   * Kind-specific content, rendered between the description and the contact
-   * rows — currently the Tripadvisor card on stays.
+   * Kind-specific content — currently the Tripadvisor card on stays.
    *
    * A slot rather than a `place.kind === 'stay'` branch in here, because this
    * panel's whole point is that it knows nothing about categories: adding one
@@ -30,6 +29,20 @@ type Props = {
    * goes in.
    */
   extra?: React.ReactNode
+  /**
+   * Layout knobs, for the same reason `extra` exists: the caller knows which
+   * category it is rendering and therefore which arrangement reads best, and
+   * this panel stays ignorant of both. Defaults reproduce the original order
+   * (hero photo, stats under the tags, extra below the description).
+   *
+   * Stays turn all three over: their own photo column is thin and duplicative
+   * next to the Tripadvisor strip, so the hero comes off and the review card
+   * rides directly under the tags, with the nightly/sleeps grid demoted to the
+   * bottom just above the contact rows.
+   */
+  hero?: boolean
+  extraPosition?: 'after-description' | 'after-tags'
+  statsPosition?: 'top' | 'bottom'
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -80,7 +93,16 @@ function ContactRow({
  * Everything rendered here comes off the `Place` view model, so adding a
  * category means writing an adapter in lib/place.ts and nothing else.
  */
-function PlaceDetailPanel({ place, onClose, onBack, onGetDirections, extra }: Props) {
+function PlaceDetailPanel({
+  place,
+  onClose,
+  onBack,
+  onGetDirections,
+  extra,
+  hero = true,
+  extraPosition = 'after-description',
+  statsPosition = 'top',
+}: Props) {
   const mappable = isMappable(place)
 
   // Stays are the first listing type with a real photo column. Everything else
@@ -106,68 +128,95 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections, extra }: Pr
 
   const { contact } = place
 
+  // Back / share / close. Float over the hero when there is one, and sit in
+  // their own row above the title when there isn't — either way they are the
+  // only way off this panel on mobile, so they cannot ride on the photo alone.
+  const controls = (
+    <>
+      {onBack ? (
+        <button
+          onClick={onBack}
+          aria-label="Back to results"
+          className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur"
+        >
+          <ChevronLeft size={16} />
+        </button>
+      ) : (
+        <span />
+      )}
+      <div className="flex gap-1.5">
+        <button
+          onClick={share}
+          aria-label="Share"
+          className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
+        >
+          <Share2 size={14} />
+        </button>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </>
+  )
+
+  const statsGrid = place.stats.length > 0 && (
+    <div className="mt-4 grid grid-cols-2 gap-2">
+      {place.stats.slice(0, place.statLimit ?? 4).map((s) => (
+        <Stat key={s.label} label={s.label} value={s.value} />
+      ))}
+    </div>
+  )
+
   return (
     <>
+      {!hero && (
+        <div className="flex shrink-0 items-start justify-between gap-2 px-4 pt-4">{controls}</div>
+      )}
+
       {/* Hero. Most listing tables still have no photo column, so the striped
           placeholder from the mockups stands in rather than a broken <img>. */}
-      <div className="relative mx-4 mt-4 h-44 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e]">
-        {heroImage ? (
-          <>
-            <img src={heroImage} alt={place.name} className="h-full w-full object-cover" />
-            {heroCredit && (
-              <div className="absolute bottom-0 right-0 bg-black/55 px-2 py-1 text-[10px] text-white/70">
-                © {heroCredit}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div
-              className="absolute inset-0 opacity-60"
-              style={{
-                backgroundImage:
-                  'repeating-linear-gradient(135deg, rgba(94,234,212,.07) 0 12px, rgba(94,234,212,.02) 12px 24px)',
-              }}
-            />
-            <div className="absolute inset-0 grid place-items-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/30">
-              {place.icon.emoji} {place.kind} photo
-            </div>
-          </>
-        )}
-
-        <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
-          {onBack ? (
-            <button
-              onClick={onBack}
-              aria-label="Back to results"
-              className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur"
-            >
-              <ChevronLeft size={16} />
-            </button>
+      {hero && (
+        <div className="relative mx-4 mt-4 h-44 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e]">
+          {heroImage ? (
+            <>
+              <img src={heroImage} alt={place.name} className="h-full w-full object-cover" />
+              {heroCredit && (
+                <div className="absolute bottom-0 right-0 bg-black/55 px-2 py-1 text-[10px] text-white/70">
+                  © {heroCredit}
+                </div>
+              )}
+            </>
           ) : (
-            <span />
+            <>
+              <div
+                className="absolute inset-0 opacity-60"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(135deg, rgba(94,234,212,.07) 0 12px, rgba(94,234,212,.02) 12px 24px)',
+                }}
+              />
+              <div className="absolute inset-0 grid place-items-center font-mono text-[11px] uppercase tracking-[0.14em] text-white/30">
+                {place.icon.emoji} {place.kind} photo
+              </div>
+            </>
           )}
-          <div className="flex gap-1.5">
-            <button
-              onClick={share}
-              aria-label="Share"
-              className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
-            >
-              <Share2 size={14} />
-            </button>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
-            >
-              <X size={14} />
-            </button>
+
+          <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
+            {controls}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Body */}
-      <div className="scroll-contain no-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-4">
+      <div
+        className={`scroll-contain no-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-4 ${
+          hero ? 'pt-4' : 'pt-3'
+        }`}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="font-display text-2xl leading-tight tracking-tight text-foreground">
@@ -204,13 +253,9 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections, extra }: Pr
           </div>
         )}
 
-        {place.stats.length > 0 && (
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {place.stats.slice(0, place.statLimit ?? 4).map((s) => (
-              <Stat key={s.label} label={s.label} value={s.value} />
-            ))}
-          </div>
-        )}
+        {extraPosition === 'after-tags' && extra}
+
+        {statsPosition === 'top' && statsGrid}
 
         {place.description && (
           <p className="mt-4 text-sm leading-relaxed text-foreground/85 text-pretty">
@@ -218,7 +263,9 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections, extra }: Pr
           </p>
         )}
 
-        {extra}
+        {extraPosition === 'after-description' && extra}
+
+        {statsPosition === 'bottom' && statsGrid}
 
         {(contact.address || contact.hours || contact.phones?.length || contact.website ||
           contact.email) && (

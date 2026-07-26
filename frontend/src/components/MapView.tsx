@@ -52,6 +52,21 @@ function detailExtra(place: Place): React.ReactNode {
   return place.kind === 'stay' ? <TripadvisorBlock place={place} /> : null
 }
 
+/**
+ * Per-kind arrangement of the detail panel, spread at both call sites for the
+ * same reason as `detailExtra`.
+ *
+ * Stays lead with the name and tags, then the Tripadvisor reviews and photos,
+ * and only then the nightly/min-stay/sleeps grid above the contact rows: their
+ * own hero photo is one stock shot that the review strip already covers better,
+ * so it comes off entirely rather than pushing everything a screen down.
+ */
+function detailLayout(place: Place) {
+  return place.kind === 'stay'
+    ? ({ hero: false, extraPosition: 'after-tags', statsPosition: 'bottom' } as const)
+    : {}
+}
+
 /** Great-circle distance in miles — only used to label result cards. */
 function milesBetween(a: [number, number], b: [number, number]): number {
   const R = 3958.8
@@ -659,6 +674,7 @@ function MapView({
                   onBack={clearSelection}
                   onGetDirections={onRoute ? handleDirections : undefined}
                   extra={detailExtra(selected)}
+                  {...detailLayout(selected)}
                 />
               ) : (
                 results
@@ -694,6 +710,7 @@ function MapView({
                 onClose={clearSelection}
                 onGetDirections={onRoute ? handleDirections : undefined}
                 extra={detailExtra(selected)}
+                {...detailLayout(selected)}
               />
             </ResponsivePanel>
           )}
