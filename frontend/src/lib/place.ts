@@ -18,6 +18,7 @@ import type {
   RestaurantListing,
   ServiceListing,
   SnorkelSpot,
+  StayListing,
   TrailFeature,
   TransportListing,
 } from './api'
@@ -27,6 +28,7 @@ import {
   DEFAULT_ICON,
   ESSENTIAL_ICONS,
   SERVICE_ICONS,
+  STAY_ICON,
   TRAIL_ICON,
   type MarkerStyle,
 } from './markerIcon'
@@ -34,6 +36,7 @@ import {
 export type PlaceKind =
   | 'beach'
   | 'restaurant'
+  | 'stay'
   | 'activity'
   | 'service'
   | 'transport'
@@ -127,9 +130,10 @@ export const CATEGORIES: CategoryMeta[] = [
   // the navigation. See the `activities` case in hooks/useCategoryPlaces.ts —
   // it takes the same "this sub has its own dataset" branch snorkelling does.
   { slug: 'activities', label: 'Activities', hasSubcategories: true },
-  // No `stays` table or endpoint exists yet — show an honest empty state
-  // rather than a blank panel.
-  { slug: 'stays', label: 'Stays', hasSubcategories: false, comingSoon: true },
+  // Lodging loads in one shot like beaches: there are ~6 properties
+  // island-wide, so `property_type` rides along on each row as a tag rather
+  // than becoming a chip row nobody needs to filter.
+  { slug: 'stays', label: 'Stays', hasSubcategories: false },
   { slug: 'services', label: 'Services', hasSubcategories: true },
   { slug: 'transportation', label: 'Transportation', hasSubcategories: true },
   { slug: 'essentials', label: 'Essentials', hasSubcategories: true },
@@ -151,7 +155,7 @@ function stats(...rows: [string, string | null | undefined][]): PlaceStat[] {
 }
 
 function contactOf(
-  l: Partial<ServiceListing & RestaurantListing & ActivityListing>,
+  l: Partial<ServiceListing & RestaurantListing & ActivityListing & StayListing>,
 ): PlaceContact {
   return {
     phones: l.phones?.length ? l.phones : undefined,
@@ -209,6 +213,77 @@ export function restaurantToPlace(r: RestaurantListing): Place {
     contact: contactOf(r),
     icon: { emoji: '🍽️', color: '#f97316' },
     raw: r,
+  }
+}
+
+/** `air_conditioning` → `Air conditioning`. The DB stores machine keys; the
+ *  pills are read by people. */
+function amenityLabel(a: string): string {
+  const words = a.replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** "$185–340" / "$185+" / "$185" — whichever the row can actually support. */
+function nightlyRange(min: number | null, max: number | null, currency: string): string | null {
+  const sym = currency === 'USD' ? '$' : `${currency} `
+  if (min == null && max == null) return null
+  if (min != null && max != null) {
+    return min === max ? `${sym}${min}` : `${sym}${min}–${max}`
+  }
+  return min != null ? `${sym}${min}+` : `up to ${sym}${max}`
+}
+
+export function stayToPlace(s: StayListing): Place {
+  const nightly = nightlyRange(s.nightly_min, s.nightly_max, s.currency)
+
+  // The amber callout is for "know this or your trip goes wrong" — on trails it
+  // carries unstable ruins and no water. A minimum-night policy is not that; it
+  // is booking arithmetic, and it lives in the stat grid below. Putting it here
+  // also read as a contradiction whenever price_note already qualified it
+  // ("3-night minimum in high season" next to "2-night minimum").
+  //
+  // What does belong: a pin you cannot trust. `Get Directions` routes to these
+  // coordinates, so an approximate one on a villa collective spread across the
+  // island is a real navigation problem, not a data-quality footnote.
+  const caveats = [
+    s.price_note,
+    s.location_precision === 'approximate' ? s.directions_note || 'Approximate location' : null,
+  ].filter(Boolean)
+
+  return {
+    id: `stay:${s.id}`,
+    kind: 'stay',
+    name: s.name,
+    subtitle: [s.property_type, s.location_area].filter(Boolean).join(' · ') || undefined,
+    latitude: s.latitude,
+    longitude: s.longitude,
+    // Order matters: PlaceCard shows only the first three, so the list row
+    // reads "$$$ · boutique hotel · sleeps 2" while the detail panel — which
+    // renders every tag — continues into the amenity pills below it.
+    tags: [
+      s.price_band,
+      s.property_type,
+      s.sleeps ? `sleeps ${s.sleeps}` : null,
+      ...s.amenities.map(amenityLabel),
+    ].filter((t): t is string => !!t),
+    stats: stats(
+      ['Nightly', nightly ? `${nightly} / night` : null],
+      ['Min stay', s.min_nights && s.min_nights > 1 ? `${s.min_nights} nights` : null],
+      ['Sleeps', s.sleeps != null ? String(s.sleeps) : null],
+      ['Bedrooms', s.bedrooms != null ? String(s.bedrooms) : null],
+      ['Bathrooms', s.bathrooms != null ? String(s.bathrooms) : null],
+      ['Check-in', s.check_in],
+      ['Check-out', s.check_out],
+    ),
+    // Eight, like trails, and for the same reason: a booking decision turns on
+    // price, minimum stay, size and both times at once. Unlike a restaurant
+    // there is no second visit to catch what the grid cut off.
+    statLimit: 8,
+    description: s.description ?? undefined,
+    warning: caveats.length ? caveats.join(' · ') : undefined,
+    contact: contactOf(s),
+    icon: STAY_ICON,
+    raw: s,
   }
 }
 

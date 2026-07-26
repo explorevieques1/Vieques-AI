@@ -11,6 +11,7 @@ import {
   fetchServiceCategories,
   fetchServiceListings,
   fetchSnorkelSpots,
+  fetchStays,
   fetchTrails,
   fetchTransportCategories,
   fetchTransportListings,
@@ -25,6 +26,7 @@ import {
   restaurantToPlace,
   serviceToPlace,
   snorkelToPlace,
+  stayToPlace,
   trailToPlace,
   transportToPlace,
   type CategorySlug,
@@ -161,6 +163,12 @@ export function useCategoryPlaces(
           (rows) => finish(rows.map(restaurantToPlace)),
           fail,
         )
+        break
+
+      // No subcategory to wait on — the whole island's lodging is one request,
+      // same as beaches.
+      case 'stays':
+        fetchStays().then((rows) => finish(rows.map(stayToPlace)), fail)
         break
 
       case 'activities':

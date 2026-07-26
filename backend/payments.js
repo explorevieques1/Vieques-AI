@@ -136,15 +136,15 @@ export const PLANS = {
 //  'free' is the tier for a signed-in user with no active purchase.
 // ----------------------------------------------------------------------------
 export const FEATURES = {
-  free:        ['map', 'search', 'beach_names', 'restaurant_preview', 'ai_trial'],
-  day_trip:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+  free:        ['map', 'search', 'beach_names', 'restaurant_preview', 'stay_preview', 'ai_trial'],
+  day_trip:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
                 'snorkel_zones_preview', 'favorites'],
-  vacation:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+  vacation:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
                 'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
                 'ai_chat', 'ai_history', 'support'],
-  exploration: ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'essentials',
+  exploration: ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
                 'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
                 'ai_chat', 'ai_history', 'support', 'support_priority',
