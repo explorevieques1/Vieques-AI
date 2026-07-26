@@ -691,102 +691,131 @@ function shapeTripadvisor(details, photos, reviews) {
   }
 }
 
-// GET /api/stays/:id/tripadvisor — live rating, reviews and photos for one stay.
-//
-// Returns 204 when the property has no Tripadvisor listing (a rental
-// collective generally does not). That is a normal state, not an error: the
-// client renders the panel without the Tripadvisor block.
-app.get('/api/stays/:id/tripadvisor', requireAuth, requireTier(pool, 'stays'), async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      'SELECT tripadvisor_location_id FROM stay_listings WHERE id = $1 AND is_active = true',
-      [req.params.id]
-    )
-    if (!rows.length) return res.status(404).json({ error: 'No such stay.' })
-
-    const locationId = rows[0].tripadvisor_location_id
-    if (!locationId) return res.status(204).end()
-
-    // --- cache read -------------------------------------------------------
-    const cached = await pool.query(
-      `SELECT payload, fetched_at,
-              fetched_at > now() - ($2 || ' hours')::interval AS fresh
-         FROM tripadvisor_cache WHERE location_id = $1`,
-      [locationId, String(TA_CACHE_TTL_HOURS)]
-    )
-    if (cached.rows.length && cached.rows[0].fresh) {
-      return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
-    }
-
-    if (!process.env.TRIPADVISOR_API_KEY) {
-      // Serve stale rather than nothing when the key is missing entirely.
-      if (cached.rows.length) {
-        return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
-      }
-      return res.status(204).end()
-    }
-
-    // --- upstream ---------------------------------------------------------
-    let details
+/**
+ * Build the `/:id/tripadvisor` handler for one listing table.
+ *
+ * Stays and restaurants want byte-identical behaviour — same cache, same TTL,
+ * same stale-on-failure fallback, same 204-for-no-listing contract — differing
+ * only in which table holds the join key. A factory keeps that one
+ * implementation; copying it per table is how the two quietly drift, and the
+ * fallback paths are exactly the ones nobody notices are wrong.
+ *
+ * `table` is interpolated into SQL, so it must never come from a request. Both
+ * call sites below pass a literal.
+ *
+ * Returns 204 when the row has no Tripadvisor listing (a villa collective or a
+ * food truck generally does not). That is a normal state, not an error: the
+ * client renders the panel without the Tripadvisor block.
+ */
+function tripadvisorRoute(table, label) {
+  return async (req, res) => {
     try {
-      details = await tripadvisorGet(`/location/${locationId}/details`, {
-        language: 'en',
-        currency: 'USD',
-      })
-    } catch (e) {
-      if (e.status === 403) {
-        console.error(
-          'Tripadvisor 403 — the caller is denied at their gateway. This is ' +
-            'almost always the key\'s IP/referer allowlist (set TRIPADVISOR_REFERER, ' +
-            'or add the host IP in the Content API portal) or a key that is not ' +
-            'Active. It is NOT a bad location_id.',
-          e.message
-        )
-      } else {
-        console.error('Tripadvisor details failed:', e.message)
-      }
-      // A stale cache entry beats a blank panel — a day-old rating is still
-      // worth more to a traveller than an error state.
-      if (cached.rows.length) {
+      const { rows } = await pool.query(
+        `SELECT tripadvisor_location_id FROM ${table} WHERE id = $1 AND is_active = true`,
+        [req.params.id]
+      )
+      if (!rows.length) return res.status(404).json({ error: `No such ${label}.` })
+
+      const locationId = rows[0].tripadvisor_location_id
+      if (!locationId) return res.status(204).end()
+
+      // --- cache read -------------------------------------------------------
+      const cached = await pool.query(
+        `SELECT payload, fetched_at,
+                fetched_at > now() - ($2 || ' hours')::interval AS fresh
+           FROM tripadvisor_cache WHERE location_id = $1`,
+        [locationId, String(TA_CACHE_TTL_HOURS)]
+      )
+      if (cached.rows.length && cached.rows[0].fresh) {
         return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
       }
-      return res.status(502).json({ error: 'Tripadvisor is unavailable right now.' })
-    }
 
-    // Photos and reviews are nice-to-haves; losing either must not lose the
-    // rating too. Fetched in parallel — they are independent calls and the
-    // panel waits on both, so serialising them just doubles the latency.
-    const [photos, reviews] = await Promise.all(
-      ['photos', 'reviews'].map(async (kind) => {
-        try {
-          const r = await tripadvisorGet(`/location/${locationId}/${kind}`, {
-            limit: '5',
-            language: 'en',
-          })
-          return r.data ?? []
-        } catch (e) {
-          console.error(`Tripadvisor ${kind} failed (continuing without them):`, e.message)
-          return []
+      if (!process.env.TRIPADVISOR_API_KEY) {
+        // Serve stale rather than nothing when the key is missing entirely.
+        if (cached.rows.length) {
+          return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
         }
-      }),
-    )
+        return res.status(204).end()
+      }
 
-    const payload = shapeTripadvisor(details, photos, reviews)
+      // --- upstream ---------------------------------------------------------
+      let details
+      try {
+        details = await tripadvisorGet(`/location/${locationId}/details`, {
+          language: 'en',
+          currency: 'USD',
+        })
+      } catch (e) {
+        if (e.status === 403) {
+          console.error(
+            'Tripadvisor 403 — the caller is denied at their gateway. This is ' +
+              'almost always the key\'s IP/referer allowlist (set TRIPADVISOR_REFERER, ' +
+              'or add the host IP in the Content API portal) or a key that is not ' +
+              'Active. It is NOT a bad location_id.',
+            e.message
+          )
+        } else {
+          console.error('Tripadvisor details failed:', e.message)
+        }
+        // A stale cache entry beats a blank panel — a day-old rating is still
+        // worth more to a traveller than an error state.
+        if (cached.rows.length) {
+          return res.json({ ...cached.rows[0].payload, fetched_at: cached.rows[0].fetched_at })
+        }
+        return res.status(502).json({ error: 'Tripadvisor is unavailable right now.' })
+      }
 
-    await pool.query(
-      `INSERT INTO tripadvisor_cache (location_id, payload, fetched_at)
-            VALUES ($1, $2, now())
-       ON CONFLICT (location_id)
-       DO UPDATE SET payload = EXCLUDED.payload, fetched_at = now()`,
-      [locationId, payload]
-    )
+      // Photos and reviews are nice-to-haves; losing either must not lose the
+      // rating too. Fetched in parallel — they are independent calls and the
+      // panel waits on both, so serialising them just doubles the latency.
+      const [photos, reviews] = await Promise.all(
+        ['photos', 'reviews'].map(async (kind) => {
+          try {
+            const r = await tripadvisorGet(`/location/${locationId}/${kind}`, {
+              limit: '5',
+              language: 'en',
+            })
+            return r.data ?? []
+          } catch (e) {
+            console.error(`Tripadvisor ${kind} failed (continuing without them):`, e.message)
+            return []
+          }
+        }),
+      )
 
-    res.json({ ...payload, fetched_at: new Date().toISOString() })
-  } catch (e) {
-    console.error('Stay Tripadvisor error:', e)
-    res.status(500).json({ error: e.message })
+      const payload = shapeTripadvisor(details, photos, reviews)
+
+      await pool.query(
+        `INSERT INTO tripadvisor_cache (location_id, payload, fetched_at)
+              VALUES ($1, $2, now())
+         ON CONFLICT (location_id)
+         DO UPDATE SET payload = EXCLUDED.payload, fetched_at = now()`,
+        [locationId, payload]
+      )
+
+      res.json({ ...payload, fetched_at: new Date().toISOString() })
+    } catch (e) {
+      console.error(`${label} Tripadvisor error:`, e)
+      res.status(500).json({ error: e.message })
+    }
   }
-})
+}
+
+// Both gated on the PAID feature, not the *_preview one. Every uncached call
+// spends Content API quota, and spending it on users who cannot see the full
+// list is the wrong trade.
+app.get(
+  '/api/stays/:id/tripadvisor',
+  requireAuth,
+  requireTier(pool, 'stays'),
+  tripadvisorRoute('stay_listings', 'stay'),
+)
+app.get(
+  '/api/restaurants/:id/tripadvisor',
+  requireAuth,
+  requireTier(pool, 'restaurants'),
+  tripadvisorRoute('restaurant_listings', 'restaurant'),
+)
 
 
 // ============================================================================

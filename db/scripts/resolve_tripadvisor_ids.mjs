@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // ============================================================================
-//  resolve_tripadvisor_ids.mjs — map stay_listings rows to Tripadvisor ids
+//  resolve_tripadvisor_ids.mjs — map listing rows to Tripadvisor ids
 // ============================================================================
 //
-//  Run once per new property, from a host whose IP is on the Tripadvisor key's
-//  allowlist:
+//  Run once per new listing, from a host the Tripadvisor key allows (an IP on
+//  its allowlist, or any host if TRIPADVISOR_REFERER matches a referer-
+//  restricted key):
 //
 //      cd backend && node ../db/scripts/resolve_tripadvisor_ids.mjs
+//      cd backend && node ../db/scripts/resolve_tripadvisor_ids.mjs --restaurants
 //
 //  (Run it from backend/ so it picks up backend/.env — the script reads
 //  TRIPADVISOR_API_KEY and DATABASE_URL from the same place the server does.)
@@ -44,6 +46,18 @@ const pg = require('pg')
 const KEY = process.env.TRIPADVISOR_API_KEY
 const REFERER = process.env.TRIPADVISOR_REFERER
 
+// Two listing tables now carry a tripadvisor_location_id. The matching problem
+// is identical for both, so this is a table swap rather than a second script.
+// `category` is Tripadvisor's own filter — passing the wrong one is how a
+// restaurant search starts returning hotels.
+const TARGETS = {
+  stays: { table: 'stay_listings', category: 'hotels', label: 'stay' },
+  restaurants: { table: 'restaurant_listings', category: 'restaurants', label: 'restaurant' },
+}
+
+const MODE = process.argv.includes('--restaurants') ? 'restaurants' : 'stays'
+const TARGET = TARGETS[MODE]
+
 if (!KEY) {
   console.error('TRIPADVISOR_API_KEY is not set. Add it to backend/.env first.')
   process.exit(1)
@@ -68,7 +82,7 @@ async function search(stay) {
   const url = new URL('https://api.content.tripadvisor.com/api/v1/location/search')
   url.searchParams.set('key', KEY)
   url.searchParams.set('searchQuery', stay.name)
-  url.searchParams.set('category', 'hotels')
+  url.searchParams.set('category', TARGET.category)
   if (stay.latitude != null && stay.longitude != null) {
     url.searchParams.set('latLong', `${stay.latitude},${stay.longitude}`)
   }
@@ -99,18 +113,18 @@ async function search(stay) {
 
 const { rows } = await pool.query(
   `SELECT id, name, latitude, longitude, location_area
-     FROM stay_listings
+     FROM ${TARGET.table}
     WHERE tripadvisor_location_id IS NULL AND is_active = true
     ORDER BY name`,
 )
 
 if (!rows.length) {
-  console.log('Every active stay already has a tripadvisor_location_id. Nothing to do.')
+  console.log(`Every active ${TARGET.label} already has a tripadvisor_location_id. Nothing to do.`)
   await pool.end()
   process.exit(0)
 }
 
-console.log(`${rows.length} stay(s) without a Tripadvisor id.\n`)
+console.log(`${rows.length} ${TARGET.label}(s) without a Tripadvisor id.\n`)
 
 for (const stay of rows) {
   console.log('='.repeat(72))
@@ -141,7 +155,7 @@ for (const stay of rows) {
 
   console.log(
     `\n  -- if [1] is correct:\n` +
-      `  UPDATE stay_listings SET tripadvisor_location_id = '${q(candidates[0].location_id)}'\n` +
+      `  UPDATE ${TARGET.table} SET tripadvisor_location_id = '${q(candidates[0].location_id)}'\n` +
       `   WHERE name = '${q(stay.name)}';\n`,
   )
 }

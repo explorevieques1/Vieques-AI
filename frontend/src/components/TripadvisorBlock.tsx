@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 
-import { fetchStayTripadvisor, type TripadvisorInfo } from '../lib/api'
+import { fetchTripadvisor, type TripadvisorInfo } from '../lib/api'
 import type { Place } from '../lib/place'
 
+/** Which listing kinds have a Tripadvisor proxy route behind them. */
+const RESOURCE = { stay: 'stays', restaurant: 'restaurants' } as const
+
+/** True for the kinds RESOURCE covers — the caller's guard before rendering. */
+export function hasTripadvisor(place: Place): boolean {
+  return place.kind in RESOURCE
+}
+
 /**
- * Live Tripadvisor content for one stay, slotted into PlaceDetailPanel.
+ * Live Tripadvisor content for one stay or restaurant, slotted into
+ * PlaceDetailPanel.
  *
  * ATTRIBUTION IS NOT OPTIONAL. The Content API licence requires that wherever
  * their content appears we show *their* rating image (not a hand-rolled star
@@ -13,45 +22,52 @@ import type { Place } from '../lib/place'
  * is why `rating_image_url` is rendered as an <img> rather than reduced to a
  * number, and why the whole block links out to `web_url`.
  *
- * RENDERS NOTHING RATHER THAN AN ERROR. A property with no Tripadvisor listing
- * (204) and an unreachable upstream both resolve to `null` in fetchStayTripadvisor.
+ * RENDERS NOTHING RATHER THAN AN ERROR. A listing with no Tripadvisor entry
+ * (204) and an unreachable upstream both resolve to `null` in fetchTripadvisor.
  * Neither is worth a red box in a panel that is already showing our own
  * description, price and contact details — the traveller loses a nice-to-have,
  * not the page.
  */
 function TripadvisorBlock({ place }: { place: Place }) {
-  // `place.id` is namespaced as `stay:<rawId>`; the API wants the raw id.
-  const stayId = place.id.replace(/^stay:/, '')
+  // `place.id` is namespaced as `stay:<rawId>` / `restaurant:<rawId>`; the API
+  // wants the raw id, and the prefix is also what picks the route.
+  const resource = RESOURCE[place.kind as keyof typeof RESOURCE]
+  const rawId = place.id.replace(/^[a-z]+:/, '')
 
-  // Tagged with the stay it answers, and everything below is *derived* by
+  // Tagged with the listing it answers, and everything below is *derived* by
   // comparing that tag to the current one — the same shape useCategoryPlaces
   // uses, for the same two reasons. It keeps setState out of the effect body,
-  // and switching properties shows the skeleton on the very same render
-  // instead of flashing the previous hotel's rating for one frame.
+  // and switching listings shows the skeleton on the very same render
+  // instead of flashing the previous one's rating for one frame.
   const [cache, setCache] = useState<{ id: string; info: TripadvisorInfo | null } | null>(null)
 
-  const fresh = cache?.id === stayId
+  // Keyed by the namespaced id, not the raw one: stay 26 and restaurant 26 are
+  // different listings, and a bare "26" would show one's rating on the other.
+  const fresh = cache?.id === place.id
   const info = fresh ? cache!.info : null
   const loading = !fresh
 
   useEffect(() => {
+    if (!resource) return
     let cancelled = false
 
-    fetchStayTripadvisor(stayId)
+    fetchTripadvisor(resource, rawId)
       .then((data) => {
-        if (!cancelled) setCache({ id: stayId, info: data })
+        if (!cancelled) setCache({ id: place.id, info: data })
       })
       .catch(() => {
-        // fetchStayTripadvisor already swallows the expected failures (204, an
+        // fetchTripadvisor already swallows the expected failures (204, an
         // unreachable upstream); this is the belt-and-braces path for a network
         // drop mid-flight. Cache the miss too, or `loading` never clears.
-        if (!cancelled) setCache({ id: stayId, info: null })
+        if (!cancelled) setCache({ id: place.id, info: null })
       })
 
     return () => {
       cancelled = true
     }
-  }, [stayId])
+  }, [resource, rawId, place.id])
+
+  if (!resource) return null
 
   if (loading) {
     return (

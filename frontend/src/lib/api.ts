@@ -504,8 +504,11 @@ export type TripadvisorInfo = {
  * listing (204) or the upstream is unreachable. Both are normal states the
  * panel renders around, so neither throws.
  */
-export async function fetchStayTripadvisor(stayId: string): Promise<TripadvisorInfo | null> {
-  const res = await apiFetch(`/api/stays/${stayId}/tripadvisor`)
+export async function fetchTripadvisor(
+  resource: 'stays' | 'restaurants',
+  id: string,
+): Promise<TripadvisorInfo | null> {
+  const res = await apiFetch(`/api/${resource}/${id}/tripadvisor`)
   if (res.status === 204) return null
   if (!res.ok) return null
   return res.json()

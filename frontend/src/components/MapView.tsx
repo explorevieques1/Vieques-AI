@@ -34,7 +34,7 @@ import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
-import TripadvisorBlock from './TripadvisorBlock'
+import TripadvisorBlock, { hasTripadvisor } from './TripadvisorBlock'
 import ResultsList, { type SortKey } from './ResultsList'
 import UpsellOverlay from './UpsellOverlay'
 import { ResponsivePanel } from './ui/ResponsivePanel'
@@ -49,7 +49,7 @@ const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
  * bug that only shows up at one viewport width.
  */
 function detailExtra(place: Place): React.ReactNode {
-  return place.kind === 'stay' ? <TripadvisorBlock place={place} /> : null
+  return hasTripadvisor(place) ? <TripadvisorBlock place={place} /> : null
 }
 
 /**
