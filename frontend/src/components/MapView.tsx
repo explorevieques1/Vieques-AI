@@ -17,6 +17,7 @@ import {
 import { makeMarkerEl } from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
+import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -221,12 +222,21 @@ function MapView({
       setSnap(SHEET_PEEK)
       const map = mapRef.current
       if (!map || !isMappable(p)) return
-      map.flyTo({
-        center: [p.longitude, p.latitude],
-        zoom: 15,
-        speed: 1.2,
-        padding: padding(),
-      })
+      if (p.geometry) {
+        // Zooming to a fixed 15 on the trailhead would put a 3-mile trail's far
+        // end off screen. Frame the whole line instead — and cap the zoom so a
+        // 100 m spur doesn't slam the camera into max zoom.
+        const b = new maplibregl.LngLatBounds()
+        p.geometry.coordinates.forEach((c) => b.extend(c))
+        map.fitBounds(b, { padding: padding(), maxZoom: 16, speed: 1.2 })
+      } else {
+        map.flyTo({
+          center: [p.longitude, p.latitude],
+          zoom: 15,
+          speed: 1.2,
+          padding: padding(),
+        })
+      }
       // Snorkel spots carry zone polygons; drawing them is the point of the
       // Vacation tier, so load them as soon as one is picked.
       if (p.kind === 'snorkel') {
@@ -275,7 +285,10 @@ function MapView({
       setTourFilter('all')
       setSnorkelLegend([])
       const map = mapRef.current
-      if (map) removeSnorkelZones(map)
+      if (map) {
+        removeSnorkelZones(map)
+        removeTrails(map)
+      }
       if (slug !== 'beaches') {
         setBeachFilters({})
         setFilterOpen(false)
@@ -308,6 +321,62 @@ function MapView({
     })
   }, [places, selected?.id, aiPins, selectPlace])
 
+  // ---------------------------------------------------------------------------
+  //  Trails — the one category drawn as lines rather than only pins
+  // ---------------------------------------------------------------------------
+
+  const trails = useMemo(() => places.filter((p) => p.geometry), [places])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (trails.length === 0) {
+      removeTrails(map)
+      return
+    }
+
+    const onClick = (e: maplibregl.MapLayerMouseEvent) => {
+      const id = e.features?.[0]?.properties?.id
+      const hit = trails.find((t) => t.id === id)
+      // The line is a much larger click target than the trailhead pin, and on
+      // a phone it is usually the only one you can hit — so clicking anywhere
+      // along a trail selects it, exactly like clicking its row in the list.
+      if (hit) selectPlace(hit)
+    }
+    const enter = () => (map.getCanvas().style.cursor = 'pointer')
+    const leave = () => (map.getCanvas().style.cursor = '')
+
+    // Switching basemap calls setStyle, which drops every source and layer we
+    // added. Re-adding before the new style has loaded throws, so wait for it.
+    //
+    // `cancelled` matters: if this effect is torn down while still waiting on
+    // `idle`, the deferred draw would otherwise still run and attach listeners
+    // that the cleanup below has already come and gone for — leaking a handler
+    // per basemap switch.
+    let cancelled = false
+    const draw = () => {
+      if (cancelled || !mapRef.current) return
+      drawTrails(mapRef.current, trails, selected?.id ?? null)
+      TRAIL_CLICK_LAYERS.forEach((layer) => {
+        map.on('click', layer, onClick)
+        map.on('mouseenter', layer, enter)
+        map.on('mouseleave', layer, leave)
+      })
+    }
+    if (map.isStyleLoaded()) draw()
+    else map.once('idle', draw)
+
+    return () => {
+      cancelled = true
+      TRAIL_CLICK_LAYERS.forEach((layer) => {
+        map.off('click', layer, onClick)
+        map.off('mouseenter', layer, enter)
+        map.off('mouseleave', layer, leave)
+      })
+    }
+  }, [trails, selected?.id, styleId, selectPlace])
+
   // Frame the whole result set when the list changes (but not when the user is
   // merely picking rows out of it — flyTo already handled that).
   const framedKey = useRef<string>('')
@@ -320,7 +389,12 @@ function MapView({
     framedKey.current = key
     if (mappable.length === 0) return
     const bounds = new maplibregl.LngLatBounds()
-    mappable.forEach((p) => bounds.extend([p.longitude, p.latitude]))
+    mappable.forEach((p) => {
+      // A trail framed by its trailhead alone would leave most of the line off
+      // screen — extend over the whole shape where there is one.
+      if (p.geometry) p.geometry.coordinates.forEach((c) => bounds.extend(c))
+      else bounds.extend([p.longitude, p.latitude])
+    })
     map.fitBounds(bounds, { padding: padding(), maxZoom: 14 })
   }, [places, category, subSlug, aiPins, padding])
 
@@ -331,7 +405,13 @@ function MapView({
     const map = mapRef.current
     if (!map) return
     const pad = padding()
-    if (selected && isMappable(selected)) {
+    if (selected?.geometry) {
+      // Re-fit rather than re-centre: the selection is a line, and easing to
+      // its trailhead would undo the framing selectPlace just did.
+      const b = new maplibregl.LngLatBounds()
+      selected.geometry.coordinates.forEach((c) => b.extend(c))
+      map.fitBounds(b, { padding: pad, maxZoom: 16, duration: 400 })
+    } else if (selected && isMappable(selected)) {
       map.easeTo({ center: [selected.longitude, selected.latitude], padding: pad, duration: 400 })
     } else {
       map.easeTo({ padding: pad, duration: 400 })

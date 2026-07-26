@@ -80,8 +80,26 @@ the other. Do NOT assume the session carries over.
 The backend connects via `DATABASE_URL` (the pooler at `...pooler.supabase.com:6543`).
 The transaction pooler starts sessions with an **empty search_path**, so unqualified
 names like `FROM beaches` fail intermittently with `relation "beaches" does not exist`.
-Fixed with `options: '-c search_path=public'` in the `pg.Pool` config in
+Fixed with `options: '-c search_path=public,extensions'` in the `pg.Pool` config in
 `backend/server.js`. Keep it.
+
+**`extensions` is not optional, and it is easy to miss** (found 2026-07-26). Supabase
+installs PostGIS into the `extensions` schema, **not** `public`. Pinning `public` alone
+means every unqualified `ST_*` call fails with:
+
+```
+function st_asgeojson(extensions.geometry) does not exist
+```
+
+Non-spatial routes are unaffected, which is exactly why this hid: it silently broke
+`/api/snorkel-spots/:id/zones` (the only PostGIS route at the time), while the
+production smoke test hit `/api/snorkel-spots` — which reads plain lat/lng columns and
+never touches a PostGIS function. `/api/trails` needs `ST_AsGeoJSON`/`ST_StartPoint` too.
+`public` must stay **first** so unqualified table names keep resolving there.
+
+The same rule applies to any `CREATE FUNCTION ... SET search_path`: pin
+`public, extensions`, or the function won't compile against the `geometry` type
+(see `public.import_trails` in `db/migrations/0026`).
 
 ### CORS / dev ports
 - `backend/server.js` allows any `http://localhost:*` origin **in dev only**

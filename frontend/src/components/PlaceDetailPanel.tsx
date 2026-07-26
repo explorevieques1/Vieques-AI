@@ -175,7 +175,7 @@ function PlaceDetailPanel({ place, onClose, onBack, onGetDirections }: Props) {
 
         {place.stats.length > 0 && (
           <div className="mt-4 grid grid-cols-2 gap-2">
-            {place.stats.slice(0, 4).map((s) => (
+            {place.stats.slice(0, place.statLimit ?? 4).map((s) => (
               <Stat key={s.label} label={s.label} value={s.value} />
             ))}
           </div>

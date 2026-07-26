@@ -13,7 +13,8 @@
 //    • Postgres pool         — the single shared DB connection pool
 //    • Stripe webhook mount   — raw-body route, registered before express.json()
 //    • Content routes         — beaches, restaurants, activities, transport,
-//                               services, essentials, snorkel spots (read-only)
+//                               services, essentials, snorkel spots, hiking
+//                               trails (read-only)
 //    • Payment routes         — /api/checkout, /api/entitlement (see payments.js)
 //    • AI chat route          — /api/ai/chat, a Claude tool-use loop (see aiTools.js)
 //    • Directions route       — /api/directions, fuzzy place match + OSRM routing
@@ -68,8 +69,20 @@ const pool = new pg.Pool(
         // GOTCHA (do not remove): Supabase's transaction pooler starts every
         // session with an EMPTY search_path, so unqualified names like
         // `FROM beaches` fail intermittently with `relation ... does not exist`.
-        // Pinning search_path=public on connect fixes it for good.
-        options: '-c search_path=public',
+        // Pinning search_path on connect fixes it for good.
+        //
+        // `extensions` is required as well, and is easy to miss because every
+        // non-spatial route works without it. Supabase installs PostGIS into
+        // the `extensions` schema, NOT public — so pinning `public` alone
+        // makes unqualified ST_* calls fail with
+        //   function st_asgeojson(extensions.geometry) does not exist
+        // That silently broke /api/snorkel-spots/:id/zones (the only PostGIS
+        // route at the time; the verified prod smoke test hit
+        // /api/snorkel-spots, which reads plain lat/lng columns and so never
+        // exercised it). /api/trails needs ST_AsGeoJSON too.
+        //
+        // public stays FIRST so unqualified table names keep resolving there.
+        options: '-c search_path=public,extensions',
       }
     : {
         // Local Postgres fallback (only when DATABASE_URL is unset).
@@ -327,6 +340,65 @@ app.get('/api/snorkel-spots/:id/zones', requireAuth, requireTier(pool, 'snorkel_
         description: r.description,
       },
       geometry: JSON.parse(r.geojson),
+    }))
+    res.json({ type: 'FeatureCollection', features })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+
+// ----------------------------------------------------------------------------
+//  Hiking trails
+// ----------------------------------------------------------------------------
+//  Returns ONE GeoJSON FeatureCollection rather than the array-of-rows shape
+//  every other content route uses, because a trail's geometry IS the payload:
+//  the map app hands the response straight to a MapLibre `geojson` source with
+//  no reshaping (see frontend/src/lib/trailLayers.ts), and every trail's line
+//  is needed up front to draw the layer — there is no per-trail second request
+//  like /api/snorkel-spots/:id/zones does for zones.
+//
+//  Everything the info pane shows travels in `properties`, so the same
+//  FeatureCollection feeds the list, the detail panel, and the line layer.
+//
+//  Derived server-side, never stored (see db/migrations/0025_trails.sql):
+//    • distance_km / distance_mi — generated columns, measured off the geometry
+//    • trailhead_lat / trailhead_lng — ST_StartPoint, so the app can pin, sort
+//      by distance-from-you, and route to the start without its own geometry math
+//
+//  Gated on 'activities', so hiking is included from Day Trip up — the same
+//  bundle as the rest of the things-to-do content.
+// ----------------------------------------------------------------------------
+app.get('/api/trails', requireAuth, requireTier(pool, 'activities'), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, slug, name, local_name, difficulty, surface, route_type,
+              elevation_gain_m, est_minutes, region, best_time, shade,
+              dogs_allowed, in_wildlife_refuge, gate_hours, warning,
+              description, source, source_url,
+              distance_km, distance_mi, published_distance_mi,
+              ST_Y(ST_StartPoint(geom)) AS trailhead_lat,
+              ST_X(ST_StartPoint(geom)) AS trailhead_lng,
+              ST_AsGeoJSON(geom) AS geojson
+       FROM trails
+       WHERE is_active = true
+       ORDER BY name`
+    )
+    const features = rows.map(({ geojson, ...properties }) => ({
+      type: 'Feature',
+      // Postgres returns numeric as a string to preserve precision. The UI
+      // formats and sorts these, so coerce here rather than leaving "0.62"
+      // to sort lexically or render as "0.62 km" via string concat by luck.
+      properties: {
+        ...properties,
+        distance_km: properties.distance_km == null ? null : Number(properties.distance_km),
+        distance_mi: properties.distance_mi == null ? null : Number(properties.distance_mi),
+        published_distance_mi:
+          properties.published_distance_mi == null ? null : Number(properties.published_distance_mi),
+        elevation_gain_m:
+          properties.elevation_gain_m == null ? null : Number(properties.elevation_gain_m),
+      },
+      geometry: JSON.parse(geojson),
     }))
     res.json({ type: 'FeatureCollection', features })
   } catch (e) {

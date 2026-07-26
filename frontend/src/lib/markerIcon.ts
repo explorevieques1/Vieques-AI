@@ -28,6 +28,10 @@ export const ACTIVITY_ICONS: Record<string, MarkerStyle> = {
 
 export const BEACH_ICON: MarkerStyle = { emoji: '🏖️', color: '#06b6d4' }
 
+// Trailheads. The colour is deliberately shared with TRAIL_LINE_COLOR in
+// lib/trailLayers.ts so the pin and the line it belongs to read as one object.
+export const TRAIL_ICON: MarkerStyle = { emoji: '🥾', color: '#e01e37' }
+
 export const ESSENTIAL_ICONS: Record<string, MarkerStyle> = {
   'gas-stations': { emoji: '⛽', color: '#dc2626' },
   'convenience-stores': { emoji: '🏪', color: '#f59e0b' },

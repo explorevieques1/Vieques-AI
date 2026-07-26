@@ -11,6 +11,7 @@ import {
   fetchServiceCategories,
   fetchServiceListings,
   fetchSnorkelSpots,
+  fetchTrails,
   fetchTransportCategories,
   fetchTransportListings,
   ApiError,
@@ -24,6 +25,7 @@ import {
   restaurantToPlace,
   serviceToPlace,
   snorkelToPlace,
+  trailToPlace,
   transportToPlace,
   type CategorySlug,
   type Place,
@@ -152,6 +154,14 @@ export function useCategoryPlaces(
     switch (category) {
       case 'beaches':
         fetchBeaches(beachFilters).then((rows) => finish(rows.map(beachToPlace)), fail)
+        break
+
+      // Hiking is the one category whose endpoint returns a GeoJSON
+      // FeatureCollection rather than an array of rows — the `.features` unwrap
+      // is the whole difference, because trailToPlace lifts the metadata out of
+      // `properties` and hands the LineString through as Place.geometry.
+      case 'hiking':
+        fetchTrails().then((fc) => finish(fc.features.map(trailToPlace)), fail)
         break
 
       case 'restaurants':

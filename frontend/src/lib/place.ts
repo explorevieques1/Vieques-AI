@@ -18,6 +18,7 @@ import type {
   RestaurantListing,
   ServiceListing,
   SnorkelSpot,
+  TrailFeature,
   TransportListing,
 } from './api'
 import {
@@ -26,6 +27,7 @@ import {
   DEFAULT_ICON,
   ESSENTIAL_ICONS,
   SERVICE_ICONS,
+  TRAIL_ICON,
   type MarkerStyle,
 } from './markerIcon'
 
@@ -37,6 +39,7 @@ export type PlaceKind =
   | 'transport'
   | 'essential'
   | 'snorkel'
+  | 'trail'
 
 /** A label/value pair rendered in the detail panel's 2x2 stat grid. */
 export type PlaceStat = { label: string; value: string }
@@ -60,13 +63,28 @@ export type Place = {
   longitude: number | null
   /** Pill tags: beach types, cuisine, price, vehicle type. */
   tags: string[]
-  /** Drives the detail panel's stat grid. Render the first four. */
+  /** Drives the detail panel's stat grid. Capped by `statLimit`. */
   stats: PlaceStat[]
+  /**
+   * How many stats the detail panel renders. Four is right for a point listing
+   * — past that the grid pushes the description below the fold for no gain.
+   * Trails legitimately have more that a hiker needs before setting out
+   * (distance, difficulty, time, elevation, surface, route type, shade), so
+   * they raise it rather than every category silently growing a longer grid.
+   */
+  statLimit?: number
   description?: string
   /** Amber callout, e.g. the wildlife-refuge warning + gate hours. */
   warning?: string
   contact: PlaceContact
   icon: MarkerStyle
+  /**
+   * The drawn shape, for places that are a line rather than a point (trails).
+   * `latitude`/`longitude` still hold a representative point — the trailhead —
+   * so search, distance sorting, selection and routing keep working unchanged;
+   * this is purely what the map draws in addition to the pin.
+   */
+  geometry?: { type: 'LineString'; coordinates: [number, number][] }
   raw: unknown
 }
 
@@ -83,6 +101,7 @@ export type CategorySlug =
   | 'beaches'
   | 'restaurants'
   | 'activities'
+  | 'hiking'
   | 'stays'
   | 'services'
   | 'transportation'
@@ -104,6 +123,12 @@ export const CATEGORIES: CategoryMeta[] = [
   { slug: 'beaches', label: 'Beaches', hasSubcategories: false },
   { slug: 'restaurants', label: 'Restaurants', hasSubcategories: true },
   { slug: 'activities', label: 'Activities', hasSubcategories: true },
+  // Hiking is top-level rather than an activity subcategory: trails are lines,
+  // not pins, so they have their own table, their own endpoint shape (a GeoJSON
+  // FeatureCollection) and their own map layer. Burying them under Activities
+  // would mean the one category whose rendering is different is also the one
+  // that takes two clicks to reach.
+  { slug: 'hiking', label: 'Hiking', hasSubcategories: false },
   // No `stays` table or endpoint exists yet — show an honest empty state
   // rather than a blank panel.
   { slug: 'stays', label: 'Stays', hasSubcategories: false, comingSoon: true },
@@ -259,6 +284,89 @@ export function transportToPlace(t: TransportListing, slug: string): Place {
     description: t.description ?? undefined,
     contact: contactOf(t),
     icon: slug === 'taxis' ? { emoji: '🚕', color: '#eab308' } : { emoji: '🚗', color: '#0ea5e9' },
+    raw: t,
+  }
+}
+
+// --- trails ----------------------------------------------------------------
+
+const ROUTE_TYPE_LABELS: Record<string, string> = {
+  out_and_back: 'Out & back',
+  loop: 'Loop',
+  point_to_point: 'Point to point',
+}
+
+/**
+ * Walking time when the trail has no authored `est_minutes`.
+ *
+ * Naismith's rule: 12 min per km on the flat, plus 10 min per 100 m of climb.
+ * Returned separately from an authored time so the UI can mark it "≈" — a
+ * guess presented as a fact is worse than no number on a trail with no shade
+ * and no water.
+ */
+function naismithMinutes(km: number, ascentM: number | null): number {
+  return Math.max(5, Math.round(km * 12 + ((ascentM ?? 0) / 100) * 10))
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h}h ${m}m` : `${h}h`
+}
+
+export function trailToPlace(f: TrailFeature): Place {
+  const t = f.properties
+  const km = t.distance_km ?? 0
+  const mi = t.distance_mi
+
+  // Authored time wins; otherwise estimate and say so.
+  const estimated = t.est_minutes == null
+  const minutes = t.est_minutes ?? naismithMinutes(km, t.elevation_gain_m)
+
+  // The refuge warning and the trail's own hazard note are both worth showing
+  // and are independent — a trail can be outside the refuge and still have no
+  // water. Join rather than letting one shadow the other.
+  const warnings = [
+    t.in_wildlife_refuge
+      ? `Inside the wildlife refuge${t.gate_hours ? ` · ${t.gate_hours}` : ''}`
+      : null,
+    t.warning,
+  ].filter(Boolean)
+
+  return {
+    id: `trail:${t.id}`,
+    kind: 'trail',
+    name: t.name,
+    subtitle:
+      [t.local_name, t.region].filter(Boolean).join(' · ') ||
+      undefined,
+    // The trailhead, not the midpoint: it is where you park, and it is what
+    // "3.2mi away" and Get Directions should both mean.
+    latitude: t.trailhead_lat,
+    longitude: t.trailhead_lng,
+    tags: [
+      mi != null ? `${mi} mi` : null,
+      t.difficulty,
+      t.route_type ? ROUTE_TYPE_LABELS[t.route_type] : null,
+    ].filter((x): x is string => !!x),
+    stats: stats(
+      ['Distance', mi != null ? `${mi} mi · ${km.toFixed(1)} km` : null],
+      ['Difficulty', t.difficulty],
+      ['Time', `${estimated ? '≈ ' : ''}${formatDuration(minutes)}`],
+      ['Elevation gain', t.elevation_gain_m != null ? `${Math.round(t.elevation_gain_m)} m` : null],
+      ['Surface', t.surface],
+      ['Route', t.route_type ? ROUTE_TYPE_LABELS[t.route_type] : null],
+      ['Shade', t.shade],
+      ['Dogs', t.dogs_allowed == null ? null : t.dogs_allowed ? 'Allowed' : 'Not allowed'],
+      ['Best time', t.best_time],
+    ),
+    statLimit: 8,
+    description: t.description ?? undefined,
+    warning: warnings.length ? warnings.join(' · ') : undefined,
+    contact: { website: t.source_url ?? undefined },
+    icon: TRAIL_ICON,
+    geometry: f.geometry,
     raw: t,
   }
 }

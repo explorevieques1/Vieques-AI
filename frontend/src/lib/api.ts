@@ -221,6 +221,73 @@ export async function fetchSnorkelZones(spotId: string): Promise<ZoneFeatureColl
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+//  Hiking trails
+// ---------------------------------------------------------------------------
+//  Unlike every other listing type, a trail is a LINE. `/api/trails` therefore
+//  returns a GeoJSON FeatureCollection, not an array of rows: the same response
+//  feeds the results list, the detail panel, AND the MapLibre line layer with
+//  no reshaping.
+
+export type TrailDifficulty = 'easy' | 'moderate' | 'hard'
+
+export type TrailProperties = {
+  id: string
+  slug: string
+  name: string
+  local_name: string | null
+  difficulty: TrailDifficulty | null
+  /** native | boardwalk | gravel | sand | paved */
+  surface: string | null
+  route_type: 'out_and_back' | 'loop' | 'point_to_point' | null
+  elevation_gain_m: number | null
+  /** Authored walking time. Null → the client estimates it from the distance. */
+  est_minutes: number | null
+  region: string | null
+  best_time: string | null
+  /** none | partial | full */
+  shade: string | null
+  dogs_allowed: boolean | null
+  in_wildlife_refuge: boolean
+  gate_hours: string | null
+  warning: string | null
+  description: string | null
+  source: string | null
+  source_url: string | null
+  /** MEASURED off the geometry by Postgres (generated column) — always current. */
+  distance_km: number | null
+  distance_mi: number | null
+  /**
+   * The length the source *prints*. Deliberately separate from `distance_mi`:
+   * the USFWS inventory is from ~2012, so a disagreement means the published
+   * figure or the geometry is stale, and neither should quietly win.
+   */
+  published_distance_mi: number | null
+  /** ST_StartPoint of the line — where you actually park and start walking. */
+  trailhead_lat: number
+  trailhead_lng: number
+}
+
+export type TrailFeature = {
+  type: 'Feature'
+  properties: TrailProperties
+  geometry: { type: 'LineString'; coordinates: [number, number][] }
+}
+
+export type TrailFeatureCollection = {
+  type: 'FeatureCollection'
+  features: TrailFeature[]
+}
+
+export async function fetchTrails(): Promise<TrailFeatureCollection> {
+  const res = await apiFetch('/api/trails')
+  // Hiking rides the 'activities' feature bundle, so an un-upgraded user gets a
+  // 402 here. raise() preserves the UPGRADE_REQUIRED code so ResultsList can
+  // show the upsell instead of "couldn't load hiking".
+  if (!res.ok) await raise(res, 'Trails request failed')
+  return res.json()
+}
+
 export type ServiceCategory = { slug: string; label: string }
 
 export type ServiceListing = {
