@@ -101,7 +101,6 @@ export type CategorySlug =
   | 'beaches'
   | 'restaurants'
   | 'activities'
-  | 'hiking'
   | 'stays'
   | 'services'
   | 'transportation'
@@ -122,13 +121,12 @@ export type CategoryMeta = {
 export const CATEGORIES: CategoryMeta[] = [
   { slug: 'beaches', label: 'Beaches', hasSubcategories: false },
   { slug: 'restaurants', label: 'Restaurants', hasSubcategories: true },
+  // Hiking lives here as the `hiking` subcategory, not as its own top-level
+  // pill: it is a thing to do on the island, and the fact that its rows happen
+  // to be lines rather than pins is a rendering detail, not a reason to split
+  // the navigation. See the `activities` case in hooks/useCategoryPlaces.ts —
+  // it takes the same "this sub has its own dataset" branch snorkelling does.
   { slug: 'activities', label: 'Activities', hasSubcategories: true },
-  // Hiking is top-level rather than an activity subcategory: trails are lines,
-  // not pins, so they have their own table, their own endpoint shape (a GeoJSON
-  // FeatureCollection) and their own map layer. Burying them under Activities
-  // would mean the one category whose rendering is different is also the one
-  // that takes two clicks to reach.
-  { slug: 'hiking', label: 'Hiking', hasSubcategories: false },
   // No `stays` table or endpoint exists yet — show an honest empty state
   // rather than a blank panel.
   { slug: 'stays', label: 'Stays', hasSubcategories: false, comingSoon: true },

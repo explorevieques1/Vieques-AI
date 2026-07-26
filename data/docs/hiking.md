@@ -144,10 +144,12 @@ Where things live:
 | Dashed line + label layers | `frontend/src/lib/trailLayers.ts` |
 | Wiring, click-to-select, framing | `frontend/src/components/MapView.tsx` |
 
-Hiking is a **top-level category**, not an Activities subcategory: trails are
-lines, so they have their own table, their own response shape and their own map
-layer — burying the one category that renders differently two clicks deep made
-no sense.
+Hiking is the **`hiking` subcategory of Activities**, not a top-level pill —
+it's a thing to do on the island, and trails being lines rather than pins is a
+rendering detail, not a reason to split the navigation. The chip comes from an
+`activity_categories` row (`slug='hiking'`, `sort_order=0`, so it leads the
+row); nothing joins that row to `activity_listings`. `useCategoryPlaces` takes
+the same "this sub has its own dataset" branch that snorkelling does.
 
 Seeded trail: `puerto-ferro-lighthouse`, from
 `data/trails/puerto-ferro-lighthouse.geojson` — 27 vertices after cleaning

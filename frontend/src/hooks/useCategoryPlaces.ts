@@ -156,14 +156,6 @@ export function useCategoryPlaces(
         fetchBeaches(beachFilters).then((rows) => finish(rows.map(beachToPlace)), fail)
         break
 
-      // Hiking is the one category whose endpoint returns a GeoJSON
-      // FeatureCollection rather than an array of rows — the `.features` unwrap
-      // is the whole difference, because trailToPlace lifts the metadata out of
-      // `properties` and hands the LineString through as Place.geometry.
-      case 'hiking':
-        fetchTrails().then((fc) => finish(fc.features.map(trailToPlace)), fail)
-        break
-
       case 'restaurants':
         fetchRestaurantListings(subSlug!).then(
           (rows) => finish(rows.map(restaurantToPlace)),
@@ -172,11 +164,25 @@ export function useCategoryPlaces(
         break
 
       case 'activities':
+        // Two activity subcategories are backed by their own table rather than
+        // activity_listings, so they branch before the generic fetch. Both
+        // still appear as ordinary chips — the `activity_categories` rows
+        // ('snorkeling', 'hiking') exist purely to put them in the chip row;
+        // nothing joins them to a listing.
+
         // Snorkelling is its own dataset (spots + zone polygons), not an
         // activity listing. Gate it before the request so a free-tier user
         // gets the upsell instead of a 402 in the console.
         if (subSlug === 'snorkeling') {
           fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
+          break
+        }
+        // Hiking returns a GeoJSON FeatureCollection rather than an array of
+        // rows — the `.features` unwrap is the whole difference, because
+        // trailToPlace lifts the metadata out of `properties` and hands the
+        // LineString through as Place.geometry for the trail line layer.
+        if (subSlug === 'hiking') {
+          fetchTrails().then((fc) => finish(fc.features.map(trailToPlace)), fail)
           break
         }
         fetchActivityListings(subSlug!).then(

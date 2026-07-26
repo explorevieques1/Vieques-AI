@@ -24,6 +24,11 @@ export const ACTIVITY_ICONS: Record<string, MarkerStyle> = {
   'local-markets': { emoji: '🛍️', color: '#ca8a04' },
   stargazing: { emoji: '🌌', color: '#1e3a8a' },
   adventures: { emoji: '🧭', color: '#dc2626' },
+  // Trails come from the `trails` table and get TRAIL_ICON via trailToPlace, so
+  // this entry is only reached if a guided-hike *listing* is ever filed under
+  // the hiking subcategory. Matching TRAIL_ICON keeps the two from clashing on
+  // the same chip; without it such a listing would fall back to 'adventures'.
+  hiking: { emoji: '🥾', color: '#e01e37' },
 }
 
 export const BEACH_ICON: MarkerStyle = { emoji: '🏖️', color: '#06b6d4' }
