@@ -178,6 +178,21 @@ app.post('/api/stripe/webhook',
   (req, res) => handleWebhook(pool, req, res)
 )
 
+// Dev-only request log. Off in production, where the host already captures
+// access logs and this would just double the noise.
+//
+// Worth keeping: the gated routes deliberately fail *quietly* at the client —
+// a 402 from requireTier and a 204 from "no Tripadvisor listing" both render
+// as an absent panel section, which is indistinguishable from a fetch that
+// never happened. Without this line the only way to tell those three apart is
+// to guess.
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    res.on('finish', () => console.log(`${res.statusCode} ${req.method} ${req.originalUrl}`))
+    next()
+  })
+}
+
 // From here down, every route parses its body as JSON.
 app.use(express.json())
 
