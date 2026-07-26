@@ -552,8 +552,9 @@ app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_pr
 // ============================================================================
 //  STAYS — lodging listings + their Tripadvisor enrichment
 // ============================================================================
-//  Two routes with deliberately different gates:
+//  Three routes, with deliberately different gates:
 //
+//    GET /api/stay-categories        → stay_preview (free) or stays (paid)
 //    GET /api/stays                  → stay_preview (free) or stays (paid)
 //    GET /api/stays/:id/tripadvisor  → stays only
 //
@@ -563,10 +564,30 @@ app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_pr
 //  full list is the wrong trade.
 // ============================================================================
 
-// All lodging in one shot — there are ~6 properties island-wide, so unlike
-// restaurants there is no subcategory to pick first (see lib/place.ts).
+// Categories for the chip row (0028_stay_categories.sql). Gated with the list
+// itself: the chips leak nothing the list does not, and hiding them from the
+// free tier would make the panel look broken rather than gated.
+app.get('/api/stay-categories', requireAuth, requireTier(pool, ['stay_preview', 'stays']), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT slug, label FROM stay_categories ORDER BY sort_order'
+    )
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// All lodging in one shot, or one category of it via ?category=<slug>.
+//
+// The filter is a query param on the list route rather than a
+// /api/stays/:slug of its own, the way restaurants do it, because for stays
+// the unfiltered list is the default view and not a state you pass through —
+// there are ~6 properties island-wide. `/api/stays/:id/tripadvisor` also
+// already owns the `/api/stays/:something` shape.
 app.get('/api/stays', requireAuth, requireTier(pool, ['stay_preview', 'stays']), async (req, res) => {
   try {
+    const category = req.query.category || null
     // NOTE: tripadvisor_location_id is deliberately NOT selected. It is a
     // server-side join key; keeping it off the wire means the enrichment route
     // resolves it from our own row and enforces its own tier gate, rather than
@@ -581,7 +602,9 @@ app.get('/api/stays', requireAuth, requireTier(pool, ['stay_preview', 'stays']),
               address, location_area, location_precision, directions_note
          FROM stay_listings
         WHERE is_active = true
-        ORDER BY name`
+          AND ($1::text IS NULL OR category_slug = $1)
+        ORDER BY name`,
+      [category]
     )
     res.json(tierHas(req.tier, 'stays') ? rows : rows.slice(0, 3))
   } catch (e) {
