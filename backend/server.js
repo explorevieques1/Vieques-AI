@@ -204,12 +204,19 @@ app.use(express.json())
 //  connection is live, not just that the process is up. Returns 500 if the DB
 //  is unreachable, which tells Railway the deploy is unhealthy.
 // ----------------------------------------------------------------------------
+//
+//  `commit` is the SHA Railway built from (it injects RAILWAY_GIT_COMMIT_SHA).
+//  Every other route is behind auth, so without this there is no way to tell
+//  from outside whether a push actually reached production — the difference
+//  between "the code is wrong" and "the code never deployed".
+// ----------------------------------------------------------------------------
 app.get('/api/health', async (_req, res) => {
+  const commit = (process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown').slice(0, 7)
   try {
     await pool.query('SELECT 1')
-    res.json({ ok: true })
+    res.json({ ok: true, commit })
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message })
+    res.status(500).json({ ok: false, commit, error: e.message })
   }
 })
 
