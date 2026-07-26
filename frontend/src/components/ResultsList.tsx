@@ -83,10 +83,15 @@ function ResultsList({
         </div>
       </div>
 
-      {/* Subcategory chips — the old sidebars' entire job, compressed to a row. */}
+      {/* Subcategory chips — the old sidebars' entire job, compressed to a row.
+          Visible scrollbar, not `.no-scrollbar`: these chips are the only way
+          into a subcategory, and there are more of them than fit the panel
+          width. A hidden bar leaves the overflowed ones both undiscoverable and
+          unreachable with a mouse. The inner `pb-2` reserves the track's height
+          so it sits under the chips rather than over them. */}
       {subcategories.length > 0 && (
-        <div className="no-scrollbar shrink-0 overflow-x-auto px-4 pb-3">
-          <div className="flex w-max gap-1.5">
+        <div className="scrollbar-thin shrink-0 overflow-x-auto px-4 pb-2">
+          <div className="flex w-max gap-1.5 pb-2">
             {subcategories.map((s) => (
               <button
                 key={s.slug}
@@ -106,7 +111,7 @@ function ResultsList({
 
       {banner && <div className="shrink-0 px-4 pb-3">{banner}</div>}
 
-      <div className="scroll-contain no-scrollbar flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-4">
+      <div className="scroll-contain scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-4">
         {loading &&
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] shrink-0 rounded-2xl" />

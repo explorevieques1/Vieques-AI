@@ -78,7 +78,12 @@ function MapTopBar({
         </div>
 
         {/* Category pills — centre column from lg up, own row below */}
-        <div className="glass pointer-events-auto hidden rounded-2xl p-1.5 lg:block">{tabs}</div>
+        {/* min-w-0 + overflow lets this shrink and scroll between lg and the
+            width where all eight pills genuinely fit. Without it the middle
+            column of a justify-between row just overflows its neighbours. */}
+        <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
+          {tabs}
+        </div>
 
         {/* Actions */}
         <div className="pointer-events-auto flex shrink-0 items-center gap-2">
@@ -117,7 +122,7 @@ function MapTopBar({
       </div>
 
       {/* Pills row for anything narrower than lg. */}
-      <div className="no-scrollbar overflow-x-auto px-4 pb-1 sm:px-5 lg:hidden">
+      <div className="scrollbar-thin overflow-x-auto px-4 pb-1 sm:px-5 lg:hidden">
         <div className="glass pointer-events-auto mx-auto w-max rounded-2xl p-1.5">{tabs}</div>
       </div>
     </div>

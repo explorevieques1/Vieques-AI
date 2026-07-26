@@ -95,6 +95,8 @@ html, body, #root {
   --accent-sky: oklch(0.62 0.14 233);
   --glass: oklch(1 0 0 / 82%);
   --glass-border: oklch(0.21 0.03 245 / 10%);
+  --scrollbar-thumb: oklch(0.21 0.03 245 / 24%);
+  --scrollbar-thumb-hover: oklch(0.21 0.03 245 / 40%);
   --sidebar: oklch(0.98 0.008 220);
   --sidebar-foreground: oklch(0.21 0.03 245);
   --sidebar-primary: oklch(0.68 0.13 205);
@@ -132,6 +134,8 @@ html, body, #root {
      whatever map tiles sit behind it. */
   --glass: oklch(0.17 0.028 258 / 82%);
   --glass-border: oklch(1 0 0 / 10%);
+  --scrollbar-thumb: oklch(1 0 0 / 20%);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 34%);
   --chart-1: oklch(0.78 0.13 200);
   --chart-2: oklch(0.66 0.12 235);
   --chart-3: oklch(0.74 0.15 160);
@@ -220,6 +224,30 @@ html, body, #root {
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+  /* A slim, themed scrollbar for panes whose overflow the user must be able to
+     FIND. Touch users can always swipe, but on a desktop mouse a hidden
+     scrollbar means overflowed content — the subcategory chips past the panel
+     edge, a long results list — is simply unreachable and unadvertised. Use
+     this anywhere the scroll is the only route to some content; keep
+     `.no-scrollbar` for rows that merely spill decoratively. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
 }
 
