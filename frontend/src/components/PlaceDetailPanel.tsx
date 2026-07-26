@@ -105,12 +105,10 @@ function PlaceDetailPanel({
 }: Props) {
   const mappable = isMappable(place)
 
-  // Stays are the first listing type with a real photo column. Everything else
-  // still falls through to the striped placeholder below.
-  const heroImage =
-    place.kind === 'stay' ? (place.raw as { images?: string[] }).images?.[0] ?? null : null
-  const heroCredit =
-    place.kind === 'stay' ? (place.raw as { image_credit?: string | null }).image_credit : null
+  // Photos come off the view model, not off `raw` per category — see Place.photo.
+  // Listings without one still fall through to the striped placeholder below.
+  const heroImage = place.photo ?? null
+  const heroCredit = place.photoCredit ?? null
   const gmaps = mappable
     ? `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`
     : null

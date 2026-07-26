@@ -271,7 +271,8 @@ app.get('/api/beaches', requireAuth, requireTier(pool, 'beach_names'), async (re
     const cols = tierHas(req.tier, 'beach_profiles')
       ? `id, name, local_name, latitude, longitude,
          region, type, water_conditions, access, facilities,
-         best_for, in_wildlife_refuge, gate_hours, notes`
+         best_for, in_wildlife_refuge, gate_hours, notes,
+         images, image_credit`
       : `id, name, latitude, longitude, region`
 
     const { rows } = await pool.query(

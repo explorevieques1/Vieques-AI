@@ -133,6 +133,9 @@ export type Beach = {
   in_wildlife_refuge: boolean
   gate_hours: string | null
   notes: string | null
+  /** Hero photo paths, same contract as StayListing.images. Free tier omits. */
+  images?: string[]
+  image_credit?: string | null
 }
 
 export type BeachFilters = {

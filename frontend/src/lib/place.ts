@@ -77,6 +77,14 @@ export type Place = {
    */
   statLimit?: number
   description?: string
+  /**
+   * Hero photo for the detail panel. Absent means the striped placeholder —
+   * most listings still have no photo. Kept on the view model rather than read
+   * off `raw` per category so the panel stays ignorant of which kind it holds.
+   */
+  photo?: string
+  /** Attribution overlaid on the hero, when the photo requires one. */
+  photoCredit?: string
   /** Amber callout, e.g. the wildlife-refuge warning + gate hours. */
   warning?: string
   contact: PlaceContact
@@ -193,6 +201,8 @@ export function beachToPlace(b: Beach): Place {
       ['Region', b.region],
     ),
     description: b.notes ?? undefined,
+    photo: b.images?.[0],
+    photoCredit: b.image_credit ?? undefined,
     warning: b.in_wildlife_refuge
       ? `Inside the wildlife refuge${
           b.gate_hours && b.gate_hours !== 'N/A' ? ` · ${b.gate_hours}` : ''
@@ -290,6 +300,8 @@ export function stayToPlace(s: StayListing): Place {
     // there is no second visit to catch what the grid cut off.
     statLimit: 8,
     description: s.description ?? undefined,
+    photo: s.images?.[0],
+    photoCredit: s.image_credit ?? undefined,
     warning: caveats.length ? caveats.join(' · ') : undefined,
     contact: contactOf(s),
     icon: STAY_ICON,
