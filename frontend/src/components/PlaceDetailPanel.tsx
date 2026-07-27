@@ -1,4 +1,5 @@
 import {
+  ChevronDown,
   ChevronLeft,
   Clock,
   Globe,
@@ -17,6 +18,12 @@ type Props = {
   onClose: () => void
   /** Mobile: pops back to the results list instead of dismissing the sheet. */
   onBack?: () => void
+  /**
+   * Mobile: drop the sheet to its collapsed stop, keeping the place selected.
+   * The point of the panel is the pin it describes, and sometimes you want to
+   * look at the pin.
+   */
+  onCollapse?: () => void
   /** In-app routing. When absent the primary action links to Google Maps. */
   onGetDirections?: (p: Place) => void
   /**
@@ -97,6 +104,7 @@ function PlaceDetailPanel({
   place,
   onClose,
   onBack,
+  onCollapse,
   onGetDirections,
   extra,
   hero = true,
@@ -143,6 +151,16 @@ function PlaceDetailPanel({
         <span />
       )}
       <div className="flex gap-1.5">
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            aria-label="Collapse panel"
+            title="Collapse panel"
+            className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
+          >
+            <ChevronDown size={16} />
+          </button>
+        )}
         <button
           onClick={share}
           aria-label="Share"

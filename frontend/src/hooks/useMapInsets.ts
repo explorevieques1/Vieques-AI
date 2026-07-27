@@ -44,7 +44,11 @@ export const TOP_BAR_H_MOBILE = 100
  *
  * They live here because they are what the bottom inset resolves to.
  */
-export const SHEET_COLLAPSED = '104px'
+// Generous because a snap height is the sheet's *outer* height, and the sheet
+// pads itself by env(safe-area-inset-bottom) — on a home-indicator iPhone ~34px
+// of this is padding, not content. It has to still clear the handle, the
+// tap-to-expand strip and the search field after that is taken out.
+export const SHEET_COLLAPSED = '148px'
 export const SHEET_PEEK = 0.45
 export const SHEET_FULL = 0.92
 export const SHEET_SNAPS: (string | number)[] = [SHEET_COLLAPSED, SHEET_PEEK, SHEET_FULL]

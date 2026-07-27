@@ -1,4 +1,4 @@
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, ChevronDown, PanelLeftClose, X } from 'lucide-react'
 
 import type { Subcategory } from '../hooks/useCategoryPlaces'
 import { ApiError, LANDING_URL } from '../lib/api'
@@ -23,6 +23,14 @@ type Props = {
   distances: Map<string, number>
   /** Desktop only — the sheet has its own dismiss affordance on mobile. */
   onClose?: () => void
+  /**
+   * Get the list out of the way *without* losing it — distinct from `onClose`,
+   * which drops the category and its results entirely. Desktop folds the panel
+   * to a tab at the edge; mobile drops the sheet to its collapsed stop.
+   */
+  onCollapse?: () => void
+  /** Which way `onCollapse` visually moves the panel. */
+  collapseDirection?: 'left' | 'down'
   /** Rendered above the list, e.g. the snorkelling upsell or tour toggle. */
   banner?: React.ReactNode
   /** Surfaced in place of the empty state — never swallow a failed fetch. */
@@ -51,6 +59,8 @@ function ResultsList({
   onSortChange,
   distances,
   onClose,
+  onCollapse,
+  collapseDirection = 'left',
   banner,
   error,
 }: Props) {
@@ -72,6 +82,20 @@ function ResultsList({
           >
             Sort: {sort === 'nearest' ? 'Nearest' : 'A–Z'} ↓
           </button>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              aria-label="Collapse results"
+              title="Collapse results"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {collapseDirection === 'down' ? (
+                <ChevronDown size={16} />
+              ) : (
+                <PanelLeftClose size={15} />
+              )}
+            </button>
+          )}
           {onClose && (
             <button
               onClick={onClose}

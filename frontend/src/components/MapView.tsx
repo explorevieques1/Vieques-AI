@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
+import { ChevronUp, PanelLeftOpen } from 'lucide-react'
 
 import {
   fetchDirections,
@@ -136,6 +137,9 @@ function MapView({
   >([])
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
   const [quickSearch, setQuickSearch] = useState(false)
+  // Desktop: the results panel is folded to an edge tab. The category and its
+  // results survive — this is "get out of my way", not "close".
+  const [resultsCollapsed, setResultsCollapsed] = useState(false)
 
   // Mobile sheet geometry. The sheet's *visible* height drives the map's bottom
   // padding, so a pin never ends up underneath it.
@@ -181,7 +185,9 @@ function MapView({
     return sorted
   }, [rawPlaces, snorkelling, tourFilter, sort, distances])
 
-  const resultsOpen = category != null
+  // Collapsed counts as closed for the camera: the map really does have that
+  // width back, and padding for a panel that isn't there parks pins off-centre.
+  const resultsOpen = category != null && !resultsCollapsed
   const detailOpen = selected != null
 
   /**
@@ -347,6 +353,9 @@ function MapView({
       setSubSlug(null)
       setSelected(null)
       setSnap(SHEET_PEEK)
+      // Asking for a category is asking to see its results — a collapse left
+      // over from the previous one would silently swallow the click.
+      setResultsCollapsed(false)
       setTourFilter('all')
       setSnorkelLegend([])
       const map = mapRef.current
@@ -669,6 +678,8 @@ function MapView({
       onSortChange={setSort}
       distances={distances}
       onClose={isMobile ? undefined : () => selectCategory(null)}
+      onCollapse={isMobile ? () => setSnap(SHEET_COLLAPSED) : () => setResultsCollapsed(true)}
+      collapseDirection={isMobile ? 'down' : 'left'}
       banner={hasBanner ? banner : undefined}
       error={error}
     />
@@ -719,11 +730,26 @@ function MapView({
               onSnapChange={setSnap}
               onClose={() => (selected ? clearSelection() : selectCategory(null))}
             >
+              {/* The mobile twin of the desktop folded tab: names what is
+                  hidden and taps back open. Dragging up works too, but a
+                  collapsed sheet should not rely on the user knowing that. */}
+              {snap === SHEET_COLLAPSED && (
+                <button
+                  onClick={() => setSnap(SHEET_PEEK)}
+                  className="mx-4 mb-2 flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/4 py-1.5 text-xs text-muted-foreground"
+                >
+                  <ChevronUp size={14} />
+                  {selected
+                    ? selected.name
+                    : `${places.length} ${categoryMeta(category).label.toLowerCase()}`}
+                </button>
+              )}
               {selected ? (
                 <PlaceDetailPanel
                   place={selected}
                   onClose={() => selectCategory(null)}
                   onBack={clearSelection}
+                  onCollapse={() => setSnap(SHEET_COLLAPSED)}
                   onGetDirections={onRoute ? handleDirections : undefined}
                   extra={detailExtra(selected)}
                   {...detailLayout(selected)}
@@ -748,7 +774,7 @@ function MapView({
         </>
       ) : (
         <>
-          {category && (
+          {category && !resultsCollapsed && (
             <ResponsivePanel
               variant="floating"
               side="left"
@@ -759,6 +785,21 @@ function MapView({
               <div className="shrink-0 border-b border-white/8 p-4">{searchBar}</div>
               {results}
             </ResponsivePanel>
+          )}
+
+          {/* Folded state: a tab where the panel was. It names the category and
+              its count so collapsing never costs you the sense of what is on
+              the map — and it is the only way back, so it sits exactly where
+              the panel's own collapse button was. */}
+          {category && resultsCollapsed && (
+            <button
+              onClick={() => setResultsCollapsed(false)}
+              className="glass absolute left-5 top-[5.75rem] z-20 flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm text-foreground shadow-2xl hover:bg-white/5"
+            >
+              <PanelLeftOpen size={16} className="text-muted-foreground" />
+              {categoryMeta(category).label}
+              <span className="font-mono text-[10px] text-muted-foreground">{places.length}</span>
+            </button>
           )}
 
           {selected && (
