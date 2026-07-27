@@ -225,6 +225,14 @@ html, body, #root {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+  /* Soft fade at the right edge of a horizontally-scrolling row. On a phone the
+     category pills are always wider than the screen; without a cue that the row
+     scrolls, the ones past the edge simply don't exist to the user. Pairs with
+     `.no-scrollbar` — the fade IS the affordance, so no bar is needed. */
+  .fade-r {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
   /* A slim, themed scrollbar for panes whose overflow the user must be able to
      FIND. Touch users can always swipe, but on a desktop mouse a hidden
      scrollbar means overflowed content — the subcategory chips past the panel

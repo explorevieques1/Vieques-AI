@@ -69,10 +69,13 @@ function AiChatPane({ onClose, onPins }: Props) {
     // A self-positioned floating panel rather than a ResponsivePanel: on phones
     // that would render a vaul Drawer, and the map's results sheet is already
     // one — two nested drawers fight over the same drag handling.
+    // Top offsets clear MapTopBar: two rows on a phone (measured from the
+    // safe-area inset so it also clears the notch in standalone mode), one row
+    // from `sm` up.
     <aside
-      className="glass pointer-events-auto absolute inset-x-4 bottom-4 top-[9.5rem] z-40 flex flex-col
+      className="glass pointer-events-auto absolute inset-x-3 bottom-3 top-[calc(env(safe-area-inset-top)+6.25rem)] z-40 flex flex-col
                  overflow-hidden rounded-3xl shadow-2xl pad-safe-bottom
-                 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:top-[5.75rem] sm:w-[400px]"
+                 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:top-[5.5rem] sm:w-[400px]"
     >
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/8 p-4">
         <div>

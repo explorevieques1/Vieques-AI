@@ -556,6 +556,7 @@ function MapView({
       onOpenFilters={category === 'beaches' ? () => setFilterOpen((v) => !v) : undefined}
       filtersOpen={filterOpen}
       activeFilters={activeFilters}
+      compact={isMobile}
     />
   )
 
@@ -655,8 +656,11 @@ function MapView({
           {/* Search floats above the sheet on phones — it belongs to the map,
               not to the results, and must stay reachable at any snap height. */}
           {category && (
-            <div className="absolute inset-x-4 top-[9.5rem] z-20">
-              <div className="glass rounded-3xl p-3">{searchBar}</div>
+            // Sits just under MapTopBar's pill row. Offset from the safe-area
+            // inset rather than a flat rem so it clears the notch in
+            // standalone PWA mode, where the bar starts lower.
+            <div className="absolute inset-x-3 z-20 top-[calc(env(safe-area-inset-top)+6.25rem)]">
+              <div className="glass rounded-2xl p-2.5">{searchBar}</div>
             </div>
           )}
           {category && (

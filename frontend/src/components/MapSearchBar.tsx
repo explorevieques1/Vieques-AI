@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Layers, Search, SlidersHorizontal, X } from 'lucide-react'
 
 import { MAP_STYLES } from '../lib/mapStyles'
 import type { Place } from '../lib/place'
@@ -17,6 +17,14 @@ type Props = {
   onOpenFilters?: () => void
   filtersOpen?: boolean
   activeFilters?: ActiveFilterChip[]
+  /**
+   * Phone layout: collapse the basemap switcher behind a chip.
+   *
+   * The four-up Satellite/Streets/Outdoor/Basic row is a whole line of a panel
+   * that floats over the map, and it is a set-once preference — it does not
+   * earn permanent space on a 390px screen the way search and filters do.
+   */
+  compact?: boolean
 }
 
 /**
@@ -35,9 +43,11 @@ function MapSearchBar({
   onOpenFilters,
   filtersOpen,
   activeFilters = [],
+  compact = false,
 }: Props) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [layersOpen, setLayersOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // "/" focuses search, the convention in every map and docs app. Ignored while
@@ -78,11 +88,67 @@ function MapSearchBar({
     inputRef.current?.blur()
   }
 
+  const chipBase = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors'
+  const chipOff = `${chipBase} border border-white/8 bg-white/4 text-foreground hover:bg-white/8`
+  const chipOn = `${chipBase} border border-primary/30 bg-primary/15 text-primary`
+
+  const layers = (
+    <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
+      {MAP_STYLES.map((s) => (
+        <button
+          key={s.id}
+          onClick={() => onStyleChange(s.id)}
+          className={`flex-1 rounded-xl py-1.5 text-xs transition-colors ${
+            styleId === s.id
+              ? 'bg-primary font-semibold text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {s.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  const chips = (onOpenFilters || compact) && (
+    <div className="flex flex-wrap gap-1.5">
+      {onOpenFilters && (
+        <button
+          onClick={onOpenFilters}
+          className={filtersOpen || activeFilters.length > 0 ? chipOn : chipOff}
+        >
+          <SlidersHorizontal size={12} />
+          Filters{activeFilters.length > 0 ? ` · ${activeFilters.length}` : ''}
+        </button>
+      )}
+      {compact && (
+        <button
+          onClick={() => setLayersOpen((v) => !v)}
+          aria-expanded={layersOpen}
+          className={layersOpen ? chipOn : chipOff}
+        >
+          <Layers size={12} />
+          {MAP_STYLES.find((s) => s.id === styleId)?.label ?? 'Layers'}
+        </button>
+      )}
+      {activeFilters.map((f) => (
+        <button key={f.key} onClick={f.onRemove} className={chipOff}>
+          {f.label}
+          <X size={11} className="text-muted-foreground" />
+        </button>
+      ))}
+    </div>
+  )
+
   return (
-    <div className="relative flex flex-col gap-3">
+    <div className={`relative flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
       {/* Search */}
       <div className="relative">
-        <div className="flex items-center gap-2.5 rounded-2xl border border-white/6 bg-white/4 px-3.5 py-2.5">
+        <div
+          className={`flex items-center gap-2.5 rounded-2xl border border-white/6 bg-white/4 px-3.5 ${
+            compact ? 'py-2' : 'py-2.5'
+          }`}
+        >
           <Search size={15} className="shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
@@ -136,49 +202,13 @@ function MapSearchBar({
         )}
       </div>
 
-      {/* Map layers */}
-      <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
-        {MAP_STYLES.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onStyleChange(s.id)}
-            className={`flex-1 rounded-xl py-1.5 text-xs transition-colors ${
-              styleId === s.id
-                ? 'bg-primary font-semibold text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Filters */}
-      {onOpenFilters && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={onOpenFilters}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-              filtersOpen || activeFilters.length > 0
-                ? 'border border-primary/30 bg-primary/15 text-primary'
-                : 'border border-white/8 bg-white/4 text-foreground hover:bg-white/8'
-            }`}
-          >
-            <SlidersHorizontal size={12} />
-            Filters{activeFilters.length > 0 ? ` · ${activeFilters.length}` : ''}
-          </button>
-          {activeFilters.map((f) => (
-            <button
-              key={f.key}
-              onClick={f.onRemove}
-              className="flex items-center gap-1 rounded-full border border-white/8 bg-white/4 px-3 py-1.5 text-xs text-foreground hover:bg-white/8"
-            >
-              {f.label}
-              <X size={11} className="text-muted-foreground" />
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Map layers — always shown on desktop, behind the Layers chip on a
+          phone. Rendered before the chip row on desktop (where it is a
+          permanent control) and after it on a phone (where it is a disclosure
+          belonging to the chip that opened it). */}
+      {!compact && layers}
+      {chips}
+      {compact && layersOpen && layers}
     </div>
   )
 }

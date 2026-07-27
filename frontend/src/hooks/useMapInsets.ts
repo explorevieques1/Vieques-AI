@@ -22,8 +22,15 @@ export const RESULTS_PANEL_W = 344
 export const DETAIL_PANEL_W = 400
 /** Gutter between a floating panel and the viewport edge (Tailwind `left-5`). */
 export const PANEL_GAP = 20
-/** Height of the floating top bar plus its gutter. */
-export const TOP_BAR_H = 92
+/**
+ * Height of the floating top bar plus its gutter.
+ *
+ * Phones carry a second row for the category pills but a tighter gutter and
+ * smaller pills; desktop is the single control row. Both are measured from
+ * MapTopBar's classes — keep them in step if that padding changes.
+ */
+export const TOP_BAR_H = 88
+export const TOP_BAR_H_MOBILE = 100
 
 /**
  * Mobile sheet rest heights, as fractions of the viewport. Peek is low enough
@@ -53,7 +60,7 @@ export function useMapInsets({ resultsOpen, detailOpen, sheetHeight }: Args): Ma
       // no usable map left, and over-padding makes MapLibre clamp oddly.
       const maxBottom = Math.max(0, window.innerHeight * 0.55)
       return {
-        top: TOP_BAR_H,
+        top: TOP_BAR_H_MOBILE,
         right: 16,
         bottom: Math.min(sheetHeight, maxBottom),
         left: 16,

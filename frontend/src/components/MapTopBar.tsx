@@ -1,8 +1,17 @@
-import { Sparkles, User } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Home, Menu, Navigation, Sparkles, User } from 'lucide-react'
 
 import { CATEGORIES, type CategorySlug } from '../lib/place'
 import { LANDING_URL } from '../lib/api'
 import { TIER_LABELS, useEntitlement } from '../lib/entitlement'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 
 type Props = {
   active: CategorySlug | null
@@ -16,16 +25,18 @@ type Props = {
 }
 
 /**
- * The floating chrome across the top of the map: brand lockup, category pills,
- * and the AI / profile actions.
+ * The floating chrome across the top of the map: a compact left-hand control
+ * cluster (menu + profile) and the category pills.
  *
- * This used to be a solid `<header>` above the map in App.tsx. Floating it lets
- * the map run full-bleed behind — the map is the product, so it gets the whole
- * viewport and the controls hover over it.
+ * The map is the product, so the chrome takes as little of it as possible. The
+ * brand lockup that used to sit here is gone — the landing site already says
+ * whose app this is, and on a phone it cost a third of the top row. Directions
+ * / Ask AI / Home moved into the ☰ menu for the same reason; they are
+ * destinations, not things you need one tap from at all times.
  *
- * Below `lg` the pills drop to their own scrollable row. `w-max mx-auto` rather
- * than `justify-center`: inside an overflow-x-auto parent, justify-center clips
- * the START of content wider than the container and no scrolling gets it back.
+ * Everything is left-aligned: on a phone the right edge is where the thumb
+ * covers the map, and a single anchored cluster reads as one control rather
+ * than two floating islands.
  */
 function MapTopBar({
   active,
@@ -38,20 +49,29 @@ function MapTopBar({
   profileOpen,
 }: Props) {
   const { tier, hasAccess, credits } = useEntitlement()
+  const pillsRef = useRef<HTMLDivElement>(null)
 
-  const pill = 'shrink-0 rounded-xl px-4 py-2 text-sm transition-colors whitespace-nowrap'
+  // The pill row scrolls horizontally on phones — eight categories will never
+  // fit 390px. Keep the active one in view so tapping "Essentials" and coming
+  // back doesn't leave the selection parked off screen.
+  useEffect(() => {
+    const row = pillsRef.current
+    if (!row || !active) return
+    const el = row.querySelector<HTMLElement>(`[data-slug="${active}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [active])
+
+  const pill =
+    'shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors whitespace-nowrap sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm'
   const pillOn = `${pill} bg-primary text-primary-foreground font-semibold`
   const pillOff = `${pill} text-muted-foreground hover:bg-white/5 hover:text-foreground`
 
-  const action = 'rounded-xl px-3 py-2 text-sm transition-colors whitespace-nowrap'
-  const actionOn = `${action} bg-primary text-primary-foreground font-semibold`
-  const actionOff = `${action} text-muted-foreground hover:bg-white/5 hover:text-foreground`
-
   const tabs = (
-    <nav className="flex w-max gap-1">
+    <nav className="flex w-max gap-0.5 sm:gap-1">
       {CATEGORIES.map((c) => (
         <button
           key={c.slug}
+          data-slug={c.slug}
           onClick={() => onSelect(c.slug)}
           className={active === c.slug ? pillOn : pillOff}
         >
@@ -61,69 +81,96 @@ function MapTopBar({
     </nav>
   )
 
+  const menuItem = 'gap-2.5 rounded-lg px-2.5 py-2 text-sm'
+
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 pad-safe-top pad-safe-x">
-      <div className="flex items-start justify-between gap-3 p-4 sm:p-5">
-        {/* Brand */}
-        <div className="glass pointer-events-auto flex shrink-0 items-center gap-3 rounded-2xl py-2 pl-2.5 pr-4">
-          <img src="/logo.svg" alt="" className="h-9 w-9 shrink-0 rounded-xl" />
-          <div className="leading-none">
-            <div className="font-display text-lg tracking-tight sm:text-xl">
-              Explore <span className="italic text-primary">Vieques</span>
-            </div>
-            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-              {hasAccess ? (TIER_LABELS[tier] ?? tier) : 'Island guide · Puerto Rico'}
-            </div>
-          </div>
-        </div>
-
-        {/* Category pills — centre column from lg up, own row below */}
-        {/* min-w-0 + overflow lets this shrink and scroll between lg and the
-            width where all eight pills genuinely fit. Without it the middle
-            column of a justify-between row just overflows its neighbours. */}
-        <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
-          {tabs}
-        </div>
-
-        {/* Actions */}
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          <div className="glass hidden items-center gap-1 rounded-2xl p-1.5 sm:flex">
-            <button onClick={onDirections} className={dirOpen ? actionOn : actionOff}>
-              Directions
-            </button>
-            <button
-              onClick={onAskAi}
-              className={`${aiOpen ? actionOn : actionOff} flex items-center gap-1.5`}
+      <div className="flex items-start gap-2 p-3 sm:gap-3 sm:p-5">
+        {/* Left cluster: menu + profile, one glass pill. */}
+        <div className="glass pointer-events-auto flex shrink-0 items-center gap-1 rounded-2xl p-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Menu"
+              className="grid h-9 w-9 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/8 data-[state=open]:bg-primary data-[state=open]:text-primary-foreground sm:h-10 sm:w-10"
             >
-              <Sparkles size={14} />
-              Ask AI
-            </button>
-            <a href={LANDING_URL} className={actionOff}>
-              Home
-            </a>
-          </div>
+              <Menu size={18} />
+            </DropdownMenuTrigger>
+            {/* The frosted look by hand rather than `.glass`: this content
+                already ships a `bg-popover`, and two rules setting
+                background-color from the same layer is a coin flip. */}
+            <DropdownMenuContent
+              align="start"
+              sideOffset={10}
+              className="w-56 rounded-2xl border border-white/10 bg-popover/85 p-1.5 backdrop-blur-xl backdrop-saturate-150"
+            >
+              <DropdownMenuLabel className="px-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {hasAccess
+                  ? (TIER_LABELS[tier] ?? tier)
+                  : `${credits} AI message${credits === 1 ? '' : 's'} left`}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-white/8" />
+              <DropdownMenuItem
+                onSelect={onDirections}
+                data-active={dirOpen || undefined}
+                className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
+              >
+                <Navigation size={15} />
+                Directions
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={onAskAi}
+                data-active={aiOpen || undefined}
+                className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
+              >
+                <Sparkles size={15} />
+                Ask AI
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={menuItem}>
+                <a href={LANDING_URL}>
+                  <Home size={15} />
+                  Home
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Profile. Avatar-style so it reads as "you" rather than a nav item. */}
           <button
             onClick={onProfile}
             aria-label="Your profile"
             title="Your profile"
-            className={`glass relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl transition-colors ${
-              profileOpen ? 'bg-primary text-primary-foreground' : 'hover:bg-white/5'
+            className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-colors sm:h-10 sm:w-10 ${
+              profileOpen ? 'bg-primary text-primary-foreground' : 'hover:bg-white/8'
             }`}
           >
             <User size={17} />
             {/* Quiet nudge when the free trial is spent. */}
             {!hasAccess && credits <= 0 && (
-              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
+              <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
             )}
           </button>
         </div>
+
+        {/* Category pills — same row as the cluster from lg up, own row below.
+            min-w-0 + overflow lets this shrink and scroll rather than pushing
+            past the viewport edge. */}
+        <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
+          {tabs}
+        </div>
       </div>
 
-      {/* Pills row for anything narrower than lg. */}
-      <div className="scrollbar-thin overflow-x-auto px-4 pb-1 sm:px-5 lg:hidden">
-        <div className="glass pointer-events-auto mx-auto w-max rounded-2xl p-1.5">{tabs}</div>
+      {/* Pills row for anything narrower than lg.
+
+          Left-aligned and scrolled, not centred: inside overflow-x-auto,
+          centring clips the START of a too-wide row and no amount of swiping
+          gets it back. `fade-r` advertises that there is more to the right —
+          on a phone the row is always wider than the screen. */}
+      <div className="px-3 pb-1 sm:px-5 lg:hidden">
+        <div className="glass pointer-events-auto w-max max-w-full rounded-2xl p-1">
+          <div ref={pillsRef} className="no-scrollbar fade-r overflow-x-auto">
+            {tabs}
+          </div>
+        </div>
       </div>
     </div>
   )
