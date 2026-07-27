@@ -5,7 +5,6 @@ type Props = {
   title: string
   snap: string | number | null
   onSnapChange: (snap: string | number | null) => void
-  onHeightChange: (px: number) => void
   onClose: () => void
   children: React.ReactNode
 }
@@ -20,7 +19,7 @@ type Props = {
  * That is the whole "the card never covers the pin" behaviour — there is no
  * separate re-centring code path.
  */
-function MapSheet({ title, snap, onSnapChange, onHeightChange, onClose, children }: Props) {
+function MapSheet({ title, snap, onSnapChange, onClose, children }: Props) {
   return (
     <ResponsivePanel
       title={title}
@@ -28,7 +27,6 @@ function MapSheet({ title, snap, onSnapChange, onHeightChange, onClose, children
       snapPoints={SHEET_SNAPS}
       activeSnapPoint={snap}
       onSnapChange={onSnapChange}
-      onHeightChange={onHeightChange}
     >
       {children}
     </ResponsivePanel>

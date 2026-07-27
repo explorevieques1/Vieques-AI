@@ -26,6 +26,7 @@ import {
   useMapInsets,
   DETAIL_PANEL_W,
   RESULTS_PANEL_W,
+  SHEET_COLLAPSED,
   SHEET_PEEK,
 } from '../hooks/useMapInsets'
 import { useFeature } from '../lib/entitlement'
@@ -97,8 +98,9 @@ type Props = {
  * Desktop lays results on the left and the selected place on the right, and the
  * map pads its camera by both so the pin lands in the visible gap between them
  * (see hooks/useMapInsets). Mobile stacks the same two views into one draggable
- * sheet whose live height feeds the same padding, so the sheet never covers the
- * pin and dragging it down re-centres.
+ * sheet with three rest heights, and the active one feeds the same padding — so
+ * the sheet never covers the pin, dragging it down re-centres, and dragging the
+ * map collapses the sheet out of the way.
  */
 function MapView({
   aiPins,
@@ -133,11 +135,11 @@ function MapView({
     { label: string | null; color: string | null; description: string | null }[]
   >([])
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+  const [quickSearch, setQuickSearch] = useState(false)
 
-  // Mobile sheet geometry. `sheetHeight` is the live pixel height reported by
-  // ResponsivePanel's ResizeObserver; it drives the map's bottom padding.
+  // Mobile sheet geometry. The sheet's *visible* height drives the map's bottom
+  // padding, so a pin never ends up underneath it.
   const [snap, setSnap] = useState<string | number | null>(SHEET_PEEK)
-  const [sheetHeight, setSheetHeight] = useState(0)
 
   const { places: rawPlaces, subcategories, loading, locked, error } = useCategoryPlaces(
     category,
@@ -181,6 +183,23 @@ function MapView({
 
   const resultsOpen = category != null
   const detailOpen = selected != null
+
+  /**
+   * Visible sheet height, derived from the active snap point.
+   *
+   * Not measured off the element: in snap mode vaul gives the drawer a
+   * full-viewport box and slides it with a transform, so its bounding height is
+   * always ~94dvh regardless of where it rests. Measuring it made the bottom
+   * inset a constant — the map padded for a full-screen sheet even when the
+   * sheet was at peek, which pushed every pin into the top of the canvas.
+   * The snap point is the number that actually describes what's covered.
+   */
+  const sheetHeight = useMemo(() => {
+    if (!isMobile) return 0
+    if (typeof snap === 'number') return snap * window.innerHeight
+    if (typeof snap === 'string') return parseFloat(snap) || 0
+    return 0
+  }, [isMobile, snap])
   const insets = useMapInsets({
     resultsOpen,
     detailOpen,
@@ -216,6 +235,25 @@ function MapView({
       mapRef.current = null
     }
   }, [])
+
+  // Reaching for the map means you want to see the map. Drop the sheet to its
+  // collapsed stop so the pan isn't happening in the top third of the screen.
+  //
+  // Gated on `originalEvent`: every flyTo / easeTo / fitBounds in this file also
+  // fires `dragstart`-adjacent movement events, and collapsing the sheet in
+  // response to our own camera work would fight the user constantly. Only a
+  // real gesture carries the DOM event.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !isMobile) return
+    const onDrag = (e: { originalEvent?: Event }) => {
+      if (e.originalEvent) setSnap(SHEET_COLLAPSED)
+    }
+    map.on('dragstart', onDrag)
+    return () => {
+      map.off('dragstart', onDrag)
+    }
+  }, [isMobile])
 
   const changeStyle = (id: string) => {
     if (!mapRef.current || id === styleId) return
@@ -649,26 +687,36 @@ function MapView({
         dirOpen={dirOpen}
         onProfile={onProfile}
         profileOpen={profileOpen}
+        onToggleSearch={() => setQuickSearch((v) => !v)}
+        searchOpen={quickSearch}
+        search={
+          <MapSearchBar
+            variant="input"
+            autoFocus
+            disabled={!category}
+            places={places}
+            onSelect={(p) => {
+              selectPlace(p)
+              setQuickSearch(false)
+            }}
+            placeholder={
+              category
+                ? `Search ${categoryMeta(category).label.toLowerCase()}…`
+                : 'Search the island…'
+            }
+            styleId={styleId}
+            onStyleChange={changeStyle}
+          />
+        }
       />
 
       {isMobile ? (
         <>
-          {/* Search floats above the sheet on phones — it belongs to the map,
-              not to the results, and must stay reachable at any snap height. */}
-          {category && (
-            // Sits just under MapTopBar's pill row. Offset from the safe-area
-            // inset rather than a flat rem so it clears the notch in
-            // standalone PWA mode, where the bar starts lower.
-            <div className="absolute inset-x-3 z-20 top-[calc(env(safe-area-inset-top)+6.25rem)]">
-              <div className="glass rounded-2xl p-2.5">{searchBar}</div>
-            </div>
-          )}
           {category && (
             <MapSheet
               title={selected?.name ?? categoryMeta(category).label}
               snap={snap}
               onSnapChange={setSnap}
-              onHeightChange={setSheetHeight}
               onClose={() => (selected ? clearSelection() : selectCategory(null))}
             >
               {selected ? (
@@ -681,7 +729,19 @@ function MapView({
                   {...detailLayout(selected)}
                 />
               ) : (
-                results
+                <>
+                  {/* Search lives in the sheet, exactly as it does in the
+                      desktop results panel. It used to float over the map on
+                      its own, which put a text input outside the vaul drawer —
+                      and the drawer is a *modal* Radix dialog whatever we pass
+                      for `modal` (see the note in MapTopBar), so the body gets
+                      `pointer-events: none` and outside focus is trapped back
+                      inside. The field simply could not be typed into. */}
+                  <div className="shrink-0 border-b border-white/8 px-4 pb-3 pt-1">
+                    {searchBar}
+                  </div>
+                  {results}
+                </>
               )}
             </MapSheet>
           )}

@@ -33,13 +33,21 @@ export const TOP_BAR_H = 88
 export const TOP_BAR_H_MOBILE = 100
 
 /**
- * Mobile sheet rest heights, as fractions of the viewport. Peek is low enough
- * that a selected pin stays on screen above the sheet; full is for reading.
+ * Mobile sheet rest heights. Fractions are of the viewport; the collapsed stop
+ * is a fixed pixel height because what it must show is a fixed thing — the drag
+ * handle and the search field, nothing else.
+ *
+ * Collapsed exists so swiping the sheet down gets it out of the way *without*
+ * throwing away the category: before, the only thing below peek was dismissal,
+ * so "let me see the map" cost you your results. Peek keeps a selected pin on
+ * screen above the sheet; full is for reading.
+ *
  * They live here because they are what the bottom inset resolves to.
  */
-export const SHEET_PEEK = 0.38
+export const SHEET_COLLAPSED = '104px'
+export const SHEET_PEEK = 0.45
 export const SHEET_FULL = 0.92
-export const SHEET_SNAPS: (string | number)[] = [SHEET_PEEK, SHEET_FULL]
+export const SHEET_SNAPS: (string | number)[] = [SHEET_COLLAPSED, SHEET_PEEK, SHEET_FULL]
 
 type Args = {
   /** Desktop: is the left results panel showing? */

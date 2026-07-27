@@ -25,6 +25,15 @@ type Props = {
    * earn permanent space on a 390px screen the way search and filters do.
    */
   compact?: boolean
+  /**
+   * `stack` — search + basemap switcher + filter chips, the panel/sheet header.
+   * `input` — just the field and its results dropdown, for the top bar's
+   *           quick-search row where the pills used to be.
+   */
+  variant?: 'stack' | 'input'
+  /** `input` variant only: no category loaded, so there is nothing to match. */
+  disabled?: boolean
+  autoFocus?: boolean
 }
 
 /**
@@ -44,6 +53,9 @@ function MapSearchBar({
   filtersOpen,
   activeFilters = [],
   compact = false,
+  variant = 'stack',
+  disabled = false,
+  autoFocus = false,
 }: Props) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -68,6 +80,14 @@ function MapSearchBar({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // The top bar's quick-search row is opened by an explicit tap on the search
+  // icon, so the field should already be live — one tap, not two. Deliberately
+  // not the `autoFocus` attribute: this mounts inside an animating row, and
+  // React's autoFocus fires before that settles.
+  useEffect(() => {
+    if (autoFocus && !disabled) inputRef.current?.focus()
+  }, [autoFocus, disabled])
 
   const q = query.trim().toLowerCase()
   const matches = q
@@ -140,67 +160,73 @@ function MapSearchBar({
     </div>
   )
 
-  return (
-    <div className={`relative flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
-      {/* Search */}
-      <div className="relative">
-        <div
-          className={`flex items-center gap-2.5 rounded-2xl border border-white/6 bg-white/4 px-3.5 ${
-            compact ? 'py-2' : 'py-2.5'
-          }`}
-        >
-          <Search size={15} className="shrink-0 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setOpen(true)
-            }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 120)}
-            placeholder={placeholder}
-            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-          />
-          {query ? (
-            <button
-              onClick={() => setQuery('')}
-              aria-label="Clear search"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X size={14} />
-            </button>
-          ) : (
-            <kbd className="hidden rounded bg-white/6 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
-              /
-            </kbd>
-          )}
-        </div>
-
-        {open && matches.length > 0 && (
-          <ul className="glass absolute inset-x-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl py-1.5 shadow-2xl scroll-contain">
-            {matches.map((p) => (
-              <li key={p.id}>
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pick(p)}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left hover:bg-white/5"
-                >
-                  <span className="text-base leading-none">{p.icon.emoji}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-foreground">{p.name}</span>
-                    {p.subtitle && (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {p.subtitle}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+  const search = (
+    <div className="relative">
+      <div
+        className={`flex items-center gap-2.5 rounded-2xl border border-white/6 bg-white/4 px-3.5 ${
+          compact ? 'py-2' : 'py-2.5'
+        }`}
+      >
+        <Search size={15} className="shrink-0 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          value={query}
+          disabled={disabled}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          placeholder={disabled ? 'Pick a category to search…' : placeholder}
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
+        />
+        {query ? (
+          <button
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        ) : (
+          <kbd className="hidden rounded bg-white/6 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+            /
+          </kbd>
         )}
       </div>
+
+      {open && matches.length > 0 && (
+        <ul className="glass absolute inset-x-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl py-1.5 shadow-2xl scroll-contain">
+          {matches.map((p) => (
+            <li key={p.id}>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(p)}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left hover:bg-white/5"
+              >
+                <span className="text-base leading-none">{p.icon.emoji}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-foreground">{p.name}</span>
+                  {p.subtitle && (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {p.subtitle}
+                    </span>
+                  )}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+
+  if (variant === 'input') return search
+
+  return (
+    <div className={`relative flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
+      {search}
 
       {/* Map layers — always shown on desktop, behind the Layers chip on a
           phone. Rendered before the chip row on desktop (where it is a

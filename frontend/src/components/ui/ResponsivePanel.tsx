@@ -29,11 +29,6 @@ type Props = {
   snapPoints?: (string | number)[]
   activeSnapPoint?: string | number | null
   onSnapChange?: (snap: string | number | null) => void
-  /**
-   * Fires with the sheet's rendered height in px whenever it changes. Feeds
-   * useMapInsets so the map can keep the selected pin clear of the sheet.
-   */
-  onHeightChange?: (px: number) => void
   className?: string
   children: React.ReactNode
 }
@@ -56,28 +51,10 @@ export function ResponsivePanel({
   snapPoints,
   activeSnapPoint,
   onSnapChange,
-  onHeightChange,
   className,
   children,
 }: Props) {
   const isMobile = useIsMobile()
-  const sheetRef = React.useRef<HTMLDivElement>(null)
-
-  // Report the sheet's height so the map can pad its camera by it. A
-  // ResizeObserver rather than deriving from the snap fraction: vaul animates
-  // between snaps, and the map should track the real edge, not the target.
-  React.useEffect(() => {
-    if (!isMobile || !onHeightChange) return
-    const el = sheetRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => onHeightChange(el.getBoundingClientRect().height))
-    ro.observe(el)
-    onHeightChange(el.getBoundingClientRect().height)
-    return () => {
-      ro.disconnect()
-      onHeightChange(0)
-    }
-  }, [isMobile, onHeightChange])
 
   // Only hand vaul the snap trio when snapping is actually wanted — passing
   // `snapPoints={undefined}` alongside a setter puts it in a half-configured
@@ -103,7 +80,6 @@ export function ResponsivePanel({
             tall content box to slide; the default `h-auto max-h-[85dvh]`
             would fight it. */}
         <DrawerContent
-          ref={sheetRef}
           className={cn(snapPoints && "h-full max-h-[94dvh]", className)}
           showOverlay={false}
         >

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Home, Menu, Navigation, Sparkles, User } from 'lucide-react'
+import { Home, Menu, Navigation, Search, Sparkles, User, X } from 'lucide-react'
 
 import { CATEGORIES, type CategorySlug } from '../lib/place'
 import { LANDING_URL } from '../lib/api'
@@ -22,11 +22,16 @@ type Props = {
   dirOpen: boolean
   onProfile: () => void
   profileOpen: boolean
+  /** Quick search takes over the pill row rather than adding a third one. */
+  onToggleSearch: () => void
+  searchOpen: boolean
+  /** The field itself, supplied by MapView — it owns the place data. */
+  search: React.ReactNode
 }
 
 /**
  * The floating chrome across the top of the map: a compact left-hand control
- * cluster (menu + profile) and the category pills.
+ * cluster (menu, profile, search) and the category pills.
  *
  * The map is the product, so the chrome takes as little of it as possible. The
  * brand lockup that used to sit here is gone — the landing site already says
@@ -47,9 +52,43 @@ function MapTopBar({
   dirOpen,
   onProfile,
   profileOpen,
+  onToggleSearch,
+  searchOpen,
+  search,
 }: Props) {
   const { tier, hasAccess, credits } = useEntitlement()
   const pillsRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Let the quick-search field keep focus while the map sheet is open.
+   *
+   * vaul builds on Radix Dialog but never forwards its own `modal` prop to
+   * `Dialog.Root` (see node_modules/vaul — `createElement(DialogPrimitive.Root,
+   * { defaultOpen, onOpenChange, open })`), so our `modal={false}` sheet is
+   * still a *modal* Radix dialog: it traps focus, and anything focused outside
+   * the drawer is bounced straight back inside. That is why the old floating
+   * search could not be typed into.
+   *
+   * The sheet's own search is inside the drawer and unaffected. This field is
+   * not, so it opts itself out: a capture-phase listener stops focus events
+   * involving this subtree before they reach the document-level trap.
+   */
+  useEffect(() => {
+    if (!searchOpen) return
+    const guard = (e: FocusEvent) => {
+      const el = searchRef.current
+      if (!el) return
+      const inside = (n: EventTarget | null) => n instanceof Node && el.contains(n)
+      if (inside(e.target) || inside(e.relatedTarget)) e.stopPropagation()
+    }
+    document.addEventListener('focusin', guard, true)
+    document.addEventListener('focusout', guard, true)
+    return () => {
+      document.removeEventListener('focusin', guard, true)
+      document.removeEventListener('focusout', guard, true)
+    }
+  }, [searchOpen])
 
   // The pill row scrolls horizontally on phones — eight categories will never
   // fit 390px. Keep the active one in view so tapping "Essentials" and coming
@@ -149,14 +188,30 @@ function MapTopBar({
               <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
             )}
           </button>
+
+          {/* Quick search. Trades the pill row for a field rather than adding a
+              third row — on a phone the chrome budget is the whole point. */}
+          <button
+            onClick={onToggleSearch}
+            aria-label={searchOpen ? 'Close search' : 'Search'}
+            aria-expanded={searchOpen}
+            title="Search"
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-colors sm:h-10 sm:w-10 ${
+              searchOpen ? 'bg-primary text-primary-foreground' : 'hover:bg-white/8'
+            }`}
+          >
+            {searchOpen ? <X size={17} /> : <Search size={17} />}
+          </button>
         </div>
 
         {/* Category pills — same row as the cluster from lg up, own row below.
             min-w-0 + overflow lets this shrink and scroll rather than pushing
             past the viewport edge. */}
-        <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
-          {tabs}
-        </div>
+        {!searchOpen && (
+          <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
+            {tabs}
+          </div>
+        )}
       </div>
 
       {/* Pills row for anything narrower than lg.
@@ -165,13 +220,31 @@ function MapTopBar({
           centring clips the START of a too-wide row and no amount of swiping
           gets it back. `fade-r` advertises that there is more to the right —
           on a phone the row is always wider than the screen. */}
-      <div className="px-3 pb-1 sm:px-5 lg:hidden">
-        <div className="glass pointer-events-auto w-max max-w-full rounded-2xl p-1">
-          <div ref={pillsRef} className="no-scrollbar fade-r overflow-x-auto">
-            {tabs}
+      {/* Search, when open, is rendered here at every width — never in both
+          this row and the lg one. Two copies would mean two mounted fields
+          fighting over autofocus and the "/" shortcut. */}
+      {searchOpen ? (
+        <div className="px-3 pb-1 sm:px-5">
+          {/* pointer-events-auto is load-bearing, not decoration: the modal
+              Radix dialog behind the sheet puts `pointer-events: none` on the
+              body, so anything over the map that doesn't opt back in is dead
+              to touch. */}
+          <div
+            ref={searchRef}
+            className="glass pointer-events-auto rounded-2xl p-1.5 lg:w-[26rem]"
+          >
+            {search}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="px-3 pb-1 sm:px-5 lg:hidden">
+          <div className="glass pointer-events-auto w-max max-w-full rounded-2xl p-1">
+            <div ref={pillsRef} className="no-scrollbar fade-r overflow-x-auto">
+              {tabs}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
