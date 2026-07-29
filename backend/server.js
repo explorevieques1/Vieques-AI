@@ -1055,6 +1055,255 @@ app.get('/api/essentials/:slug', requireAuth, requireTier(pool, 'essentials'), a
   }
 })
 
+// ============================================================================
+//  WEATHER — GET /api/weather
+// ============================================================================
+//  A proxy, not a passthrough. Three reasons it is not a browser fetch:
+//    1. One island, one forecast. Every signed-in user on the app is asking
+//       about the same 2 square miles, so a single 10-minute cache serves the
+//       entire userbase off one upstream request.
+//    2. The WMO code → label mapping belongs in one place. Doing it client-side
+//       means the mobile card and anything later (an AI tool, the landing site)
+//       each grow their own copy and drift.
+//    3. We choose what the client depends on. Open-Meteo's payload is large and
+//       versioned on their schedule; the card needs eight fields.
+//
+//  Open-Meteo needs no API key, so there is no env var to set — which also
+//  means an outage is silent rather than a 401. Hence the stale-cache
+//  fallback: a blank weather card is worse than a ten-minute-old temperature.
+// ============================================================================
+
+const VIEQUES_COORDS = { lat: 18.12, lng: -65.44 }  // matches VIEQUES_CENTER in MapView
+const WEATHER_TTL_MS = 10 * 60_000
+let weatherCache = { at: 0, body: null }
+
+/**
+ * WMO weather interpretation codes → what a person would say.
+ *
+ * Open-Meteo returns the WMO 4677 code, which is an integer like 61. Groups
+ * are collapsed deliberately: "slight/moderate/dense drizzle" is three codes
+ * and one decision (bring a hat).
+ */
+const WMO = {
+  0: ['Clear', '☀️'],
+  1: ['Mostly clear', '🌤️'],
+  2: ['Partly cloudy', '⛅'],
+  3: ['Overcast', '☁️'],
+  45: ['Fog', '🌫️'], 48: ['Freezing fog', '🌫️'],
+  51: ['Light drizzle', '🌦️'], 53: ['Drizzle', '🌦️'], 55: ['Heavy drizzle', '🌦️'],
+  56: ['Freezing drizzle', '🌧️'], 57: ['Freezing drizzle', '🌧️'],
+  61: ['Light rain', '🌦️'], 63: ['Rain', '🌧️'], 65: ['Heavy rain', '🌧️'],
+  66: ['Freezing rain', '🌧️'], 67: ['Freezing rain', '🌧️'],
+  71: ['Light snow', '🌨️'], 73: ['Snow', '🌨️'], 75: ['Heavy snow', '🌨️'],
+  77: ['Snow grains', '🌨️'],
+  80: ['Light showers', '🌦️'], 81: ['Showers', '🌦️'], 82: ['Heavy showers', '⛈️'],
+  85: ['Snow showers', '🌨️'], 86: ['Snow showers', '🌨️'],
+  95: ['Thunderstorm', '⛈️'], 96: ['Thunderstorm', '⛈️'], 99: ['Thunderstorm', '⛈️'],
+}
+
+app.get('/api/weather', requireAuth, async (_req, res) => {
+  const fresh = weatherCache.body && Date.now() - weatherCache.at < WEATHER_TTL_MS
+  if (fresh) return res.json(weatherCache.body)
+
+  try {
+    const url = new URL('https://api.open-meteo.com/v1/forecast')
+    Object.entries({
+      latitude: VIEQUES_COORDS.lat,
+      longitude: VIEQUES_COORDS.lng,
+      current: 'temperature_2m,apparent_temperature,is_day,weather_code,wind_speed_10m',
+      daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      temperature_unit: 'fahrenheit',
+      wind_speed_unit: 'mph',
+      timezone: 'America/Puerto_Rico',
+      forecast_days: 1,
+    }).forEach(([k, v]) => url.searchParams.set(k, v))
+
+    const upstream = await fetch(url, { signal: AbortSignal.timeout(6000) })
+    if (!upstream.ok) throw new Error(`Open-Meteo ${upstream.status}`)
+    const data = await upstream.json()
+
+    const code = data.current?.weather_code ?? 0
+    const [label, emoji] = WMO[code] || ['—', '🌡️']
+    const round = (n) => (n == null ? null : Math.round(n))
+
+    const body = {
+      tempF: round(data.current?.temperature_2m),
+      feelsLikeF: round(data.current?.apparent_temperature),
+      code,
+      label,
+      emoji,
+      isDay: data.current?.is_day === 1,
+      highF: round(data.daily?.temperature_2m_max?.[0]),
+      lowF: round(data.daily?.temperature_2m_min?.[0]),
+      precipChance: round(data.daily?.precipitation_probability_max?.[0]),
+      windMph: round(data.current?.wind_speed_10m),
+      fetchedAt: new Date().toISOString(),
+    }
+    weatherCache = { at: Date.now(), body }
+    res.json(body)
+  } catch (e) {
+    // Stale beats empty. Only 503 when there is nothing cached at all — and
+    // 503 rather than 500 so the client knows to retry rather than give up.
+    if (weatherCache.body) return res.json({ ...weatherCache.body, stale: true })
+    console.error('Weather error:', e)
+    res.status(503).json({ error: 'Weather is unavailable right now.' })
+  }
+})
+
+// ============================================================================
+//  SUGGESTION OF THE DAY — GET /api/suggestion
+// ============================================================================
+//  Not tier-gated: this is the first thing a free user sees on the greeting
+//  card, and an empty card sells nothing (PRICING.md §4.1). The listing it
+//  points at is still gated when they tap through.
+//
+//  ?when=morning|afternoon|evening biases the pick toward suggestions that fit
+//  the time of day the card is showing — a sunrise tip under "Good evening"
+//  reads as broken. Rows marked 'any' always qualify, so the pool is never
+//  empty even if a period has no dedicated copy.
+// ============================================================================
+app.get('/api/suggestion', requireAuth, async (req, res) => {
+  try {
+    const when = ['morning', 'afternoon', 'evening'].includes(req.query.when)
+      ? req.query.when
+      : null
+
+    // random() * weight, ordered desc: a weight-2 row draws from [0,2) against
+    // a weight-1 row's [0,1), so it wins roughly twice as often. Cheap
+    // weighted sampling in one statement — the table is 20 rows.
+    const { rows } = await pool.query(
+      `SELECT id, title, blurb, category, place_kind, place_ref,
+              latitude, longitude, emoji, time_of_day
+         FROM public.suggestions
+        WHERE is_active
+          AND ($1::text IS NULL OR time_of_day = $1 OR time_of_day = 'any')
+        ORDER BY random() * weight DESC
+        LIMIT 1`,
+      [when],
+    )
+    if (!rows.length) return res.status(404).json({ error: 'No suggestions available.' })
+    res.json(rows[0])
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ============================================================================
+//  FAVORITES — GET / PUT / DELETE /api/favorites
+// ============================================================================
+//  requireAuth only, no requireTier. Saving a place is retention, not a
+//  feature to sell: a user who cannot keep a shortlist has less reason to open
+//  the app tomorrow. (The 'favorites' slug in payments.js describes a future
+//  premium saved-places feature and is deliberately not wired to this table.)
+//
+//  place_id is the namespaced Place.id — 'beach:3'. The seven listing tables
+//  have independent id sequences, so the kind prefix is load-bearing, not
+//  decoration. kind and ref are derived from it HERE and never read from the
+//  body: a client that could set them freely could file a beach under 'trail'
+//  and break the Saved list for itself.
+// ============================================================================
+
+const PLACE_KINDS = new Set([
+  'beach', 'restaurant', 'stay', 'activity', 'service',
+  'transport', 'essential', 'snorkel', 'trail',
+])
+
+/** Split 'beach:3' into its parts, or null if it isn't a valid Place.id. */
+function parsePlaceId(raw) {
+  const id = String(raw || '')
+  if (!/^[a-z]+:[A-Za-z0-9._-]+$/.test(id)) return null
+  const [kind, ...rest] = id.split(':')
+  const ref = rest.join(':')
+  if (!PLACE_KINDS.has(kind) || !ref) return null
+  return { id, kind, ref }
+}
+
+/**
+ * Reduce a client-supplied place to the fields the Saved card renders.
+ *
+ * Whitelist, not sanitise. `snapshot` is written straight from the browser, so
+ * without this the route is a free per-user JSON blob store — an open invitation
+ * to park megabytes in someone else's database. Lengths are capped for the same
+ * reason.
+ */
+function shapeSnapshot(input) {
+  const src = input && typeof input === 'object' ? input : {}
+  const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : undefined)
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+  const icon = src.icon && typeof src.icon === 'object' ? src.icon : {}
+  return {
+    kind: str(src.kind, 32),
+    name: str(src.name, 200) || 'Saved place',
+    subtitle: str(src.subtitle, 300),
+    latitude: num(src.latitude),
+    longitude: num(src.longitude),
+    tags: Array.isArray(src.tags)
+      ? src.tags.filter((t) => typeof t === 'string').slice(0, 12).map((t) => t.slice(0, 48))
+      : [],
+    icon: { emoji: str(icon.emoji, 8) || '📍', color: str(icon.color, 32) || '#38bdf8' },
+  }
+}
+
+app.get('/api/favorites', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT place_id, place_kind, place_ref, snapshot, created_at
+         FROM public.favorites
+        WHERE user_id = $1
+        ORDER BY created_at DESC`,
+      [req.user.id],
+    )
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Upsert, so the client can PUT without first checking whether it is saved —
+// and a double-tap cannot create two rows (UNIQUE (user_id, place_id)).
+app.put('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
+  const parsed = parsePlaceId(req.params.placeId)
+  if (!parsed) return res.status(400).json({ error: 'Invalid place id.' })
+
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO public.favorites (user_id, place_id, place_kind, place_ref, snapshot)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       ON CONFLICT (user_id, place_id)
+         DO UPDATE SET snapshot = EXCLUDED.snapshot
+       RETURNING place_id, place_kind, place_ref, snapshot, created_at`,
+      [
+        req.user.id,
+        parsed.id,
+        parsed.kind,
+        parsed.ref,
+        JSON.stringify(shapeSnapshot(req.body?.snapshot ?? req.body)),
+      ],
+    )
+    res.json(rows[0])
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
+  const parsed = parsePlaceId(req.params.placeId)
+  if (!parsed) return res.status(400).json({ error: 'Invalid place id.' })
+
+  try {
+    // Scoped by user_id as well as place_id — the path parameter alone would
+    // let any signed-in user delete any other user's row.
+    await pool.query('DELETE FROM public.favorites WHERE user_id = $1 AND place_id = $2', [
+      req.user.id,
+      parsed.id,
+    ])
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ----------------------------------------------------------------------------
 //  Start the server
 // ----------------------------------------------------------------------------
