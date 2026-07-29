@@ -1,41 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import { ChevronUp, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftOpen, Route, X } from 'lucide-react'
 
 import {
   fetchDirections,
   fetchSnorkelZones,
   type AiPin,
-  type BeachFilters,
   type DirectionsResult,
+  type Suggestion,
 } from '../lib/api'
 import {
   isMappable,
   categoryMeta,
+  suggestionToPlace,
   type CategorySlug,
   type Place,
 } from '../lib/place'
+import { milesBetween } from '../lib/geo'
+import { deriveFilters, matchesFilters } from '../lib/filters'
 import { makeMarkerEl } from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
+import type { ShellMode } from '../lib/shell'
+import { useAiChat } from '../lib/aiChat'
 import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
+import type { Favorites } from '../hooks/useFavorites'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useSafeArea } from '../hooks/useSafeArea'
+import { daypart, useSuggestion } from '../hooks/useSuggestion'
+import { useWeather } from '../hooks/useWeather'
 import {
+  mobileTopInset,
   safeInsets,
   useMapInsets,
+  BANNER_H_MOBILE,
   DETAIL_PANEL_W,
   RESULTS_PANEL_W,
-  SHEET_COLLAPSED,
-  SHEET_PEEK,
+  SHEET_FULL,
+  SHEET_HIDDEN,
+  SHEET_PREVIEW,
 } from '../hooks/useMapInsets'
-import { useFeature } from '../lib/entitlement'
-import BeachFilterPanel from './BeachFilterPanel'
+import { useEntitlement, useFeature } from '../lib/entitlement'
+import AiChatBody from './AiChatBody'
+import BottomNav from './BottomNav'
+import CategoryRow from './CategoryRow'
+import FilterRow from './FilterRow'
+import GreetingCard from './GreetingCard'
 import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
+import ProfileBody from './ProfileBody'
+import SavedBody from './SavedBody'
 import TripadvisorBlock, { hasTripadvisor } from './TripadvisorBlock'
 import ResultsList, { type SortKey } from './ResultsList'
 import UpsellOverlay from './UpsellOverlay'
@@ -69,28 +87,18 @@ function detailLayout(place: Place) {
     : {}
 }
 
-/** Great-circle distance in miles — only used to label result cards. */
-function milesBetween(a: [number, number], b: [number, number]): number {
-  const R = 3958.8
-  const toRad = (d: number) => (d * Math.PI) / 180
-  const dLat = toRad(b[1] - a[1])
-  const dLon = toRad(b[0] - a[0])
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
-
 type Props = {
+  /** Which of the four things the app is doing — see lib/shell.ts. */
+  mode: ShellMode
+  onModeChange: (m: ShellMode) => void
+  favorites: Favorites
   aiPins?: AiPin[]
   route?: DirectionsResult | null
   onRoute?: (r: DirectionsResult | null) => void
   onAskAi: () => void
-  aiOpen: boolean
   onDirections: () => void
   dirOpen: boolean
-  onProfile: () => void
-  profileOpen: boolean
+  onSaved: () => void
 }
 
 /**
@@ -104,20 +112,27 @@ type Props = {
  * map collapses the sheet out of the way.
  */
 function MapView({
+  mode,
+  onModeChange,
+  favorites,
   aiPins,
   route,
   onRoute,
   onAskAi,
-  aiOpen,
   onDirections,
   dirOpen,
-  onProfile,
-  profileOpen,
+  onSaved,
 }: Props) {
   // Snorkeling is the Vacation-tier upsell (PRICING.md §4). Advisory only —
   // requireTier on the server and the RLS policy in 0022 are the real gates.
   const canSnorkel = useFeature('snorkel_zones')
   const isMobile = useIsMobile()
+  const safeArea = useSafeArea()
+  // Drives the amber dot on the nav's Profile cell — the nudge that used to sit
+  // on the top bar's profile button.
+  const { credits, hasAccess } = useEntitlement()
+  const { pinsSeq } = useAiChat()
+  const weather = useWeather()
 
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -128,27 +143,50 @@ function MapView({
   const [category, setCategory] = useState<CategorySlug | null>(null)
   const [subSlug, setSubSlug] = useState<string | null>(null)
   const [selected, setSelected] = useState<Place | null>(null)
-  const [beachFilters, setBeachFilters] = useState<BeachFilters>({})
-  const [filterOpen, setFilterOpen] = useState(false)
+  /**
+   * Client-side filter chips, derived from the loaded result set (lib/filters.ts).
+   *
+   * All seven categories filter this way, beaches included: their type, water and
+   * facilities are all in `Place.tags`, so the same code that filters restaurants
+   * by cuisine filters beaches by "has a restroom". Free, because the whole
+   * category is already in memory.
+   */
+  const [tagFilters, setTagFilters] = useState<Set<string>>(() => new Set())
   const [sort, setSort] = useState<SortKey>('nearest')
   const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
   const [snorkelLegend, setSnorkelLegend] = useState<
     { label: string | null; color: string | null; description: string | null }[]
   >([])
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
-  const [quickSearch, setQuickSearch] = useState(false)
   // Desktop: the results panel is folded to an edge tab. The category and its
   // results survive — this is "get out of my way", not "close".
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
+  /** Mobile: the greeting card collapsed to a weather pill, giving the map 60px. */
+  const [greetingMin, setGreetingMin] = useState(false)
+  /** Build Itinerary is a stub; this is its "coming soon" toast. */
+  const [itineraryNote, setItineraryNote] = useState(false)
+  /**
+   * Suggestion of the Day, held separately from `selected`.
+   *
+   * Its own state and its own marker because the category marker effect calls
+   * clearMarkers() — a suggestion pin parked in `markersRef` would be wiped the
+   * next time the result set changed, which is exactly when the user is looking
+   * at the map.
+   */
+  const [suggestionPin, setSuggestionPin] = useState<Place | null>(null)
+  const suggestionMarkerRef = useRef<maplibregl.Marker | null>(null)
 
   // Mobile sheet geometry. The sheet's *visible* height drives the map's bottom
-  // padding, so a pin never ends up underneath it.
-  const [snap, setSnap] = useState<string | number | null>(SHEET_PEEK)
+  // padding, so a pin never ends up underneath it. Starts at HIDDEN: the app
+  // opens on the map with just the search bar, not on a half-covered screen.
+  const [snap, setSnap] = useState<string | number | null>(SHEET_HIDDEN)
+
+  const part = daypart()
+  const { suggestion, loading: loadingSuggestion, next: nextSuggestion } = useSuggestion(part)
 
   const { places: rawPlaces, subcategories, loading, locked, error } = useCategoryPlaces(
     category,
     subSlug,
-    beachFilters,
     canSnorkel,
   )
 
@@ -172,6 +210,7 @@ function MapView({
     if (snorkelling && tourFilter === 'tours') {
       list = list.filter((p) => (p.raw as { offers_tours?: boolean }).offers_tours)
     }
+    if (tagFilters.size > 0) list = list.filter((p) => matchesFilters(p, tagFilters))
     const sorted = [...list]
     sorted.sort((a, b) => {
       if (sort === 'name') return a.name.localeCompare(b.name)
@@ -183,7 +222,20 @@ function MapView({
       return da - db
     })
     return sorted
-  }, [rawPlaces, snorkelling, tourFilter, sort, distances])
+  }, [rawPlaces, snorkelling, tourFilter, tagFilters, sort, distances])
+
+  /**
+   * Chips for the current category, counted over the *unfiltered* list.
+   *
+   * `rawPlaces`, not `places`: counting over the filtered list would make every
+   * chip read "1" the moment one was active, and chips for values the remaining
+   * results happen not to have would vanish — so you could never widen back out
+   * without clearing everything.
+   */
+  const filterChips = useMemo(
+    () => (category ? deriveFilters(category, rawPlaces, tagFilters) : []),
+    [category, rawPlaces, tagFilters],
+  )
 
   // Collapsed counts as closed for the camera: the map really does have that
   // width back, and padding for a panel that isn't there parks pins off-centre.
@@ -195,10 +247,17 @@ function MapView({
    *
    * Not measured off the element: in snap mode vaul gives the drawer a
    * full-viewport box and slides it with a transform, so its bounding height is
-   * always ~94dvh regardless of where it rests. Measuring it made the bottom
-   * inset a constant — the map padded for a full-screen sheet even when the
-   * sheet was at peek, which pushed every pin into the top of the canvas.
+   * always the max-height regardless of where it rests. Measuring it made the
+   * bottom inset a constant — the map padded for a full-screen sheet even when
+   * the sheet was at preview, which pushed every pin into the top of the canvas.
    * The snap point is the number that actually describes what's covered.
+   *
+   * This is only true because ui/ResponsivePanel caps the drawer at
+   * `max-h-[100dvh]`. vaul translates by `innerHeight - snapValue`, so a smaller
+   * cap makes the real height `snapValue - (100dvh - cap)` and this number is
+   * silently too large by the difference. It was `94dvh` — ~51px of error at
+   * 844px, applied to every camera move. Do not change that class without
+   * changing this.
    */
   const sheetHeight = useMemo(() => {
     if (!isMobile) return 0
@@ -206,10 +265,32 @@ function MapView({
     if (typeof snap === 'string') return parseFloat(snap) || 0
     return 0
   }, [isMobile, snap])
+
+  /**
+   * How much chrome sits above the map right now.
+   *
+   * Recomputed from what is actually on screen rather than read off one
+   * constant: the greeting card is only shown in Explore, only the phone has a
+   * category row, and minimising the card genuinely returns 60px. The camera
+   * should know about all three, and before this it knew about none of them —
+   * nor about the 47px notch.
+   */
+  const topInset = useMemo(() => {
+    if (!isMobile) return undefined
+    return mobileTopInset({
+      safeTop: safeArea.top,
+      greeting: mode !== 'explore' ? 'hidden' : greetingMin ? 'minimized' : 'expanded',
+      categories: mode === 'explore',
+    })
+  }, [isMobile, safeArea.top, mode, greetingMin])
+
   const insets = useMapInsets({
     resultsOpen,
     detailOpen,
-    sheetHeight: detailOpen || resultsOpen ? sheetHeight : 0,
+    // The mobile sheet is always mounted now, so its height always counts.
+    sheetHeight,
+    topInset,
+    safeBottom: safeArea.bottom,
   })
 
   /** Clamp the inset box to the current canvas before handing it to MapLibre. */
@@ -253,7 +334,7 @@ function MapView({
     const map = mapRef.current
     if (!map || !isMobile) return
     const onDrag = (e: { originalEvent?: Event }) => {
-      if (e.originalEvent) setSnap(SHEET_COLLAPSED)
+      if (e.originalEvent) setSnap(SHEET_HIDDEN)
     }
     map.on('dragstart', onDrag)
     return () => {
@@ -290,7 +371,7 @@ function MapView({
   const selectPlace = useCallback(
     (p: Place) => {
       setSelected(p)
-      setSnap(SHEET_PEEK)
+      setSnap(SHEET_PREVIEW)
       const map = mapRef.current
       if (!map || !isMappable(p)) return
       if (p.geometry) {
@@ -331,7 +412,7 @@ function MapView({
 
   const clearSelection = useCallback(() => {
     setSelected(null)
-    setSnap(SHEET_PEEK)
+    setSnap(SHEET_PREVIEW)
     const map = mapRef.current
     if (map) {
       removeSnorkelZones(map)
@@ -352,23 +433,122 @@ function MapView({
       setCategory(slug)
       setSubSlug(null)
       setSelected(null)
-      setSnap(SHEET_PEEK)
+      // Tapping the category you are already in toggles the sheet rather than
+      // reloading the same list — a second tap on "Beaches" means "show me the
+      // map"/"show me the list", which is the gesture the pill is nearest to.
+      setSnap((cur) =>
+        slug != null && slug === category && cur !== SHEET_HIDDEN ? SHEET_HIDDEN : SHEET_PREVIEW,
+      )
+      // Picking a category is an Explore action — if the user was reading the
+      // chat or their profile, the results they just asked for must be what the
+      // sheet shows.
+      onModeChange('explore')
       // Asking for a category is asking to see its results — a collapse left
       // over from the previous one would silently swallow the click.
       setResultsCollapsed(false)
       setTourFilter('all')
       setSnorkelLegend([])
+      // Chips are derived per category, so any carried over would filter on a
+      // tag the new list has never heard of and show an empty panel.
+      setTagFilters(new Set())
       const map = mapRef.current
       if (map) {
         removeSnorkelZones(map)
         removeTrails(map)
       }
-      if (slug !== 'beaches') {
-        setBeachFilters({})
-        setFilterOpen(false)
+    },
+    [category, onModeChange],
+  )
+
+  /** A chip tap must not leave the user staring at a sheet they cannot see. */
+  const toggleTagFilter = useCallback((key: string) => {
+    setTagFilters((cur) => {
+      const next = new Set(cur)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    setSelected(null)
+    setSnap((cur) => (cur === SHEET_HIDDEN ? SHEET_PREVIEW : cur))
+  }, [])
+
+  /**
+   * Drop a suggestion on the map as its own pin.
+   *
+   * Not routed through `selectPlace`: a suggestion is not in `places`, so the
+   * marker effect would never draw it, and `selected` is what the detail panel
+   * shows. This sets both — the pin comes from its own effect (see
+   * suggestionMarkerRef) and the panel gets the copy.
+   */
+  const openSuggestion = useCallback(
+    (s: Suggestion) => {
+      const place = suggestionToPlace(s)
+      setSuggestionPin(place)
+      onModeChange('explore')
+      // Advice with no coordinates ("cash still runs this island") still has
+      // something to say, so show the panel — there is just no pin to fly to.
+      if (isMappable(place)) {
+        setSelected(place)
+        setSnap(SHEET_PREVIEW)
+        mapRef.current?.flyTo({
+          center: [place.longitude, place.latitude],
+          zoom: 14.5,
+          speed: 1.2,
+          padding: padding(),
+        })
+      } else {
+        setSelected(place)
+        setSnap(SHEET_PREVIEW)
       }
     },
-    [],
+    [onModeChange, padding],
+  )
+
+  // ---------------------------------------------------------------------------
+  //  Mode guards
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A reply that carried pins drops the sheet so the user can see them (§8).
+   *
+   * Keyed on the counter rather than the array: two consecutive answers can
+   * legitimately return the same pins, and that second answer still needs to
+   * reveal the map.
+   *
+   * Adjusted during render against the last value seen rather than in an effect
+   * — the pattern React documents for "derive state from a changed input". An
+   * effect would collapse the sheet one painted frame later, so the user would
+   * see the full-height chat repaint before it dropped.
+   */
+  const [seenPinsSeq, setSeenPinsSeq] = useState(pinsSeq)
+  if (pinsSeq !== seenPinsSeq) {
+    setSeenPinsSeq(pinsSeq)
+    if (mode === 'ai') setSnap(SHEET_HIDDEN)
+  }
+
+  /** Switching mode starts that mode at the height it is useful at. */
+  const changeMode = useCallback(
+    (next: ShellMode) => {
+      if (next === mode) {
+        // Tapping the cell you are on is "let me see the map".
+        setSnap((cur) => (cur === SHEET_HIDDEN ? SHEET_PREVIEW : SHEET_HIDDEN))
+        return
+      }
+      onModeChange(next)
+      // A place selected in Explore has no meaning in the chat or the profile,
+      // and leaving it set would render a detail panel instead of the mode.
+      setSelected(null)
+      setSnap(
+        next === 'ai' || next === 'profile'
+          ? SHEET_FULL
+          : next === 'saved'
+            ? SHEET_PREVIEW
+            : category
+              ? SHEET_PREVIEW
+              : SHEET_HIDDEN,
+      )
+    },
+    [mode, onModeChange, category],
   )
 
   // ---------------------------------------------------------------------------
@@ -478,6 +658,11 @@ function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
+    // At the full snap there are ~60px of map left. Re-centring into that strip
+    // means an easeTo that visibly zooms out to nothing every time the user
+    // opens the sheet to read something — so leave the camera where it was and
+    // let the next snap down bring the pin back.
+    if (isMobile && snap === SHEET_FULL) return
     const pad = padding()
     if (selected?.geometry) {
       // Re-fit rather than re-centre: the selection is a line, and easing to
@@ -525,6 +710,31 @@ function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiPins])
 
+  /**
+   * The Suggestion of the Day pin.
+   *
+   * Its own effect and its own ref, deliberately not part of `markersRef`: the
+   * category marker effect calls clearMarkers() whenever the result set changes,
+   * which would silently wipe the suggestion the moment the user touched a
+   * filter or a subcategory chip. Kept separate, it survives until replaced.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    suggestionMarkerRef.current?.remove()
+    suggestionMarkerRef.current = null
+    if (!map || !suggestionPin || !isMappable(suggestionPin)) return
+
+    const el = makeMarkerEl(suggestionPin.icon, suggestionPin.id === selected?.id, 'suggestion')
+    el.addEventListener('click', (e) => {
+      e.stopPropagation()
+      setSelected(suggestionPin)
+      setSnap(SHEET_PREVIEW)
+    })
+    suggestionMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([suggestionPin.longitude, suggestionPin.latitude])
+      .addTo(map)
+  }, [suggestionPin, selected?.id])
+
   // Draw the directions route when one is provided; clear it when null.
   useEffect(() => {
     const map = mapRef.current
@@ -558,52 +768,48 @@ function MapView({
   //  Render
   // ---------------------------------------------------------------------------
 
-  const activeFilters = useMemo(() => {
-    const chips: { key: string; label: string; onRemove: () => void }[] = []
-    beachFilters.type?.forEach((t) =>
-      chips.push({
-        key: `type:${t}`,
-        label: t,
-        onRemove: () =>
-          setBeachFilters((f) => ({ ...f, type: f.type?.filter((x) => x !== t) })),
-      }),
-    )
-    if (beachFilters.water)
-      chips.push({
-        key: 'water',
-        label: beachFilters.water,
-        onRemove: () => setBeachFilters((f) => ({ ...f, water: undefined })),
-      })
-    beachFilters.facilities?.forEach((t) =>
-      chips.push({
-        key: `fac:${t}`,
-        label: t,
-        onRemove: () =>
-          setBeachFilters((f) => ({ ...f, facilities: f.facilities?.filter((x) => x !== t) })),
-      }),
-    )
-    if (typeof beachFilters.refuge === 'boolean')
-      chips.push({
-        key: 'refuge',
-        label: beachFilters.refuge ? 'In refuge' : 'Outside refuge',
-        onRemove: () => setBeachFilters((f) => ({ ...f, refuge: undefined })),
-      })
-    return chips
-  }, [beachFilters])
+  const accent = category ? categoryMeta(category).color : undefined
+
+  /**
+   * The sheet is at its lowest stop, where §5 wants the search bar and nothing
+   * else.
+   *
+   * Everything below it — the layers chip, the filter row, the results — is
+   * withheld rather than merely covered. The bottom nav is frosted glass, not
+   * opaque, so content left mounted underneath it shows through as unreadable
+   * ghost text rather than disappearing.
+   */
+  const sheetCollapsed = isMobile && snap === SHEET_HIDDEN
 
   const searchBar = (
     <MapSearchBar
       places={places}
       onSelect={selectPlace}
+      // Search matches against the loaded category only, so with nothing loaded
+      // there is nothing it could ever find. Disabled it says so ("Pick a
+      // category to search…"); enabled it would take focus, promote the sheet to
+      // full height, and then cover the category row it is telling the user to
+      // use — a dead end reachable in two taps from a cold start.
+      disabled={!category}
       placeholder={
         category ? `Search ${categoryMeta(category).label.toLowerCase()}…` : 'Search the island…'
       }
       styleId={styleId}
       onStyleChange={changeStyle}
-      onOpenFilters={category === 'beaches' ? () => setFilterOpen((v) => !v) : undefined}
-      filtersOpen={filterOpen}
-      activeFilters={activeFilters}
       compact={isMobile}
+      chipsHidden={sheetCollapsed}
+      // Focusing the field opens the sheet all the way (§5's "hitting search
+      // opens the panel"), a beat earlier than submitting would — the results
+      // are then already visible as you type.
+      //
+      // It also sidesteps a vaul bug. Its keyboard-repositioning code guards on
+      // `if (… && activeSnapPointIndex)`, and index 0 is falsy, so at the lowest
+      // snap it skips the active-snap term and writes a wrong height directly to
+      // the element. Promoting on focus means the keyboard only ever opens at
+      // index 2, where that maths is correct.
+      onFocusChange={(focused) => {
+        if (focused && isMobile) setSnap(SHEET_FULL)
+      }}
     />
   )
 
@@ -678,11 +884,83 @@ function MapView({
       onSortChange={setSort}
       distances={distances}
       onClose={isMobile ? undefined : () => selectCategory(null)}
-      onCollapse={isMobile ? () => setSnap(SHEET_COLLAPSED) : () => setResultsCollapsed(true)}
+      onCollapse={isMobile ? () => setSnap(SHEET_HIDDEN) : () => setResultsCollapsed(true)}
       collapseDirection={isMobile ? 'down' : 'left'}
       banner={hasBanner ? banner : undefined}
       error={error}
+      savedIds={favorites.ids}
+      onToggleSave={favorites.toggle}
+      navPad={isMobile}
     />
+  )
+
+  /** The filter chips + search field that sit above the results in both layouts. */
+  const exploreHeader = (
+    <>
+      <div
+        className={`shrink-0 px-4 pb-3 pt-1 sm:p-4 ${
+          sheetCollapsed ? '' : 'border-b border-white/8'
+        }`}
+      >
+        {searchBar}
+      </div>
+      {category && !sheetCollapsed && (
+        <FilterRow
+          chips={filterChips}
+          onToggle={toggleTagFilter}
+          onClear={() => setTagFilters(new Set())}
+          accent={accent}
+        />
+      )}
+    </>
+  )
+
+  /**
+   * What the mobile sheet is showing.
+   *
+   * One surface, five states. A selected place wins over the mode because it is
+   * a drill-down *within* whichever list produced it — its Back button returns
+   * to that list, not to Explore.
+   */
+  const sheetBody = selected ? (
+    <PlaceDetailPanel
+      place={selected}
+      onClose={clearSelection}
+      onBack={clearSelection}
+      onCollapse={() => setSnap(SHEET_HIDDEN)}
+      onGetDirections={onRoute ? handleDirections : undefined}
+      saved={favorites.ids.has(selected.id)}
+      onToggleSave={favorites.toggle}
+      extra={detailExtra(selected)}
+      navPad
+      {...detailLayout(selected)}
+    />
+  ) : mode === 'ai' ? (
+    <AiChatBody navPad />
+  ) : mode === 'saved' ? (
+    <SavedBody
+      favorites={favorites}
+      selectedId={null}
+      onSelect={selectPlace}
+      distances={distances}
+      navPad
+    />
+  ) : mode === 'profile' ? (
+    <ProfileBody navPad />
+  ) : (
+    <>
+      {exploreHeader}
+      {sheetCollapsed ? null : category ? (
+        results
+      ) : (
+        // Before, nothing at all rendered on mobile until a category was picked
+        // — the app opened to a bare map with no affordance. The search bar above
+        // is now always there, and this says what the row of pills is for.
+        <p className="px-6 py-10 text-center text-sm leading-relaxed text-muted-foreground">
+          Pick a category above, or search the island.
+        </p>
+      )}
+    </>
   )
 
   return (
@@ -693,88 +971,83 @@ function MapView({
         active={category}
         onSelect={selectCategory}
         onAskAi={onAskAi}
-        aiOpen={aiOpen}
+        aiOpen={mode === 'ai'}
         onDirections={onDirections}
         dirOpen={dirOpen}
-        onProfile={onProfile}
-        profileOpen={profileOpen}
-        onToggleSearch={() => setQuickSearch((v) => !v)}
-        searchOpen={quickSearch}
-        search={
-          <MapSearchBar
-            variant="input"
-            autoFocus
-            disabled={!category}
-            places={places}
-            onSelect={(p) => {
-              selectPlace(p)
-              setQuickSearch(false)
-            }}
-            placeholder={
-              category
-                ? `Search ${categoryMeta(category).label.toLowerCase()}…`
-                : 'Search the island…'
-            }
-            styleId={styleId}
-            onStyleChange={changeStyle}
-          />
-        }
+        onSaved={onSaved}
+        savedOpen={mode === 'saved'}
+        onBuildItinerary={() => setItineraryNote(true)}
+        styleId={styleId}
+        onStyleChange={changeStyle}
+        showCategories={!isMobile}
       />
+
+      {/* Phone chrome under the banner: the greeting card, then the category
+          row. Both float over the map and both must opt back into pointer
+          events — the sheet below is a modal Radix dialog, so the body carries
+          `pointer-events: none` (see the note in MapTopBar).
+          Only in Explore: in the chat or the profile the sheet is full-height
+          and this would just be covered chrome stealing 150px from the map. */}
+      {isMobile && mode === 'explore' && (
+        <div
+          className="pointer-events-none absolute inset-x-0 z-20 flex flex-col gap-1.5 pad-safe-x"
+          style={{ top: `calc(var(--sat) + ${BANNER_H_MOBILE}px)` }}
+        >
+          <GreetingCard
+            daypart={part}
+            weather={weather}
+            suggestion={suggestion}
+            loadingSuggestion={loadingSuggestion}
+            minimized={greetingMin}
+            onToggleMinimize={() => setGreetingMin((v) => !v)}
+            onOpenSuggestion={openSuggestion}
+            onNextSuggestion={() => {
+              void nextSuggestion().then((s) => s && openSuggestion(s))
+            }}
+          />
+          <CategoryRow active={category} onSelect={selectCategory} />
+        </div>
+      )}
 
       {isMobile ? (
         <>
-          {category && (
-            <MapSheet
-              title={selected?.name ?? categoryMeta(category).label}
-              snap={snap}
-              onSnapChange={setSnap}
-              onClose={() => (selected ? clearSelection() : selectCategory(null))}
-            >
-              {/* The mobile twin of the desktop folded tab: names what is
-                  hidden and taps back open. Dragging up works too, but a
-                  collapsed sheet should not rely on the user knowing that. */}
-              {snap === SHEET_COLLAPSED && (
-                <button
-                  onClick={() => setSnap(SHEET_PEEK)}
-                  className="mx-4 mb-2 flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-white/8 bg-white/4 py-1.5 text-xs text-muted-foreground"
-                >
-                  <ChevronUp size={14} />
-                  {selected
-                    ? selected.name
-                    : `${places.length} ${categoryMeta(category).label.toLowerCase()}`}
-                </button>
-              )}
-              {selected ? (
-                <PlaceDetailPanel
-                  place={selected}
-                  onClose={() => selectCategory(null)}
-                  onBack={clearSelection}
-                  onCollapse={() => setSnap(SHEET_COLLAPSED)}
-                  onGetDirections={onRoute ? handleDirections : undefined}
-                  extra={detailExtra(selected)}
-                  {...detailLayout(selected)}
-                />
-              ) : (
-                <>
-                  {/* Search lives in the sheet, exactly as it does in the
-                      desktop results panel. It used to float over the map on
-                      its own, which put a text input outside the vaul drawer —
-                      and the drawer is a *modal* Radix dialog whatever we pass
-                      for `modal` (see the note in MapTopBar), so the body gets
-                      `pointer-events: none` and outside focus is trapped back
-                      inside. The field simply could not be typed into. */}
-                  <div className="shrink-0 border-b border-white/8 px-4 pb-3 pt-1">
-                    {searchBar}
-                  </div>
-                  {results}
-                </>
-              )}
-            </MapSheet>
-          )}
+          <MapSheet
+            title={selected?.name ?? (category ? categoryMeta(category).label : 'Explore Vieques')}
+            snap={snap}
+            onSnapChange={setSnap}
+          >
+            {sheetBody}
+          </MapSheet>
+          <BottomNav
+            mode={mode}
+            onChange={changeMode}
+            accent={accent}
+            showCreditDot={!hasAccess && credits <= 0}
+          />
         </>
       ) : (
         <>
-          {category && !resultsCollapsed && (
+          {/* Saved takes the results panel's slot rather than floating over it:
+              it is the same kind of thing — a list of places you pick from — and
+              two stacked left panels would just cover each other. */}
+          {mode === 'saved' && (
+            <ResponsivePanel
+              variant="floating"
+              side="left"
+              title="Saved"
+              desktopWidth="sm:w-[344px]"
+            >
+              <SavedBody
+                favorites={favorites}
+                selectedId={selected?.id ?? null}
+                onSelect={selectPlace}
+                distances={distances}
+                onClose={() => onModeChange('explore')}
+              />
+            </ResponsivePanel>
+          )}
+
+          {mode !== 'saved' && category && !resultsCollapsed && (
             <ResponsivePanel
               variant="floating"
               side="left"
@@ -782,7 +1055,7 @@ function MapView({
               desktopWidth="sm:w-[344px]"
               onClose={() => selectCategory(null)}
             >
-              <div className="shrink-0 border-b border-white/8 p-4">{searchBar}</div>
+              {exploreHeader}
               {results}
             </ResponsivePanel>
           )}
@@ -814,6 +1087,8 @@ function MapView({
                 place={selected}
                 onClose={clearSelection}
                 onGetDirections={onRoute ? handleDirections : undefined}
+                saved={favorites.ids.has(selected.id)}
+                onToggleSave={favorites.toggle}
                 extra={detailExtra(selected)}
                 {...detailLayout(selected)}
               />
@@ -822,11 +1097,16 @@ function MapView({
         </>
       )}
 
-      {/* Zoom / recentre, tucked clear of the detail panel. */}
+      {/* Zoom / recentre.
+          Mobile tracks `insets.bottom` rather than the raw sheet height: that
+          value is already clamped to 55% of the viewport AND floored at the
+          bottom nav, so the buttons follow the sheet without sliding off the top
+          of the screen at the full snap or hiding behind the nav at the lowest
+          one. (§4 — "reposition dynamically when the panel changes height".) */}
       <div
         className="absolute z-10 flex flex-col gap-2"
         style={{
-          bottom: isMobile ? `calc(${sheetHeight}px + 1rem)` : '1.25rem',
+          bottom: isMobile ? `calc(${insets.bottom}px + 0.75rem)` : '1.25rem',
           right: !isMobile && detailOpen ? `${DETAIL_PANEL_W + 40}px` : '1.25rem',
         }}
       >
@@ -870,12 +1150,23 @@ function MapView({
         © Explore Vieques · MapTiler · OpenStreetMap
       </div>
 
-      {category === 'beaches' && filterOpen && (
-        <BeachFilterPanel
-          filters={beachFilters}
-          onChange={setBeachFilters}
-          onClose={() => setFilterOpen(false)}
-        />
+      {/* Build Itinerary is a stub (§1). A toast rather than a disabled button:
+          a control that looks broken on every tier is worse than one that says
+          what it will be. */}
+      {itineraryNote && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-50 flex justify-center px-6 sm:bottom-8">
+          <div className="glass pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-foreground shadow-2xl">
+            <Route size={15} className="shrink-0 text-primary" />
+            Itinerary building is coming soon.
+            <button
+              onClick={() => setItineraryNote(false)}
+              className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

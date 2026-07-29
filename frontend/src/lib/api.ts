@@ -578,3 +578,117 @@ export async function fetchEssentialListings(slug: string): Promise<EssentialLis
   if (!res.ok) throw new Error(`Essential listings failed: ${res.status}`)
   return res.json()
 }
+
+// ---------------------------------------------------------------------------
+//  Weather
+// ---------------------------------------------------------------------------
+
+/** Vieques' current conditions, already reduced to what the greeting card
+ *  renders. The WMO code → label/emoji mapping happens server-side so there is
+ *  only ever one copy of it (see /api/weather). */
+export type Weather = {
+  tempF: number | null
+  feelsLikeF: number | null
+  code: number
+  label: string
+  emoji: string
+  isDay: boolean
+  highF: number | null
+  lowF: number | null
+  precipChance: number | null
+  windMph: number | null
+  fetchedAt: string
+  /** Set when the upstream is down and this is the last good reading. */
+  stale?: boolean
+}
+
+export async function fetchWeather(): Promise<Weather> {
+  const res = await apiFetch('/api/weather')
+  if (!res.ok) return raise(res, 'Weather failed')
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
+//  Suggestion of the day
+// ---------------------------------------------------------------------------
+
+export type Suggestion = {
+  id: number
+  title: string
+  blurb: string | null
+  /** A CategorySlug, or null for island-wide advice. */
+  category: string | null
+  /** Null on advice with no single pin ("cash still runs this island"). */
+  place_kind: string | null
+  place_ref: string | null
+  latitude: number | null
+  longitude: number | null
+  emoji: string
+  time_of_day: 'morning' | 'afternoon' | 'evening' | 'any'
+}
+
+/** `when` biases the pick toward copy that fits the greeting above it — a
+ *  sunrise tip under "Good evening" reads as broken. */
+export async function fetchSuggestion(
+  when?: 'morning' | 'afternoon' | 'evening',
+): Promise<Suggestion> {
+  const res = await apiFetch(`/api/suggestion${when ? `?when=${when}` : ''}`)
+  if (!res.ok) return raise(res, 'Suggestion failed')
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
+//  Favorites
+// ---------------------------------------------------------------------------
+
+/**
+ * One saved place.
+ *
+ * `snapshot` is a copy of the card taken at save time, not a live join: Saved
+ * draws from up to seven listing tables and resolving it live would mean seven
+ * requests for a list that is usually four items long. It is allowed to go
+ * stale — tapping through loads the real row.
+ */
+export type FavoriteRow = {
+  /** The namespaced Place.id, e.g. 'beach:3'. */
+  place_id: string
+  place_kind: string
+  place_ref: string
+  snapshot: {
+    kind?: string
+    name: string
+    subtitle?: string
+    latitude: number | null
+    longitude: number | null
+    tags: string[]
+    icon: { emoji: string; color: string }
+  }
+  created_at: string
+}
+
+export async function fetchFavorites(): Promise<FavoriteRow[]> {
+  const res = await apiFetch('/api/favorites')
+  if (!res.ok) return raise(res, 'Favorites failed')
+  return res.json()
+}
+
+/** Upsert — safe to call without first checking whether it is already saved. */
+export async function saveFavorite(
+  placeId: string,
+  snapshot: FavoriteRow['snapshot'],
+): Promise<FavoriteRow> {
+  const res = await apiFetch(`/api/favorites/${encodeURIComponent(placeId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot }),
+  })
+  if (!res.ok) return raise(res, 'Save failed')
+  return res.json()
+}
+
+export async function removeFavorite(placeId: string): Promise<void> {
+  const res = await apiFetch(`/api/favorites/${encodeURIComponent(placeId)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) return raise(res, 'Remove failed')
+}

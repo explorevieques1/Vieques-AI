@@ -66,9 +66,20 @@ type Result = {
 export function useCategoryPlaces(
   category: CategorySlug | null,
   subSlug: string | null,
-  beachFilters: BeachFilters,
   /** Snorkelling is Vacation-tier (PRICING.md §4); skip the fetch without it. */
   canSnorkel: boolean,
+  /**
+   * Server-side beach filters.
+   *
+   * Unused by the UI since the filter chips became client-side and category-wide
+   * (lib/filters.ts) — beach type, water and facilities are all in `Place.tags`
+   * now, so they filter in memory like every other category. Kept because
+   * /api/beaches still implements them and its `facilities` matching is an
+   * array-overlap + ILIKE query no client pass can reproduce over trimmed
+   * free-tier columns; a future "filter on the server for big result sets" path
+   * starts here rather than from nothing.
+   */
+  beachFilters: BeachFilters = {},
 ): Result {
   // Both caches are tagged with the request they answer. Everything the hook
   // returns is then *derived* by comparing that tag to the current request, so

@@ -35,6 +35,11 @@ type Props = {
   banner?: React.ReactNode
   /** Surfaced in place of the empty state — never swallow a failed fetch. */
   error?: ApiError | Error | null
+  /** Place ids the user has saved. Omit to render cards without a heart. */
+  savedIds?: Set<string>
+  onToggleSave?: (p: Place) => void
+  /** Mobile: pad the scroller so the last card clears the bottom nav. */
+  navPad?: boolean
 }
 
 /**
@@ -63,17 +68,31 @@ function ResultsList({
   collapseDirection = 'left',
   banner,
   error,
+  savedIds,
+  onToggleSave,
+  navPad = false,
 }: Props) {
   const meta = categoryMeta(category)
   const upgradeable = error instanceof ApiError && error.isUpgradeable
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4">
-        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+      {/* Category accent as a hairline over the header: the same hue as the
+          pill, the pins and the active nav cell, so the panel says which
+          category it belongs to without spending a line of type on it. */}
+      <div
+        className="h-0.5 shrink-0"
+        style={{ background: `linear-gradient(to right, ${meta.color}, transparent)` }}
+        aria-hidden="true"
+      />
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+        <div
+          className="font-mono text-[10px] uppercase tracking-[0.16em]"
+          style={{ color: meta.color }}
+        >
           {loading
             ? 'Loading…'
-            : `Results · ${places.length} ${places.length === 1 ? meta.label.replace(/s$/, '') : meta.label}`}
+            : `${places.length} ${places.length === 1 ? meta.label.replace(/s$/, '') : meta.label}`}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -151,7 +170,11 @@ function ResultsList({
 
       {banner && <div className="shrink-0 px-4 pb-3">{banner}</div>}
 
-      <div className="scroll-contain scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-4">
+      <div
+        className={`scroll-contain scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 ${
+          navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+        }`}
+      >
         {loading &&
           Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[72px] shrink-0 rounded-2xl" />
@@ -205,6 +228,8 @@ function ResultsList({
               selected={p.id === selectedId}
               onSelect={onSelect}
               distanceMi={distances.get(p.id)}
+              saved={savedIds?.has(p.id)}
+              onToggleSave={onToggleSave}
             />
           ))}
       </div>

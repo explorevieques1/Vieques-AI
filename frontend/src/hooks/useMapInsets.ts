@@ -30,28 +30,84 @@ export const PANEL_GAP = 20
  * MapTopBar's classes — keep them in step if that padding changes.
  */
 export const TOP_BAR_H = 88
-export const TOP_BAR_H_MOBILE = 100
 
 /**
- * Mobile sheet rest heights. Fractions are of the viewport; the collapsed stop
- * is a fixed pixel height because what it must show is a fixed thing — the drag
- * handle and the search field, nothing else.
+ * Mobile chrome, measured piece by piece rather than as one number.
  *
- * Collapsed exists so swiping the sheet down gets it out of the way *without*
- * throwing away the category: before, the only thing below peek was dismissal,
- * so "let me see the map" cost you your results. Peek keeps a selected pin on
- * screen above the sheet; full is for reading.
+ * The phone layout stacks four independent things above the map — the banner,
+ * the greeting card, the category row, and whichever of those is currently
+ * hidden — so a single TOP_BAR_H_MOBILE constant could only ever be right for
+ * one combination. Minimising the greeting card genuinely gives the map 60px
+ * back, and the camera should know.
  *
- * They live here because they are what the bottom inset resolves to.
+ * Budget at 390x844 with the greeting expanded:
+ *   47 notch + 52 banner + 6 + 100 greeting + 6 + 40 categories = 251
+ *   425 map band
+ *   168 sheet at its lowest stop (the bottom nav overlays its lowest 90)
+ * Keep these in step with the actual classes in MapTopBar / GreetingCard /
+ * CategoryRow — they are measurements of those components, not free parameters.
  */
-// Generous because a snap height is the sheet's *outer* height, and the sheet
-// pads itself by env(safe-area-inset-bottom) — on a home-indicator iPhone ~34px
-// of this is padding, not content. It has to still clear the handle, the
-// tap-to-expand strip and the search field after that is taken out.
-export const SHEET_COLLAPSED = '148px'
-export const SHEET_PEEK = 0.45
-export const SHEET_FULL = 0.92
-export const SHEET_SNAPS: (string | number)[] = [SHEET_COLLAPSED, SHEET_PEEK, SHEET_FULL]
+export const BANNER_H_MOBILE = 52
+export const GREETING_H = 100
+export const GREETING_H_MIN = 40
+export const CATEGORY_ROW_H = 40
+export const CHROME_GAP = 6
+/** Inner height of the bottom nav, excluding its safe-area padding. */
+export const BOTTOM_NAV_H = 56
+
+/**
+ * Total mobile top inset, for whatever chrome is currently on screen.
+ *
+ * `safeTop` comes from useSafeArea rather than being baked in: env() is only
+ * legal in CSS, so before that hook existed this number silently ignored the
+ * notch and every pin sat ~47px low in the visible band.
+ */
+export function mobileTopInset({
+  safeTop,
+  greeting,
+  categories,
+}: {
+  safeTop: number
+  greeting: 'expanded' | 'minimized' | 'hidden'
+  categories: boolean
+}): number {
+  let h = safeTop + BANNER_H_MOBILE
+  if (greeting !== 'hidden') {
+    h += CHROME_GAP + (greeting === 'expanded' ? GREETING_H : GREETING_H_MIN)
+  }
+  if (categories) h += CHROME_GAP + CATEGORY_ROW_H
+  return h
+}
+
+/** Kept for the desktop-only callers that still want one number. */
+export const TOP_BAR_H_MOBILE = 252
+
+/**
+ * The three mobile sheet stops, per §5 of the mobile rebuild:
+ *
+ *   HIDDEN  — the search bar and nothing else. The map is the screen.
+ *   PREVIEW — about a third of the screen; a selected pin still fits above it.
+ *   FULL    — to the top of the screen, for reading and for the chat.
+ *
+ * A snap value is the sheet's visible outer height, exactly — but only because
+ * ui/ResponsivePanel caps the drawer at `max-h-[100dvh]`. vaul translates a
+ * full-height box by `innerHeight - snapValue`, so any smaller cap makes every
+ * stop render short by the difference (it was `94dvh`, i.e. ~51px short at
+ * 844px, and `sheetHeight` fed that error straight into the camera padding).
+ * If that class changes, these numbers stop meaning what they say.
+ *
+ * HIDDEN is a pixel height because what it must show is a fixed thing — the
+ * handle and the search field. The other two are viewport fractions because
+ * "a third of the screen" is the actual intent.
+ *
+ * There is no dismissal below HIDDEN: the sheet is passed `dismissible={false}`,
+ * so a downward drag at the lowest stop is ignored rather than throwing away the
+ * category. Before that, "let me see the map" cost you your results.
+ */
+export const SHEET_HIDDEN = '168px'
+export const SHEET_PREVIEW = 0.45
+export const SHEET_FULL = 0.93
+export const SHEET_SNAPS: (string | number)[] = [SHEET_HIDDEN, SHEET_PREVIEW, SHEET_FULL]
 
 type Args = {
   /** Desktop: is the left results panel showing? */
@@ -60,9 +116,19 @@ type Args = {
   detailOpen: boolean
   /** Mobile: current height of the bottom sheet in px (0 when closed). */
   sheetHeight: number
+  /** Mobile: total height of the chrome above the map — see mobileTopInset. */
+  topInset?: number
+  /** Mobile: the home-indicator inset, so the nav's real height is known. */
+  safeBottom?: number
 }
 
-export function useMapInsets({ resultsOpen, detailOpen, sheetHeight }: Args): MapInsets {
+export function useMapInsets({
+  resultsOpen,
+  detailOpen,
+  sheetHeight,
+  topInset,
+  safeBottom = 0,
+}: Args): MapInsets {
   const isMobile = useIsMobile()
 
   return useMemo(() => {
@@ -71,10 +137,14 @@ export function useMapInsets({ resultsOpen, detailOpen, sheetHeight }: Args): Ma
       // Cap the sheet inset — once the sheet passes ~60% of the screen there is
       // no usable map left, and over-padding makes MapLibre clamp oddly.
       const maxBottom = Math.max(0, window.innerHeight * 0.55)
+      // Floored at the bottom nav: the nav sits over the sheet's lowest 90px,
+      // so even at the smallest snap that strip of map is not really visible.
+      // Without the floor the camera would happily centre a pin behind it.
+      const navH = BOTTOM_NAV_H + safeBottom
       return {
-        top: TOP_BAR_H_MOBILE,
+        top: topInset ?? TOP_BAR_H_MOBILE,
         right: 16,
-        bottom: Math.min(sheetHeight, maxBottom),
+        bottom: Math.min(Math.max(sheetHeight, navH), maxBottom),
         left: 16,
       }
     }
@@ -85,7 +155,7 @@ export function useMapInsets({ resultsOpen, detailOpen, sheetHeight }: Args): Ma
       bottom: PANEL_GAP,
       left: resultsOpen ? RESULTS_PANEL_W + PANEL_GAP * 2 : PANEL_GAP,
     }
-  }, [isMobile, resultsOpen, detailOpen, sheetHeight])
+  }, [isMobile, resultsOpen, detailOpen, sheetHeight, topInset, safeBottom])
 }
 
 /**

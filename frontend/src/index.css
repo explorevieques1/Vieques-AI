@@ -14,6 +14,17 @@ html, body, #root {
   margin: 0;
 }
 
+/* The safe-area insets, mirrored onto custom properties so JS can read them.
+   `env()` is only legal in a CSS value position, so a hook that needs the notch
+   height as a number (hooks/useSafeArea.ts — MapLibre's camera padding is a
+   plain pixel box) has no way to ask for it directly. This is the bridge.
+   Not inside `:root {}` below: that block is the colour theme, and these are
+   layout facts about the device. */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;

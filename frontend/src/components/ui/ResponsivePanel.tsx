@@ -20,7 +20,16 @@ type Props = {
   /** Desktop width utility, e.g. "sm:w-96". */
   desktopWidth?: string
   /** Called when the user dismisses (× button, overlay tap, or drag-down). */
-  onClose: () => void
+  onClose?: () => void
+  /**
+   * Mobile: may the sheet be dragged away entirely?
+   *
+   * `false` makes the lowest snap point a floor — vaul ignores a downward drag
+   * once it is the active one. That is what turns "swipe down" into "get out of
+   * my way" rather than "throw away my category", and it is why the permanent
+   * mobile sheet can host the search bar at its lowest stop.
+   */
+  dismissible?: boolean
   /**
    * Mobile snap heights, e.g. [0.35, 0.9]. When given, the sheet rests at
    * discrete heights and can be swiped between them instead of being simply
@@ -48,6 +57,7 @@ export function ResponsivePanel({
   title,
   desktopWidth = "sm:w-80",
   onClose,
+  dismissible = true,
   snapPoints,
   activeSnapPoint,
   onSnapChange,
@@ -63,14 +73,42 @@ export function ResponsivePanel({
     ? { snapPoints, activeSnapPoint, setActiveSnapPoint: onSnapChange }
     : {}
 
+  /**
+   * The active snap as a CSS length, used to clip the content to what is
+   * actually on screen.
+   *
+   * This is the other half of the `max-h-[100dvh]` note below, and without it
+   * that fix is only half a fix. vaul anchors the sheet to `bottom-0` and slides
+   * it DOWN by `innerHeight - snapValue`, so the element's bottom edge always
+   * ends up at `innerHeight + offset` — below the fold by exactly the amount it
+   * was pushed. The element has to be full-height for a snap value to mean the
+   * visible height, but that leaves its lower portion off screen, and a
+   * `flex-1` scroller inside will happily size itself to the whole element.
+   *
+   * Measured at 390x844: at the 0.45 snap the results scroller ran from y=666 to
+   * y=1307 — 463px past the bottom of the phone. The list scrolled, but its last
+   * rows sat below the physical screen and could not be reached or tapped.
+   *
+   * Capping the content to the snap height puts the scroller's own bottom edge
+   * exactly on the fold, so "scrolled to the end" means what it says.
+   * `- 22px` is the drag handle above it (mt-3 + h-1.5 + mb-1 in ui/drawer).
+   */
+  const snapCss =
+    typeof activeSnapPoint === 'number'
+      ? `${activeSnapPoint * 100}dvh`
+      : typeof activeSnapPoint === 'string'
+        ? activeSnapPoint
+        : null
+
   if (isMobile) {
     return (
       <Drawer
         open
         modal={false}
+        dismissible={dismissible}
         {...snapProps}
         onOpenChange={(open) => {
-          if (!open) onClose()
+          if (!open) onClose?.()
         }}
       >
         {/* Non-modal + no overlay: the map stays visible and interactive behind
@@ -78,13 +116,33 @@ export function ResponsivePanel({
             app. Dismiss via the × in the header or by dragging the sheet down. */}
         {/* In snap mode vaul drives the sheet's offset itself and expects a
             tall content box to slide; the default `h-auto max-h-[85dvh]`
-            would fight it. */}
+            would fight it.
+
+            `max-h-[100dvh]` is load-bearing and must stay exactly that. vaul
+            translates the sheet by `innerHeight - snapValue` (useSnapPoints in
+            node_modules/vaul), so the visible height is
+            `elementHeight + snapValue - innerHeight`. Any cap below 100dvh
+            makes every snap render short by the difference — at `94dvh` on an
+            844px screen that was ~51px, and because `sheetHeight` in MapView is
+            derived from the nominal snap, the map's bottom padding was wrong by
+            the same amount on every camera move. At 100dvh the snap value *is*
+            the visible outer height, 1:1. The rounded top corners still show
+            because SHEET_FULL is < 1. */}
         <DrawerContent
-          className={cn(snapPoints && "h-full max-h-[94dvh]", className)}
+          className={cn(snapPoints && "h-full max-h-[100dvh]", className)}
           showOverlay={false}
         >
           <DrawerTitle className="sr-only">{title}</DrawerTitle>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* `flex-1` is dropped when the height is set, not merely overridden:
+              `flex: 1 1 0%` resolves the main size from flex-basis and ignores
+              `height` outright, so leaving it on silently reverted the clip. */}
+          <div
+            className={cn(
+              'flex min-h-0 flex-col overflow-hidden',
+              !(snapPoints && snapCss) && 'flex-1',
+            )}
+            style={snapPoints && snapCss ? { height: `calc(${snapCss} - 22px)` } : undefined}
+          >
             {children}
           </div>
         </DrawerContent>

@@ -11,14 +11,27 @@
 // the API or DB schema; `raw` carries the original through for the rare
 // kind-specific branch.
 
+import {
+  BedDouble,
+  Car,
+  Compass,
+  ShoppingBasket,
+  Umbrella,
+  UtensilsCrossed,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
+
 import type {
   ActivityListing,
   Beach,
   EssentialListing,
+  FavoriteRow,
   RestaurantListing,
   ServiceListing,
   SnorkelSpot,
   StayListing,
+  Suggestion,
   TrailFeature,
   TransportListing,
 } from './api'
@@ -121,6 +134,21 @@ export type CategoryMeta = {
   slug: CategorySlug
   label: string
   /**
+   * Pill / nav icon. A lucide component rather than one of the emoji in
+   * markerIcon.ts: those maps are keyed on *sub*category slugs (`kayaking`,
+   * `pharmacy`) and have no entry for a top-level category, and a line icon
+   * sits better next to 11px type than a full-colour emoji does.
+   */
+  icon: LucideIcon
+  /**
+   * Category accent, reused for the pill tint, the results header rule and the
+   * active bottom-nav cell — so "I am in Beaches" is one colour everywhere.
+   * Hex, not a Tailwind class: v4 cannot generate classes from a runtime value,
+   * so these are applied as inline styles (see CategoryRow / PlaceCard).
+   * Values match the existing marker colours so a pill agrees with its pins.
+   */
+  color: string
+  /**
    * Categories whose listings live behind a subcategory (`/api/restaurants/:slug`).
    * Beaches load in one shot; the rest need a subcategory picked first.
    */
@@ -139,22 +167,53 @@ export type CategoryMeta = {
 }
 
 export const CATEGORIES: CategoryMeta[] = [
-  { slug: 'beaches', label: 'Beaches', hasSubcategories: false },
-  { slug: 'restaurants', label: 'Restaurants', hasSubcategories: true },
+  { slug: 'beaches', label: 'Beaches', icon: Umbrella, color: '#06b6d4', hasSubcategories: false },
+  {
+    slug: 'restaurants',
+    label: 'Restaurants',
+    icon: UtensilsCrossed,
+    color: '#f97316',
+    hasSubcategories: true,
+  },
   // Hiking lives here as the `hiking` subcategory, not as its own top-level
   // pill: it is a thing to do on the island, and the fact that its rows happen
   // to be lines rather than pins is a rendering detail, not a reason to split
   // the navigation. See the `activities` case in hooks/useCategoryPlaces.ts —
   // it takes the same "this sub has its own dataset" branch snorkelling does.
-  { slug: 'activities', label: 'Activities', hasSubcategories: true },
+  {
+    slug: 'activities',
+    label: 'Activities',
+    icon: Compass,
+    color: '#22c55e',
+    hasSubcategories: true,
+  },
   // Lodging loads in one shot like beaches — there are ~6 properties
   // island-wide — but carries a chip row over the top of that list
   // (stay_categories, 0028) so "we want an eco retreat" is one tap rather than
   // a read of every card's tags.
-  { slug: 'stays', label: 'Stays', hasSubcategories: false, optionalSubcategories: true },
-  { slug: 'services', label: 'Services', hasSubcategories: true },
-  { slug: 'transportation', label: 'Transportation', hasSubcategories: true },
-  { slug: 'essentials', label: 'Essentials', hasSubcategories: true },
+  {
+    slug: 'stays',
+    label: 'Stays',
+    icon: BedDouble,
+    color: '#8b5cf6',
+    hasSubcategories: false,
+    optionalSubcategories: true,
+  },
+  { slug: 'services', label: 'Services', icon: Wrench, color: '#0ea5e9', hasSubcategories: true },
+  {
+    slug: 'transportation',
+    label: 'Transportation',
+    icon: Car,
+    color: '#eab308',
+    hasSubcategories: true,
+  },
+  {
+    slug: 'essentials',
+    label: 'Essentials',
+    icon: ShoppingBasket,
+    color: '#f59e0b',
+    hasSubcategories: true,
+  },
 ]
 
 export function categoryMeta(slug: CategorySlug): CategoryMeta {
@@ -184,6 +243,44 @@ function contactOf(
   }
 }
 
+/**
+ * Beach facilities, reduced to a handful of filterable keywords.
+ *
+ * `beaches.facilities` is freeform prose written per beach — "composting toilets
+ * at spots #3 and #12", "parking along pier", "shade trees" — and 13 of the 19
+ * rows say only "none". Used verbatim as filter chips that is one chip per beach
+ * plus a "None" chip matching most of them: noise that pushes the useful
+ * controls off the row.
+ *
+ * The keyword collapse is not new behaviour, it is the same rule the old
+ * BeachFilterPanel relied on. Its four checkboxes posted `?facilities=restroom,
+ * parking,shade,picnic` and /api/beaches matched them with
+ * `f ILIKE '%' || keyword || '%'` — so "composting restroom" already counted as
+ * a restroom. This moves that substring match to the client, where the chips now
+ * live, rather than losing it with the popover.
+ */
+function facilityTags(facilities: string[] | null | undefined): string[] {
+  if (!facilities?.length) return []
+  const KEYWORDS: [RegExp, string][] = [
+    [/restroom|toilet|bathroom/, 'restroom'],
+    [/parking/, 'parking'],
+    [/shade|shelter|pavilion/, 'shade'],
+    [/picnic/, 'picnic'],
+    [/shower/, 'showers'],
+    [/restaurant|bar\b|snack|food|kiosk/, 'food'],
+    [/camp/, 'camping'],
+  ]
+  const found = new Set<string>()
+  facilities.forEach((raw) => {
+    const f = raw.toLowerCase()
+    if (f === 'none') return
+    KEYWORDS.forEach(([re, tag]) => {
+      if (re.test(f)) found.add(tag)
+    })
+  })
+  return [...found]
+}
+
 export function beachToPlace(b: Beach): Place {
   return {
     id: `beach:${b.id}`,
@@ -192,7 +289,19 @@ export function beachToPlace(b: Beach): Place {
     subtitle: [b.local_name, b.region].filter(Boolean).join(' · ') || undefined,
     latitude: b.latitude,
     longitude: b.longitude,
-    tags: b.type ?? [],
+    // Type first, then water, then normalised facilities. Order matters twice
+    // over: PlaceCard shows only the first three, so a card still reads
+    // "swimming · snorkeling · family" rather than leading with a restroom — and
+    // this field is also what the filter chips are derived from
+    // (lib/filters.ts), which is why water and facilities are here at all rather
+    // than only in `stats` below. The beach filters used to be a hardcoded
+    // popover posting them to /api/beaches; now every category filters the same
+    // way, off this field.
+    tags: [
+      ...(b.type ?? []),
+      ...(b.water_conditions ? [b.water_conditions] : []),
+      ...facilityTags(b.facilities),
+    ],
     stats: stats(
       ['Water', b.water_conditions],
       ['Access', b.access],
@@ -480,5 +589,73 @@ export function snorkelToPlace(s: SnorkelSpot): Place {
     contact: {},
     icon: ACTIVITY_ICONS['snorkeling'],
     raw: s,
+  }
+}
+
+/**
+ * Suggestion of the Day → a Place, so the arrow button can hand it straight to
+ * `selectPlace` and get the same pin + detail panel as any other result.
+ *
+ * `kind` comes from the row's `place_kind` when it points at a real listing,
+ * and falls back to 'activity' for pure advice ("cash still runs this island")
+ * — those still deserve the panel, they just have no listing behind them. The
+ * id keeps the `suggestion:` prefix either way: it is a distinct object with
+ * its own copy, and letting it collide with `beach:3` would make hearting a
+ * suggestion save a different card than the one on screen.
+ */
+export function suggestionToPlace(s: Suggestion): Place {
+  const kind = (s.place_kind ?? 'activity') as PlaceKind
+  return {
+    id: `suggestion:${s.id}`,
+    kind,
+    name: s.title,
+    subtitle: 'Suggestion of the day',
+    latitude: s.latitude,
+    longitude: s.longitude,
+    tags: s.category ? [s.category] : [],
+    stats: [],
+    description: s.blurb ?? undefined,
+    contact: {},
+    icon: { emoji: s.emoji, color: '#f59e0b' },
+    raw: s,
+  }
+}
+
+/**
+ * A saved row → a Place, from the snapshot rather than a live fetch.
+ *
+ * Saved lists places drawn from up to seven tables; resolving each one live
+ * would be seven requests for a four-item list. The snapshot is deliberately
+ * allowed to be stale — it gets you back to the right pin, and tapping through
+ * loads the real row. Hence no `stats` and no `description`: a card, not a
+ * detail panel.
+ */
+export function favoriteToPlace(row: FavoriteRow): Place {
+  const s = row.snapshot
+  return {
+    id: row.place_id,
+    kind: (s.kind ?? row.place_kind) as PlaceKind,
+    name: s.name,
+    subtitle: s.subtitle,
+    latitude: s.latitude,
+    longitude: s.longitude,
+    tags: s.tags ?? [],
+    stats: [],
+    contact: {},
+    icon: s.icon ?? DEFAULT_ICON,
+    raw: row,
+  }
+}
+
+/** The snapshot half of a save — the fields /api/favorites whitelists. */
+export function placeSnapshot(p: Place): FavoriteRow['snapshot'] {
+  return {
+    kind: p.kind,
+    name: p.name,
+    subtitle: p.subtitle,
+    latitude: p.latitude,
+    longitude: p.longitude,
+    tags: p.tags,
+    icon: p.icon,
   }
 }

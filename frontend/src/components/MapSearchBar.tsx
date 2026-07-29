@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Layers, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Layers, Search, X } from 'lucide-react'
 
 import { MAP_STYLES } from '../lib/mapStyles'
 import type { Place } from '../lib/place'
-
-export type ActiveFilterChip = { key: string; label: string; onRemove: () => void }
 
 type Props = {
   /** Searched client-side; whatever the current category loaded. */
@@ -13,10 +11,26 @@ type Props = {
   placeholder?: string
   styleId: string
   onStyleChange: (id: string) => void
-  /** Omitted for categories with no filter UI (everything but beaches today). */
-  onOpenFilters?: () => void
-  filtersOpen?: boolean
-  activeFilters?: ActiveFilterChip[]
+  /**
+   * Mobile: the sheet promotes itself to full height while the field has focus.
+   *
+   * On focus rather than on submit, for two reasons. It is better UX — the
+   * results are visible as you type — and it dodges a vaul bug: its keyboard
+   * repositioning guards on `if (… && activeSnapPointIndex)`, and index 0 is
+   * falsy, so at the lowest snap it omits the active-snap term and writes a
+   * wrong height straight to the element.
+   */
+  onFocusChange?: (focused: boolean) => void
+  /**
+   * Drop the chip row, leaving just the field.
+   *
+   * For the sheet's lowest stop, where §5 asks for the search bar and nothing
+   * else. Done by omitting the chips rather than swapping to `variant="input"`
+   * so the <input> itself is never unmounted — remounting it mid-interaction
+   * would drop focus and the typed query at the exact moment focusing the field
+   * promotes the sheet to full height.
+   */
+  chipsHidden?: boolean
   /**
    * Phone layout: collapse the basemap switcher behind a chip.
    *
@@ -49,9 +63,8 @@ function MapSearchBar({
   placeholder = 'Search beaches, bays, coves…',
   styleId,
   onStyleChange,
-  onOpenFilters,
-  filtersOpen,
-  activeFilters = [],
+  onFocusChange,
+  chipsHidden = false,
   compact = false,
   variant = 'stack',
   disabled = false,
@@ -130,33 +143,19 @@ function MapSearchBar({
     </div>
   )
 
-  const chips = (onOpenFilters || compact) && (
+  // Just the Layers disclosure now. The Filters button and the active-filter
+  // chips that used to live here moved to FilterRow, which derives them from the
+  // data for every category instead of only beaches — see lib/filters.ts.
+  const chips = compact && !chipsHidden && (
     <div className="flex flex-wrap gap-1.5">
-      {onOpenFilters && (
-        <button
-          onClick={onOpenFilters}
-          className={filtersOpen || activeFilters.length > 0 ? chipOn : chipOff}
-        >
-          <SlidersHorizontal size={12} />
-          Filters{activeFilters.length > 0 ? ` · ${activeFilters.length}` : ''}
-        </button>
-      )}
-      {compact && (
-        <button
-          onClick={() => setLayersOpen((v) => !v)}
-          aria-expanded={layersOpen}
-          className={layersOpen ? chipOn : chipOff}
-        >
-          <Layers size={12} />
-          {MAP_STYLES.find((s) => s.id === styleId)?.label ?? 'Layers'}
-        </button>
-      )}
-      {activeFilters.map((f) => (
-        <button key={f.key} onClick={f.onRemove} className={chipOff}>
-          {f.label}
-          <X size={11} className="text-muted-foreground" />
-        </button>
-      ))}
+      <button
+        onClick={() => setLayersOpen((v) => !v)}
+        aria-expanded={layersOpen}
+        className={layersOpen ? chipOn : chipOff}
+      >
+        <Layers size={12} />
+        {MAP_STYLES.find((s) => s.id === styleId)?.label ?? 'Layers'}
+      </button>
     </div>
   )
 
@@ -176,8 +175,14 @@ function MapSearchBar({
             setQuery(e.target.value)
             setOpen(true)
           }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onFocus={() => {
+            setOpen(true)
+            onFocusChange?.(true)
+          }}
+          onBlur={() => {
+            setTimeout(() => setOpen(false), 120)
+            onFocusChange?.(false)
+          }}
           placeholder={disabled ? 'Pick a category to search…' : placeholder}
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
         />

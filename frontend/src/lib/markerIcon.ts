@@ -77,8 +77,16 @@ export function makeMarkerEl(
   { emoji, color }: MarkerStyle,
   /** Selected pins get the larger teal badge + pulse ring from the mockups. */
   selected = false,
+  /**
+   * `suggestion` marks the Suggestion of the Day: a squared badge with a
+   * permanent pulse, so it reads as "this one is different" among a screen of
+   * round category pins even when it is not the selected one.
+   */
+  variant: 'default' | 'suggestion' = 'default',
 ): HTMLDivElement {
-  const size = selected ? 44 : 32
+  const suggestion = variant === 'suggestion'
+  const size = selected ? 44 : suggestion ? 38 : 32
+  const radius = suggestion ? '14px' : '50%'
 
   // Outer wrapper — MapLibre owns its transform; we don't touch it.
   //
@@ -91,15 +99,20 @@ export function makeMarkerEl(
   const outer = document.createElement('div')
   outer.style.cssText = `width:${size}px;height:${size}px;cursor:pointer;`
 
-  if (selected) {
+  if (selected || suggestion) {
     // Expanding ring behind the badge. Its own element, because the badge
     // needs a separate (hover) transform and MapLibre already claimed the
     // outer one — three nodes, three independent transforms.
     const ring = document.createElement('div')
+    // A suggestion that is merely *offered* gets a slower, fainter ring than a
+    // pin the user actually picked — it should catch the eye without competing
+    // with the selection. `${color}80` rather than a lower keyframe opacity
+    // because the animation drives opacity itself and would override it.
+    const idle = suggestion && !selected
     ring.style.cssText = `
-      position:absolute;inset:-6px;border-radius:50%;
-      background:${color};pointer-events:none;
-      animation:marker-pulse 2s ease-out infinite;
+      position:absolute;inset:-6px;border-radius:${radius};
+      background:${idle ? `${color}80` : color};pointer-events:none;
+      animation:marker-pulse ${idle ? '2.8s' : '2s'} ease-out infinite;
     `
     outer.appendChild(ring)
   }
@@ -112,7 +125,7 @@ export function makeMarkerEl(
     display:flex;align-items:center;justify-content:center;
     background:${color};
     border:2px solid ${selected ? 'rgba(255,255,255,0.9)' : 'white'};
-    border-radius:50%;
+    border-radius:${radius};
     box-shadow:${
       selected
         ? `0 8px 24px ${color}80, 0 2px 6px rgba(0,0,0,0.5)`

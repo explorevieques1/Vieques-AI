@@ -1,15 +1,33 @@
-import { useEffect, useRef } from 'react'
-import { Home, Menu, Navigation, Search, Sparkles, User, X } from 'lucide-react'
+import {
+  CreditCard,
+  Heart,
+  Home,
+  Layers,
+  LogOut,
+  Map,
+  Menu,
+  Navigation,
+  Route,
+  Sparkles,
+} from 'lucide-react'
 
-import { CATEGORIES, type CategorySlug } from '../lib/place'
 import { LANDING_URL } from '../lib/api'
+import { MAP_STYLES } from '../lib/mapStyles'
+import type { CategorySlug } from '../lib/place'
+import { signOut } from '../lib/supabase'
 import { TIER_LABELS, useEntitlement } from '../lib/entitlement'
+import CategoryRow from './CategoryRow'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 
@@ -20,28 +38,41 @@ type Props = {
   aiOpen: boolean
   onDirections: () => void
   dirOpen: boolean
-  onProfile: () => void
-  profileOpen: boolean
-  /** Quick search takes over the pill row rather than adding a third one. */
-  onToggleSearch: () => void
-  searchOpen: boolean
-  /** The field itself, supplied by MapView — it owns the place data. */
-  search: React.ReactNode
+  onSaved: () => void
+  savedOpen: boolean
+  onBuildItinerary: () => void
+  styleId: string
+  onStyleChange: (id: string) => void
+  /** Mobile hides the pills here — they get their own floating row. */
+  showCategories: boolean
 }
 
 /**
- * The floating chrome across the top of the map: a compact left-hand control
- * cluster (menu, profile, search) and the category pills.
+ * The floating chrome across the top of the map: brand at the left, Build
+ * Itinerary and the ☰ menu at the right.
  *
- * The map is the product, so the chrome takes as little of it as possible. The
- * brand lockup that used to sit here is gone — the landing site already says
- * whose app this is, and on a phone it cost a third of the top row. Directions
- * / Ask AI / Home moved into the ☰ menu for the same reason; they are
- * destinations, not things you need one tap from at all times.
+ * The row itself is transparent — no `.glass`, no border. The fill lives on the
+ * individual controls, which is what keeps them legible over satellite tiles
+ * while leaving the map visible between them. A full-width bar over a map reads
+ * as a website header; a pair of floating controls reads as a map app.
  *
- * Everything is left-aligned: on a phone the right edge is where the thumb
- * covers the map, and a single anchored cluster reads as one control rather
- * than two floating islands.
+ * WHAT IS NOT HERE ANY MORE, AND WHERE IT WENT
+ * --------------------------------------------
+ *  - Profile and Search moved to the bottom nav and into the sheet respectively.
+ *    That also let the capture-phase focus guard go: it existed solely because
+ *    the quick-search field sat OUTSIDE the vaul drawer, and vaul never forwards
+ *    its `modal` prop to Radix's Dialog.Root (see node_modules/vaul —
+ *    `createElement(DialogPrimitive.Root, { defaultOpen, onOpenChange, open })`),
+ *    so our `modal={false}` sheet is still a *modal* dialog: it traps focus and
+ *    bounces anything focused outside straight back inside. The search bar now
+ *    lives inside the drawer, where the trap does not apply.
+ *  - The category pills moved to CategoryRow, which is also the only copy now.
+ *    They used to be rendered twice — inline for `lg` and as a second row below
+ *    it — with both kept in step by hand.
+ *
+ * `pointer-events-auto` on each control is still load-bearing for the same
+ * modal-dialog reason: the body gets `pointer-events: none` while the sheet is
+ * mounted, and the sheet is now always mounted on mobile.
  */
 function MapTopBar({
   active,
@@ -50,201 +81,150 @@ function MapTopBar({
   aiOpen,
   onDirections,
   dirOpen,
-  onProfile,
-  profileOpen,
-  onToggleSearch,
-  searchOpen,
-  search,
+  onSaved,
+  savedOpen,
+  onBuildItinerary,
+  styleId,
+  onStyleChange,
+  showCategories,
 }: Props) {
   const { tier, hasAccess, credits } = useEntitlement()
-  const pillsRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLDivElement>(null)
-
-  /**
-   * Let the quick-search field keep focus while the map sheet is open.
-   *
-   * vaul builds on Radix Dialog but never forwards its own `modal` prop to
-   * `Dialog.Root` (see node_modules/vaul — `createElement(DialogPrimitive.Root,
-   * { defaultOpen, onOpenChange, open })`), so our `modal={false}` sheet is
-   * still a *modal* Radix dialog: it traps focus, and anything focused outside
-   * the drawer is bounced straight back inside. That is why the old floating
-   * search could not be typed into.
-   *
-   * The sheet's own search is inside the drawer and unaffected. This field is
-   * not, so it opts itself out: a capture-phase listener stops focus events
-   * involving this subtree before they reach the document-level trap.
-   */
-  useEffect(() => {
-    if (!searchOpen) return
-    const guard = (e: FocusEvent) => {
-      const el = searchRef.current
-      if (!el) return
-      const inside = (n: EventTarget | null) => n instanceof Node && el.contains(n)
-      if (inside(e.target) || inside(e.relatedTarget)) e.stopPropagation()
-    }
-    document.addEventListener('focusin', guard, true)
-    document.addEventListener('focusout', guard, true)
-    return () => {
-      document.removeEventListener('focusin', guard, true)
-      document.removeEventListener('focusout', guard, true)
-    }
-  }, [searchOpen])
-
-  // The pill row scrolls horizontally on phones — eight categories will never
-  // fit 390px. Keep the active one in view so tapping "Essentials" and coming
-  // back doesn't leave the selection parked off screen.
-  useEffect(() => {
-    const row = pillsRef.current
-    if (!row || !active) return
-    const el = row.querySelector<HTMLElement>(`[data-slug="${active}"]`)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-  }, [active])
-
-  const pill =
-    'shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors whitespace-nowrap sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm'
-  const pillOn = `${pill} bg-primary text-primary-foreground font-semibold`
-  const pillOff = `${pill} text-muted-foreground hover:bg-white/5 hover:text-foreground`
-
-  const tabs = (
-    <nav className="flex w-max gap-0.5 sm:gap-1">
-      {CATEGORIES.map((c) => (
-        <button
-          key={c.slug}
-          data-slug={c.slug}
-          onClick={() => onSelect(c.slug)}
-          className={active === c.slug ? pillOn : pillOff}
-        >
-          {c.label}
-        </button>
-      ))}
-    </nav>
-  )
-
   const menuItem = 'gap-2.5 rounded-lg px-2.5 py-2 text-sm'
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 pad-safe-top pad-safe-x">
-      <div className="flex items-start gap-2 p-3 sm:gap-3 sm:p-5">
-        {/* Left cluster: menu + profile, one glass pill. */}
-        <div className="glass pointer-events-auto flex shrink-0 items-center gap-1 rounded-2xl p-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label="Menu"
-              className="grid h-9 w-9 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/8 data-[state=open]:bg-primary data-[state=open]:text-primary-foreground sm:h-10 sm:w-10"
-            >
-              <Menu size={18} />
-            </DropdownMenuTrigger>
-            {/* The frosted look by hand rather than `.glass`: this content
-                already ships a `bg-popover`, and two rules setting
-                background-color from the same layer is a coin flip. */}
-            <DropdownMenuContent
-              align="start"
-              sideOffset={10}
-              className="w-56 rounded-2xl border border-white/10 bg-popover/85 p-1.5 backdrop-blur-xl backdrop-saturate-150"
-            >
-              <DropdownMenuLabel className="px-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                {hasAccess
-                  ? (TIER_LABELS[tier] ?? tier)
-                  : `${credits} AI message${credits === 1 ? '' : 's'} left`}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-white/8" />
-              <DropdownMenuItem
-                onSelect={onDirections}
-                data-active={dirOpen || undefined}
-                className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
-              >
-                <Navigation size={15} />
-                Directions
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={onAskAi}
-                data-active={aiOpen || undefined}
-                className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
-              >
-                <Sparkles size={15} />
-                Ask AI
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className={menuItem}>
-                <a href={LANDING_URL}>
-                  <Home size={15} />
-                  Home
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-5 sm:py-3">
+        {/* Brand. The landing site already says whose app this is, so this is a
+            mark and a wordmark, not a lockup with a tagline. */}
+        <a
+          href={LANDING_URL}
+          className="pointer-events-auto flex shrink-0 items-center gap-2"
+          aria-label="Explore Vieques — home"
+        >
+          <img src="/logo.svg" alt="" className="h-8 w-8 rounded-[10px]" />
+          <span className="text-[13px] font-semibold tracking-tight text-foreground">Vieques</span>
+        </a>
 
-          {/* Profile. Avatar-style so it reads as "you" rather than a nav item. */}
-          <button
-            onClick={onProfile}
-            aria-label="Your profile"
-            title="Your profile"
-            className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-colors sm:h-10 sm:w-10 ${
-              profileOpen ? 'bg-primary text-primary-foreground' : 'hover:bg-white/8'
-            }`}
-          >
-            <User size={17} />
-            {/* Quiet nudge when the free trial is spent. */}
-            {!hasAccess && credits <= 0 && (
-              <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
-            )}
-          </button>
-
-          {/* Quick search. Trades the pill row for a field rather than adding a
-              third row — on a phone the chrome budget is the whole point. */}
-          <button
-            onClick={onToggleSearch}
-            aria-label={searchOpen ? 'Close search' : 'Search'}
-            aria-expanded={searchOpen}
-            title="Search"
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-colors sm:h-10 sm:w-10 ${
-              searchOpen ? 'bg-primary text-primary-foreground' : 'hover:bg-white/8'
-            }`}
-          >
-            {searchOpen ? <X size={17} /> : <Search size={17} />}
-          </button>
-        </div>
-
-        {/* Category pills — same row as the cluster from lg up, own row below.
-            min-w-0 + overflow lets this shrink and scroll rather than pushing
-            past the viewport edge. */}
-        {!searchOpen && (
-          <div className="glass scrollbar-thin pointer-events-auto hidden min-w-0 overflow-x-auto rounded-2xl p-1.5 lg:block">
-            {tabs}
-          </div>
+        {showCategories && (
+          <CategoryRow active={active} onSelect={onSelect} variant="inline" />
         )}
-      </div>
 
-      {/* Pills row for anything narrower than lg.
+        <div className="flex-1" />
 
-          Left-aligned and scrolled, not centred: inside overflow-x-auto,
-          centring clips the START of a too-wide row and no amount of swiping
-          gets it back. `fade-r` advertises that there is more to the right —
-          on a phone the row is always wider than the screen. */}
-      {/* Search, when open, is rendered here at every width — never in both
-          this row and the lg one. Two copies would mean two mounted fields
-          fighting over autofocus and the "/" shortcut. */}
-      {searchOpen ? (
-        <div className="px-3 pb-1 sm:px-5">
-          {/* pointer-events-auto is load-bearing, not decoration: the modal
-              Radix dialog behind the sheet puts `pointer-events: none` on the
-              body, so anything over the map that doesn't opt back in is dead
-              to touch. */}
-          <div
-            ref={searchRef}
-            className="glass pointer-events-auto rounded-2xl p-1.5 lg:w-[26rem]"
+        {/* Build Itinerary — UI only for now. Deliberately NOT wired to
+            useFeature('itinerary'): that slug exists but nothing behind it does,
+            so gating it would render a locked button on every tier, which reads
+            as broken software rather than an upsell. */}
+        <button
+          onClick={onBuildItinerary}
+          className="glass pointer-events-auto flex h-9 shrink-0 items-center gap-1.5 rounded-2xl px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-white/8"
+        >
+          <Route size={14} />
+          Build Itinerary
+        </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Menu"
+            className="glass pointer-events-auto grid h-9 w-9 shrink-0 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8 data-[state=open]:bg-primary data-[state=open]:text-primary-foreground"
           >
-            {search}
-          </div>
-        </div>
-      ) : (
-        <div className="px-3 pb-1 sm:px-5 lg:hidden">
-          <div className="glass pointer-events-auto w-max max-w-full rounded-2xl p-1">
-            <div ref={pillsRef} className="no-scrollbar fade-r overflow-x-auto">
-              {tabs}
-            </div>
-          </div>
-        </div>
-      )}
+            <Menu size={18} />
+          </DropdownMenuTrigger>
+          {/* The frosted look by hand rather than `.glass`: this content already
+              ships a `bg-popover`, and two rules setting background-color from
+              the same layer is a coin flip. */}
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="w-56 rounded-2xl border border-white/10 bg-popover/85 p-1.5 backdrop-blur-xl backdrop-saturate-150"
+          >
+            <DropdownMenuLabel className="px-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              {hasAccess
+                ? (TIER_LABELS[tier] ?? tier)
+                : `${credits} AI message${credits === 1 ? '' : 's'} left`}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-white/8" />
+
+            <DropdownMenuItem asChild className={menuItem}>
+              <a href={LANDING_URL}>
+                <Home size={15} />
+                Home
+              </a>
+            </DropdownMenuItem>
+
+            {/* View — the basemap switcher. It also lives in the sheet's search
+                stack as a Layers chip; this is the same setter, so the two can
+                never disagree. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className={menuItem}>
+                <Layers size={15} />
+                View
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-44 rounded-2xl border border-white/10 bg-popover/85 p-1.5 backdrop-blur-xl backdrop-saturate-150">
+                <DropdownMenuRadioGroup value={styleId} onValueChange={onStyleChange}>
+                  {MAP_STYLES.map((s) => (
+                    <DropdownMenuRadioItem key={s.id} value={s.id} className={menuItem}>
+                      <Map size={14} />
+                      {s.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            <DropdownMenuItem asChild className={menuItem}>
+              <a href={`${LANDING_URL}/pricing`}>
+                <CreditCard size={15} />
+                Buy Credits
+              </a>
+            </DropdownMenuItem>
+
+            {/* Desktop-only destinations. On a phone all three are bottom-nav
+                cells, so repeating them here would be two controls for one
+                thing. `lg:` rather than `sm:` because that is where the desktop
+                two-panel layout actually starts being usable. */}
+            <DropdownMenuSeparator className="bg-white/8 lg:hidden" />
+            <DropdownMenuItem
+              onSelect={onDirections}
+              data-active={dirOpen || undefined}
+              className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
+            >
+              <Navigation size={15} />
+              Directions
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={onAskAi}
+              data-active={aiOpen || undefined}
+              className={`${menuItem} hidden data-active:bg-primary/15 data-active:text-primary sm:flex`}
+            >
+              <Sparkles size={15} />
+              Ask AI
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={onSaved}
+              data-active={savedOpen || undefined}
+              className={`${menuItem} hidden data-active:bg-primary/15 data-active:text-primary sm:flex`}
+            >
+              <Heart size={15} />
+              Saved
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator className="bg-white/8" />
+            <DropdownMenuItem
+              onSelect={async () => {
+                await signOut()
+                // Land on the marketing site rather than a dead app shell —
+                // AccessGate would bounce them there anyway.
+                window.location.href = LANDING_URL
+              }}
+              className={menuItem}
+            >
+              <LogOut size={15} />
+              Log Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   )
 }

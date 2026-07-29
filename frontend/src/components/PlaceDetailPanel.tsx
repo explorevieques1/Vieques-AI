@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   Clock,
   Globe,
+  Heart,
   Mail,
   MapPin,
   Navigation,
@@ -50,6 +51,11 @@ type Props = {
   hero?: boolean
   extraPosition?: 'after-description' | 'after-tags'
   statsPosition?: 'top' | 'bottom'
+  /** Optional so callers that don't offer saving render no heart. */
+  saved?: boolean
+  onToggleSave?: (p: Place) => void
+  /** Mobile: pad the sticky action bar so it clears the bottom nav. */
+  navPad?: boolean
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -110,6 +116,9 @@ function PlaceDetailPanel({
   hero = true,
   extraPosition = 'after-description',
   statsPosition = 'top',
+  saved = false,
+  onToggleSave,
+  navPad = false,
 }: Props) {
   const mappable = isMappable(place)
 
@@ -159,6 +168,21 @@ function PlaceDetailPanel({
             className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
           >
             <ChevronDown size={16} />
+          </button>
+        )}
+        {onToggleSave && (
+          <button
+            onClick={() => onToggleSave(place)}
+            aria-label={saved ? 'Remove from saved' : 'Save this place'}
+            aria-pressed={saved}
+            title={saved ? 'Saved' : 'Save'}
+            className="grid h-8 w-8 place-items-center rounded-xl bg-black/50 text-foreground backdrop-blur hover:text-primary"
+          >
+            <Heart
+              size={14}
+              className={saved ? 'text-primary' : ''}
+              fill={saved ? 'currentColor' : 'none'}
+            />
           </button>
         )}
         <button
@@ -311,7 +335,11 @@ function PlaceDetailPanel({
 
       {/* Sticky action bar */}
       {mappable && (
-        <div className="shrink-0 bg-gradient-to-b from-transparent to-background/85 px-4 pb-4 pt-3">
+        <div
+          className={`shrink-0 bg-gradient-to-b from-transparent to-background/85 px-4 pt-3 ${
+            navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+          }`}
+        >
           {onGetDirections ? (
             <button
               onClick={() => onGetDirections(place)}
