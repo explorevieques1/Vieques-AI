@@ -34,23 +34,29 @@ export const TOP_BAR_H = 88
 /**
  * Mobile chrome, measured piece by piece rather than as one number.
  *
- * The phone layout stacks four independent things above the map — the banner,
- * the greeting card, the category row, and whichever of those is currently
- * hidden — so a single TOP_BAR_H_MOBILE constant could only ever be right for
- * one combination. Minimising the greeting card genuinely gives the map 60px
- * back, and the camera should know.
+ * The phone layout stacks independent things above the map — the greeting card,
+ * the category row, the ☰ row, and whichever of those is currently hidden — so a
+ * single TOP_BAR_H_MOBILE constant could only ever be right for one
+ * combination. Minimising the greeting card genuinely gives the map 60px back,
+ * and the camera should know.
+ *
+ * There is no banner term any more: the phone has no top bar. The greeting card
+ * is flush to the safe-area top and the ☰ trigger sits *below* the category row,
+ * so the menu is now a term at the bottom of the stack rather than 52px at the
+ * top of it.
  *
  * Budget at 390x844 with the greeting expanded:
- *   47 notch + 52 banner + 6 + 100 greeting + 6 + 40 categories = 251
- *   425 map band
+ *   47 notch + 100 greeting + 6 + 40 categories + 6 + 36 menu = 235
+ *   441 map band
  *   168 sheet at its lowest stop (the bottom nav overlays its lowest 90)
  * Keep these in step with the actual classes in MapTopBar / GreetingCard /
  * CategoryRow — they are measurements of those components, not free parameters.
  */
-export const BANNER_H_MOBILE = 52
 export const GREETING_H = 100
 export const GREETING_H_MIN = 40
 export const CATEGORY_ROW_H = 40
+/** The ☰ row below the categories: a 36px (h-9) trigger, always on screen. */
+export const MENU_ROW_H = 36
 export const CHROME_GAP = 6
 /** Inner height of the bottom nav, excluding its safe-area padding. */
 export const BOTTOM_NAV_H = 56
@@ -71,16 +77,18 @@ export function mobileTopInset({
   greeting: 'expanded' | 'minimized' | 'hidden'
   categories: boolean
 }): number {
-  let h = safeTop + BANNER_H_MOBILE
+  let h = safeTop
   if (greeting !== 'hidden') {
-    h += CHROME_GAP + (greeting === 'expanded' ? GREETING_H : GREETING_H_MIN)
+    h += greeting === 'expanded' ? GREETING_H : GREETING_H_MIN
   }
   if (categories) h += CHROME_GAP + CATEGORY_ROW_H
+  // The ☰ row is the one piece that is on screen in every mode.
+  h += CHROME_GAP + MENU_ROW_H
   return h
 }
 
 /** Kept for the desktop-only callers that still want one number. */
-export const TOP_BAR_H_MOBILE = 252
+export const TOP_BAR_H_MOBILE = 236
 
 /**
  * The three mobile sheet stops, per §5 of the mobile rebuild:

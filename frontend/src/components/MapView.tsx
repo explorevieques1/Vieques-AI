@@ -35,7 +35,6 @@ import {
   mobileTopInset,
   safeInsets,
   useMapInsets,
-  BANNER_H_MOBILE,
   DETAIL_PANEL_W,
   RESULTS_PANEL_W,
   SHEET_FULL,
@@ -967,47 +966,71 @@ function MapView({
     <div className="absolute inset-0">
       <div ref={mapContainer} style={{ position: 'absolute', inset: 0 }} />
 
-      <MapTopBar
-        active={category}
-        onSelect={selectCategory}
-        onAskAi={onAskAi}
-        aiOpen={mode === 'ai'}
-        onDirections={onDirections}
-        dirOpen={dirOpen}
-        onSaved={onSaved}
-        savedOpen={mode === 'saved'}
-        onBuildItinerary={() => setItineraryNote(true)}
-        styleId={styleId}
-        onStyleChange={changeStyle}
-        showCategories={!isMobile}
-      />
-
-      {/* Phone chrome under the banner: the greeting card, then the category
-          row. Both float over the map and both must opt back into pointer
-          events — the sheet below is a modal Radix dialog, so the body carries
-          `pointer-events: none` (see the note in MapTopBar).
-          Only in Explore: in the chat or the profile the sheet is full-height
-          and this would just be covered chrome stealing 150px from the map. */}
-      {isMobile && mode === 'explore' && (
-        <div
-          className="pointer-events-none absolute inset-x-0 z-20 flex flex-col gap-1.5 pad-safe-x"
-          style={{ top: `calc(var(--sat) + ${BANNER_H_MOBILE}px)` }}
-        >
-          <GreetingCard
-            daypart={part}
-            weather={weather}
-            suggestion={suggestion}
-            loadingSuggestion={loadingSuggestion}
-            minimized={greetingMin}
-            onToggleMinimize={() => setGreetingMin((v) => !v)}
-            onOpenSuggestion={openSuggestion}
-            onNextSuggestion={() => {
-              void nextSuggestion().then((s) => s && openSuggestion(s))
-            }}
+      {(() => {
+        const topBar = (
+          <MapTopBar
+            active={category}
+            onSelect={selectCategory}
+            onAskAi={onAskAi}
+            aiOpen={mode === 'ai'}
+            onDirections={onDirections}
+            dirOpen={dirOpen}
+            onSaved={onSaved}
+            savedOpen={mode === 'saved'}
+            onBuildItinerary={() => setItineraryNote(true)}
+            styleId={styleId}
+            onStyleChange={changeStyle}
+            showCategories={!isMobile}
           />
-          <CategoryRow active={category} onSelect={selectCategory} />
-        </div>
-      )}
+        )
+
+        // Desktop keeps its own absolutely-positioned banner row.
+        if (!isMobile) return topBar
+
+        /* Phone chrome, top to bottom: greeting card flush to the safe-area top,
+           then the category row, then the ☰ trigger. There is no banner above
+           any of it — no logo, no Build Itinerary button (that moved into the
+           menu) — so the stack starts at `var(--sat)` and the greeting sits
+           against the top of the screen.
+
+           Everything here floats over the map and must opt back into pointer
+           events: the sheet below is a modal Radix dialog, so the body carries
+           `pointer-events: none` (see the note in MapTopBar).
+
+           The greeting and categories are Explore-only — in the chat or the
+           profile the sheet is full-height and they would just be covered chrome
+           stealing 150px from the map. The menu is not: it is the only route to
+           Home / Buy Credits / Log Out, so it renders in every mode. */
+        return (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-start gap-1.5 pad-safe-x"
+            style={{ top: 'var(--sat)' }}
+          >
+            {mode === 'explore' && (
+              <>
+                <div className="w-full">
+                  <GreetingCard
+                    daypart={part}
+                    weather={weather}
+                    suggestion={suggestion}
+                    loadingSuggestion={loadingSuggestion}
+                    minimized={greetingMin}
+                    onToggleMinimize={() => setGreetingMin((v) => !v)}
+                    onOpenSuggestion={openSuggestion}
+                    onNextSuggestion={() => {
+                      void nextSuggestion().then((s) => s && openSuggestion(s))
+                    }}
+                  />
+                </div>
+                <div className="w-full">
+                  <CategoryRow active={category} onSelect={selectCategory} />
+                </div>
+              </>
+            )}
+            {topBar}
+          </div>
+        )
+      })()}
 
       {isMobile ? (
         <>
