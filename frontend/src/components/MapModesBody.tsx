@@ -3,7 +3,6 @@ import { X } from 'lucide-react'
 import { MAP_STYLES } from '../lib/mapStyles'
 
 type Props = {
-  open: boolean
   onClose: () => void
   styleId: string
   onStyleChange: (id: string) => void
@@ -12,11 +11,11 @@ type Props = {
 }
 
 /**
- * The basemap picker, as a centred modal card over the map.
+ * The basemap picker, as a body for the mobile map sheet.
  *
- * Modelled on the native Maps "Map Modes" sheet: a titled card with an × in the
- * corner, a row of labelled thumbnails you tap to switch basemap, and toggles
- * below for the overlays. The thumbnails matter — a list of the words
+ * Modelled on the native Maps "Map Modes" panel: a centred title with an × in
+ * the corner, a row of labelled thumbnails you tap to switch basemap, and the
+ * overlay toggles below. The thumbnails matter — a list of the words
  * "Satellite / Streets / Outdoor / Basic" asks you to remember what each one
  * looks like, which is exactly the thing a picture answers for free.
  *
@@ -25,9 +24,13 @@ type Props = {
  * need to tell green-and-roads from photography, not to inspect a specific
  * place. Four inline SVGs are ~1kB and render instantly offline.
  *
- * Not a vaul Drawer. The map sheet already owns the bottom edge and is always
- * mounted; a second drawer stacked on it fights over drag gestures and over the
- * body's `pointer-events: none`. This is a plain fixed overlay, so it composes.
+ * NOT a fixed overlay, which is what this was first and why it rendered *behind*
+ * the sheet: the sheet is a vaul drawer portalled to the body at z-50, so
+ * nothing rendered as a sibling of the map can sit above it whatever z-index it
+ * claims. The phone layout has exactly one display surface, so this is simply
+ * another thing that surface can show — same shape as SavedBody / ProfileBody /
+ * AiChatBody, and it inherits the sheet's drag, snap and safe-area handling for
+ * free instead of reimplementing them.
  */
 
 /** Tiny abstract basemap previews, keyed by MAP_STYLES id. */
@@ -98,10 +101,10 @@ function Toggle({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <span className="text-[15px] text-foreground">
-        {label}
+      <span className="min-w-0">
+        <span className="block text-[15px] text-foreground">{label}</span>
         {hint && (
-          <span className="ml-2 text-[11px] text-muted-foreground">{hint}</span>
+          <span className="mt-0.5 block text-[11px] text-muted-foreground">{hint}</span>
         )}
       </span>
       <button
@@ -124,48 +127,38 @@ function Toggle({
   )
 }
 
-export default function MapModesSheet({
-  open,
+export default function MapModesBody({
   onClose,
   styleId,
   onStyleChange,
   labels,
   onLabelsChange,
 }: Props) {
-  if (!open) return null
-
   return (
-    // z-50: above the map sheet (z-40 overlay) and the chrome stack (z-30).
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <button
-        aria-label="Close map modes"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40"
-      />
+    // `min-h-0` and the inner scroller: the sheet clips its child to the active
+    // snap height, so this has to be allowed to shrink rather than overflow it.
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header. The × is the way out — the sheet cannot be dismissed by
+          dragging (`dismissible={false}`), so without it the only exit would be
+          the bottom nav, which also changes mode. */}
+      <div className="relative flex shrink-0 items-center justify-center px-4 pb-3 pt-1">
+        <h2 className="font-display text-[17px] font-semibold tracking-tight text-foreground">
+          Map Modes
+        </h2>
+        <button
+          onClick={onClose}
+          aria-label="Close map modes"
+          className="absolute right-4 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-foreground transition-colors hover:bg-white/16"
+        >
+          <X size={17} />
+        </button>
+      </div>
 
-      <div
-        role="dialog"
-        aria-label="Map Modes"
-        className="glass relative m-3 w-full max-w-md rounded-3xl p-4 shadow-2xl"
-        style={{ marginBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-      >
-        <div className="relative flex items-center justify-center">
-          <h2 className="font-display text-[19px] font-semibold tracking-tight text-foreground">
-            Map Modes
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute right-0 grid h-8 w-8 place-items-center rounded-full bg-white/10 text-foreground transition-colors hover:bg-white/16"
-          >
-            <X size={17} />
-          </button>
-        </div>
-
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
         {/* The thumbnails. `grid-cols-4` matches the four basemaps; if a fifth is
             ever added this wraps to a second row rather than shrinking them
             below a legible size. */}
-        <div className="mt-4 grid grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           {MAP_STYLES.map((s) => {
             const on = s.id === styleId
             return (
@@ -195,10 +188,15 @@ export default function MapModesSheet({
         </div>
 
         <div className="mt-4 overflow-hidden rounded-2xl bg-white/6">
-          <Toggle label="Labels" checked={labels} onChange={onLabelsChange} />
+          <Toggle
+            label="Labels"
+            hint="Place names drawn by the basemap"
+            checked={labels}
+            onChange={onLabelsChange}
+          />
         </div>
 
-        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+        <p className="mt-4 text-center text-[11px] text-muted-foreground">
           © MapTiler · OpenStreetMap
         </p>
       </div>

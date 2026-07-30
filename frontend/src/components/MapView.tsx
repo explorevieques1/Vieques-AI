@@ -50,7 +50,7 @@ import FilterRow from './FilterRow'
 import GreetingCard from './GreetingCard'
 import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
-import MapModesSheet from './MapModesSheet'
+import MapModesBody from './MapModesBody'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
 import ProfileBody from './ProfileBody'
@@ -577,6 +577,9 @@ function MapView({
       // A place selected in Explore has no meaning in the chat or the profile,
       // and leaving it set would render a detail panel instead of the mode.
       setSelected(null)
+      // Same for Map Modes, which outranks every mode in the sheet body: left
+      // open, tapping Ask AI would show the basemap picker under the AI title.
+      setModesOpen(false)
       setSnap(
         next === 'ai' || next === 'profile'
           ? SHEET_FULL
@@ -956,11 +959,22 @@ function MapView({
   /**
    * What the mobile sheet is showing.
    *
-   * One surface, five states. A selected place wins over the mode because it is
+   * One surface, six states. A selected place wins over the mode because it is
    * a drill-down *within* whichever list produced it — its Back button returns
    * to that list, not to Explore.
+   *
+   * Map Modes outranks all of them: it is a modal errand — pick a basemap, come
+   * back — and whatever is underneath is still there when it closes.
    */
-  const sheetBody = selected ? (
+  const sheetBody = modesOpen ? (
+    <MapModesBody
+      onClose={() => setModesOpen(false)}
+      styleId={styleId}
+      onStyleChange={changeStyle}
+      labels={mapLabels}
+      onLabelsChange={setMapLabels}
+    />
+  ) : selected ? (
     <PlaceDetailPanel
       place={selected}
       onClose={clearSelection}
@@ -1072,7 +1086,12 @@ function MapView({
       {isMobile ? (
         <>
           <MapSheet
-            title={selected?.name ?? (category ? categoryMeta(category).label : 'Explore Vieques')}
+            title={
+              modesOpen
+                ? 'Map Modes'
+                : (selected?.name ??
+                  (category ? categoryMeta(category).label : 'Explore Vieques'))
+            }
             snap={snap}
             onSnapChange={setSnap}
           >
@@ -1172,15 +1191,29 @@ function MapView({
       >
         {/* Map Modes. Sits directly above the zoom stack, where native Maps puts
             its 3D button — the basemap is a property of the view, so its control
-            belongs with the other view controls rather than in the ☰ menu. */}
-        <button
-          onClick={() => setModesOpen(true)}
-          aria-label="Map modes"
-          aria-haspopup="dialog"
-          className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8"
-        >
-          <Globe size={20} />
-        </button>
+            belongs with the other view controls rather than in the ☰ menu.
+
+            Phone only: it opens into the map sheet, and desktop has no sheet.
+            Desktop already carries the four-up switcher permanently in the
+            results panel, so there is nothing here for it to add. */}
+        {isMobile && (
+          <button
+            onClick={() => {
+              setModesOpen(true)
+              // Raise the sheet with it. The body is clipped to the active snap
+              // height, so opening this at the collapsed stop would render the
+              // thumbnails inside a 168px pill — the panel has to be open for
+              // its contents to be visible. PREVIEW rather than FULL: the card
+              // is short, and the point of picking a basemap is watching the
+              // map change behind it.
+              setSnap(SHEET_PREVIEW)
+            }}
+            aria-label="Map modes"
+            className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8"
+          >
+            <Globe size={20} />
+          </button>
+        )}
 
         <div className="glass flex flex-col rounded-2xl p-1">
           <button
@@ -1213,15 +1246,6 @@ function MapView({
           ◎
         </button>
       </div>
-
-      <MapModesSheet
-        open={modesOpen}
-        onClose={() => setModesOpen(false)}
-        styleId={styleId}
-        onStyleChange={changeStyle}
-        labels={mapLabels}
-        onLabelsChange={setMapLabels}
-      />
 
       {/* Scale / attribution strip. */}
       <div
