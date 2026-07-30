@@ -374,6 +374,66 @@ app.get('/api/snorkel-spots/:id/zones', requireAuth, requireTier(pool, 'snorkel_
 
 
 // ----------------------------------------------------------------------------
+//  Kayaking
+// ----------------------------------------------------------------------------
+//  Same shape as snorkelling: pins from /api/kayak-spots, polygons from
+//  /api/kayak-spots/:id/zones as a GeoJSON FeatureCollection. See
+//  db/migrations/0033_kayaking.sql for why it is its own dataset rather than
+//  activity_listings rows.
+//
+//  No `offers_tours` here — that column is a snorkel-only addition from 0006
+//  (tour operators upselling guided trips off a spot). Kayak tour operators are
+//  ordinary activity_listings rows and are reached through the directory.
+//
+//  Gated on 'kayak_zones', which sits at the same tier as 'snorkel_zones'
+//  (Vacation+). Keep this key in step with FEATURES in backend/payments.js and
+//  FEATURE_TIER in frontend/src/lib/entitlement.tsx.
+// ----------------------------------------------------------------------------
+app.get('/api/kayak-spots', requireAuth, requireTier(pool, 'kayak_zones'), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, beach_id, description, difficulty, entry_notes,
+              launch_type, water_type, rental_nearby, latitude, longitude
+       FROM kayak_spots
+       WHERE is_active = true AND latitude IS NOT NULL
+       ORDER BY name`
+    )
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Zones for one kayak spot, returned as a GeoJSON FeatureCollection
+app.get('/api/kayak-spots/:id/zones', requireAuth, requireTier(pool, 'kayak_zones'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, label, zone_type, color, description,
+              ST_AsGeoJSON(area::geometry) AS geojson
+       FROM kayak_zones
+       WHERE spot_id = $1
+       ORDER BY sort_order`,
+      [req.params.id]
+    )
+    const features = rows.map((r) => ({
+      type: 'Feature',
+      properties: {
+        id: r.id,
+        label: r.label,
+        zone_type: r.zone_type,
+        color: r.color,
+        description: r.description,
+      },
+      geometry: JSON.parse(r.geojson),
+    }))
+    res.json({ type: 'FeatureCollection', features })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+
+// ----------------------------------------------------------------------------
 //  Hiking trails
 // ----------------------------------------------------------------------------
 //  Returns ONE GeoJSON FeatureCollection rather than the array-of-rows shape

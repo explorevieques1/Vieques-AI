@@ -142,11 +142,11 @@ export const FEATURES = {
                 'snorkel_zones_preview', 'favorites'],
   vacation:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
-                'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
+                'snorkel_zones', 'snorkel_detail', 'kayak_zones', 'biobay_guide', 'favorites',
                 'ai_chat', 'ai_history', 'support'],
   exploration: ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
-                'snorkel_zones', 'snorkel_detail', 'biobay_guide', 'favorites',
+                'snorkel_zones', 'snorkel_detail', 'kayak_zones', 'biobay_guide', 'favorites',
                 'ai_chat', 'ai_history', 'support', 'support_priority',
                 'itinerary', 'itinerary_export', 'offline_maps'],
 }
