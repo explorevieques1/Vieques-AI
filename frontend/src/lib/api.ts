@@ -224,6 +224,39 @@ export async function fetchSnorkelZones(spotId: string): Promise<ZoneFeatureColl
   return res.json()
 }
 
+/**
+ * Kayak put-ins. Same shape as snorkelling minus `offers_tours` (a snorkel-only
+ * column from 0006), plus three launch attributes that only make sense for a
+ * boat you carry. Zones reuse ZoneFeatureCollection unchanged — the polygon
+ * contract is identical, which is what lets lib/zoneLayers.ts draw both from one
+ * implementation.
+ */
+export type KayakSpot = {
+  id: string
+  name: string
+  beach_id: string | null
+  description: string | null
+  difficulty: string | null
+  entry_notes: string | null
+  launch_type: string | null
+  water_type: string | null
+  rental_nearby: boolean | null
+  latitude: number
+  longitude: number
+}
+
+export async function fetchKayakSpots(): Promise<KayakSpot[]> {
+  const res = await apiFetch(`/api/kayak-spots`)
+  if (!res.ok) throw new Error(`Kayak spots failed: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchKayakZones(spotId: string): Promise<ZoneFeatureCollection> {
+  const res = await apiFetch(`/api/kayak-spots/${spotId}/zones`)
+  if (!res.ok) throw new Error(`Kayak zones failed: ${res.status}`)
+  return res.json()
+}
+
 // ---------------------------------------------------------------------------
 //  Hiking trails
 // ---------------------------------------------------------------------------

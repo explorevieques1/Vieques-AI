@@ -27,6 +27,7 @@ import type {
   Beach,
   EssentialListing,
   FavoriteRow,
+  KayakSpot,
   RestaurantListing,
   ServiceListing,
   SnorkelSpot,
@@ -55,6 +56,7 @@ export type PlaceKind =
   | 'transport'
   | 'essential'
   | 'snorkel'
+  | 'kayak'
   | 'trail'
 
 /** A label/value pair rendered in the detail panel's 2x2 stat grid. */
@@ -589,6 +591,39 @@ export function snorkelToPlace(s: SnorkelSpot): Place {
     contact: {},
     icon: ACTIVITY_ICONS['snorkeling'],
     raw: s,
+  }
+}
+
+/**
+ * Kayak put-in → Place. Mirrors snorkelToPlace.
+ *
+ * The stat grid leads with difficulty and entry notes like snorkelling does,
+ * then adds the two things that decide whether a paddler can actually use the
+ * spot: what the launch is (carry over sand vs a ramp) and what water they end
+ * up in. `rental_nearby` is a tag rather than a stat — it is a yes/no worth
+ * scanning for in the list, not a sentence.
+ */
+export function kayakToPlace(k: KayakSpot): Place {
+  return {
+    id: `kayak:${k.id}`,
+    kind: 'kayak',
+    name: k.name,
+    subtitle: k.difficulty ? `Difficulty · ${k.difficulty}` : undefined,
+    latitude: k.latitude,
+    longitude: k.longitude,
+    tags: [k.difficulty, k.water_type, k.rental_nearby ? 'rentals' : null].filter(
+      (t): t is string => !!t,
+    ),
+    stats: stats(
+      ['Difficulty', k.difficulty],
+      ['Entry', k.entry_notes],
+      ['Launch', k.launch_type],
+      ['Water', k.water_type],
+    ),
+    description: k.description ?? undefined,
+    contact: {},
+    icon: ACTIVITY_ICONS['kayaking'],
+    raw: k,
   }
 }
 

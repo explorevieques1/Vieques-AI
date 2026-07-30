@@ -6,6 +6,7 @@ import {
   fetchBeaches,
   fetchEssentialCategories,
   fetchEssentialListings,
+  fetchKayakSpots,
   fetchRestaurantCategories,
   fetchRestaurantListings,
   fetchServiceCategories,
@@ -24,6 +25,7 @@ import {
   beachToPlace,
   categoryMeta,
   essentialToPlace,
+  kayakToPlace,
   restaurantToPlace,
   serviceToPlace,
   snorkelToPlace,
@@ -35,6 +37,14 @@ import {
 } from '../lib/place'
 
 export type Subcategory = { slug: string; label: string }
+
+/**
+ * Activity subcategories backed by their own spots+zones dataset and gated at
+ * Vacation tier. Kept as a set so the `locked` check and the fetch branches
+ * below cannot drift apart — adding a third water activity means adding its
+ * slug here and one fetch branch, not hunting for every `=== 'snorkeling'`.
+ */
+const WATER_SUBS = new Set(['snorkeling', 'kayaking'])
 
 type Result = {
   places: Place[]
@@ -66,8 +76,17 @@ type Result = {
 export function useCategoryPlaces(
   category: CategorySlug | null,
   subSlug: string | null,
-  /** Snorkelling is Vacation-tier (PRICING.md §4); skip the fetch without it. */
-  canSnorkel: boolean,
+  /**
+   * Vacation-tier water content — snorkelling AND kayaking (PRICING.md §4).
+   * Skip the fetch without it so a free-tier user gets the upsell rather than a
+   * 402 in the console.
+   *
+   * One flag rather than one per activity because both sit at the same tier by
+   * construction: `snorkel_zones` and `kayak_zones` are both rank 2 in
+   * 0033_kayaking.sql and both in the `vacation` bundle in payments.js. If they
+   * ever diverge, this splits into two booleans and WATER_SUBS goes with it.
+   */
+  canWaterZones: boolean,
   /**
    * Server-side beach filters.
    *
@@ -100,7 +119,8 @@ export function useCategoryPlaces(
   const subcategories = subFresh ? subCache!.rows : []
 
   // Entitlement is known synchronously, so this is derived rather than state.
-  const locked = category === 'activities' && subSlug === 'snorkeling' && !canSnorkel
+  const locked =
+    category === 'activities' && WATER_SUBS.has(subSlug ?? '') && !canWaterZones
 
   const meta = category ? categoryMeta(category) : null
   const shouldFetch =
@@ -188,17 +208,24 @@ export function useCategoryPlaces(
         break
 
       case 'activities':
-        // Two activity subcategories are backed by their own table rather than
-        // activity_listings, so they branch before the generic fetch. Both
+        // Three activity subcategories are backed by their own table rather
+        // than activity_listings, so they branch before the generic fetch. All
         // still appear as ordinary chips — the `activity_categories` rows
-        // ('snorkeling', 'hiking') exist purely to put them in the chip row;
-        // nothing joins them to a listing.
+        // ('snorkeling', 'hiking', 'kayaking') exist purely to put them in the
+        // chip row; nothing joins them to a listing.
 
         // Snorkelling is its own dataset (spots + zone polygons), not an
         // activity listing. Gate it before the request so a free-tier user
         // gets the upsell instead of a 402 in the console.
         if (subSlug === 'snorkeling') {
           fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
+          break
+        }
+        // Kayaking is the same shape as snorkelling — put-in pins with hazard
+        // and route polygons (db/migrations/0033_kayaking.sql) — and gated the
+        // same way, so it takes the same branch.
+        if (subSlug === 'kayaking') {
+          fetchKayakSpots().then((rows) => finish(rows.map(kayakToPlace)), fail)
           break
         }
         // Hiking returns a GeoJSON FeatureCollection rather than an array of

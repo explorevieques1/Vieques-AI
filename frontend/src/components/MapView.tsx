@@ -4,6 +4,7 @@ import { Globe, PanelLeftOpen, Route, X } from 'lucide-react'
 
 import {
   fetchDirections,
+  fetchKayakZones,
   fetchSnorkelZones,
   type AiPin,
   type DirectionsResult,
@@ -20,7 +21,7 @@ import { milesBetween } from '../lib/geo'
 import { deriveFilters, matchesFilters } from '../lib/filters'
 import { makeMarkerEl } from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
-import { drawSnorkelZones, removeSnorkelZones } from '../lib/snorkelLayers'
+import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import type { ShellMode } from '../lib/shell'
@@ -124,9 +125,11 @@ function MapView({
   dirOpen,
   onSaved,
 }: Props) {
-  // Snorkeling is the Vacation-tier upsell (PRICING.md §4). Advisory only —
-  // requireTier on the server and the RLS policy in 0022 are the real gates.
-  const canSnorkel = useFeature('snorkel_zones')
+  // Snorkelling and kayaking are the Vacation-tier upsell (PRICING.md §4).
+  // Advisory only — requireTier on the server and the RLS policies in 0022 /
+  // 0033 are the real gates. One flag because both sit at the same tier; see
+  // the note on useCategoryPlaces' `canWaterZones` parameter.
+  const canWaterZones = useFeature('snorkel_zones')
   const isMobile = useIsMobile()
   const safeArea = useSafeArea()
   // Drives the amber dot on the nav's Profile cell — the nudge that used to sit
@@ -158,7 +161,8 @@ function MapView({
   const [tagFilters, setTagFilters] = useState<Set<string>>(() => new Set())
   const [sort, setSort] = useState<SortKey>('nearest')
   const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
-  const [snorkelLegend, setSnorkelLegend] = useState<
+  /** Zone legend for whichever water activity is selected — snorkel or kayak. */
+  const [zoneLegend, setZoneLegend] = useState<
     { label: string | null; color: string | null; description: string | null }[]
   >([])
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
@@ -191,10 +195,11 @@ function MapView({
   const { places: rawPlaces, subcategories, loading, locked, error } = useCategoryPlaces(
     category,
     subSlug,
-    canSnorkel,
+    canWaterZones,
   )
 
   const snorkelling = category === 'activities' && subSlug === 'snorkeling'
+  const kayaking = category === 'activities' && subSlug === 'kayaking'
 
   // ---------------------------------------------------------------------------
   //  Derived list: snorkel tour toggle, distance, sort
@@ -428,14 +433,17 @@ function MapView({
           padding: padding(),
         })
       }
-      // Snorkel spots carry zone polygons; drawing them is the point of the
-      // Vacation tier, so load them as soon as one is picked.
-      if (p.kind === 'snorkel') {
-        fetchSnorkelZones((p.raw as { id: string }).id)
+      // Snorkel and kayak spots carry zone polygons; drawing them is the point
+      // of the Vacation tier, so load them as soon as one is picked. Identical
+      // handling either side — only the namespace and the fetch differ.
+      if (p.kind === 'snorkel' || p.kind === 'kayak') {
+        const ns = p.kind
+        const load = ns === 'snorkel' ? fetchSnorkelZones : fetchKayakZones
+        load((p.raw as { id: string }).id)
           .then((fc) => {
             if (!mapRef.current) return
-            drawSnorkelZones(mapRef.current, fc)
-            setSnorkelLegend(
+            drawZones(mapRef.current, ns, fc)
+            setZoneLegend(
               fc.features.map((f) => ({
                 label: f.properties.label,
                 color: f.properties.color,
@@ -454,8 +462,8 @@ function MapView({
     setSnap(SHEET_PREVIEW)
     const map = mapRef.current
     if (map) {
-      removeSnorkelZones(map)
-      setSnorkelLegend([])
+      removeAllZones(map)
+      setZoneLegend([])
     }
   }, [])
 
@@ -486,13 +494,13 @@ function MapView({
       // over from the previous one would silently swallow the click.
       setResultsCollapsed(false)
       setTourFilter('all')
-      setSnorkelLegend([])
+      setZoneLegend([])
       // Chips are derived per category, so any carried over would filter on a
       // tag the new list has never heard of and show an empty panel.
       setTagFilters(new Set())
       const map = mapRef.current
       if (map) {
-        removeSnorkelZones(map)
+        removeAllZones(map)
         removeTrails(map)
       }
     },
@@ -866,6 +874,16 @@ function MapView({
           blurb="See every snorkeling zone, where to enter the water, depth and difficulty — plus the Bio Bay moon-phase guide."
         />
       )}
+      {/* Same gate for kayaking. No "Book a Tour" toggle below it: that filters
+          on `offers_tours`, a snorkel_spots-only column (0006) — kayak
+          operators are ordinary activity_listings rows. */}
+      {kayaking && locked && (
+        <UpsellOverlay
+          feature="kayak_zones"
+          title="Kayaking zone maps"
+          blurb="Every put-in on the island with the hazards, wildlife areas and routes mapped — plus what the water is doing before you launch."
+        />
+      )}
       {snorkelling && !locked && (
         <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
           {(['all', 'tours'] as const).map((f) => (
@@ -883,13 +901,13 @@ function MapView({
           ))}
         </div>
       )}
-      {snorkelLegend.length > 0 && (
+      {zoneLegend.length > 0 && (
         <div className="rounded-2xl border border-white/6 bg-white/3 p-3">
           <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-            Snorkel zones
+            {kayaking ? 'Kayak zones' : 'Snorkel zones'}
           </div>
           <ul className="space-y-1.5">
-            {snorkelLegend.map((z, i) => (
+            {zoneLegend.map((z, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <span
                   className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
@@ -906,7 +924,7 @@ function MapView({
       )}
     </>
   )
-  const hasBanner = snorkelling || snorkelLegend.length > 0
+  const hasBanner = snorkelling || kayaking || zoneLegend.length > 0
 
   const results = category && (
     <ResultsList
