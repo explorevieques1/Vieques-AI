@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import { PanelLeftOpen, Route, X } from 'lucide-react'
+import { Globe, PanelLeftOpen, Route, X } from 'lucide-react'
 
 import {
   fetchDirections,
@@ -35,6 +35,7 @@ import {
   mobileTopInset,
   safeInsets,
   useMapInsets,
+  CHROME_TOP_PAD,
   DETAIL_PANEL_W,
   RESULTS_PANEL_W,
   SHEET_FULL,
@@ -49,6 +50,7 @@ import FilterRow from './FilterRow'
 import GreetingCard from './GreetingCard'
 import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
+import MapModesSheet from './MapModesSheet'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
 import ProfileBody from './ProfileBody'
@@ -139,6 +141,9 @@ function MapView({
   const routeMarkersRef = useRef<maplibregl.Marker[]>([])
 
   const [styleId, setStyleId] = useState(DEFAULT_MAP_STYLE)
+  /** The Map Modes card (basemap + overlays), opened by the globe button. */
+  const [modesOpen, setModesOpen] = useState(false)
+  const [mapLabels, setMapLabels] = useState(true)
   const [category, setCategory] = useState<CategorySlug | null>(null)
   const [subSlug, setSubSlug] = useState<string | null>(null)
   const [selected, setSelected] = useState<Place | null>(null)
@@ -346,6 +351,41 @@ function MapView({
     mapRef.current.setStyle(styleUrl(id))
     setStyleId(id)
   }
+
+  /**
+   * The Labels toggle in Map Modes: hide the basemap's own text.
+   *
+   * Applied by walking the style's symbol layers rather than by loading a
+   * separate "no labels" style URL — MapTiler does not publish one per basemap,
+   * and swapping styles would tear down and rebuild every marker layer we own.
+   *
+   * `place_`/`poi_` are excluded from nothing here on purpose: the intent is
+   * "quiet the map so my pins read", and our own pins are HTML markers, not
+   * style layers, so they are untouched by this.
+   *
+   * Re-runs on `styleId` because setStyle replaces the layer list wholesale — a
+   * basemap switch would otherwise silently bring the labels back. `styledata`
+   * is the event that fires once the new style's layers actually exist.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const apply = () => {
+      const style = map.getStyle()
+      if (!style?.layers) return
+      for (const layer of style.layers) {
+        if (layer.type !== 'symbol') continue
+        map.setLayoutProperty(layer.id, 'visibility', mapLabels ? 'visible' : 'none')
+      }
+    }
+
+    if (map.isStyleLoaded()) apply()
+    map.on('styledata', apply)
+    return () => {
+      map.off('styledata', apply)
+    }
+  }, [mapLabels, styleId])
 
   // Ask for location once, opportunistically. Denial is fine — distance labels
   // simply don't render rather than showing a made-up number.
@@ -796,7 +836,6 @@ function MapView({
       styleId={styleId}
       onStyleChange={changeStyle}
       compact={isMobile}
-      chipsHidden={sheetCollapsed}
       // Focusing the field opens the sheet all the way (§5's "hitting search
       // opens the panel"), a beat earlier than submitting would — the results
       // are then already visible as you type.
@@ -978,8 +1017,6 @@ function MapView({
             onSaved={onSaved}
             savedOpen={mode === 'saved'}
             onBuildItinerary={() => setItineraryNote(true)}
-            styleId={styleId}
-            onStyleChange={changeStyle}
             showCategories={!isMobile}
           />
         )
@@ -1004,7 +1041,7 @@ function MapView({
         return (
           <div
             className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-start gap-1.5 pad-safe-x"
-            style={{ top: 'var(--sat)' }}
+            style={{ top: `calc(var(--sat) + ${CHROME_TOP_PAD}px)` }}
           >
             {mode === 'explore' && (
               <>
@@ -1133,6 +1170,18 @@ function MapView({
           right: !isMobile && detailOpen ? `${DETAIL_PANEL_W + 40}px` : '1.25rem',
         }}
       >
+        {/* Map Modes. Sits directly above the zoom stack, where native Maps puts
+            its 3D button — the basemap is a property of the view, so its control
+            belongs with the other view controls rather than in the ☰ menu. */}
+        <button
+          onClick={() => setModesOpen(true)}
+          aria-label="Map modes"
+          aria-haspopup="dialog"
+          className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8"
+        >
+          <Globe size={20} />
+        </button>
+
         <div className="glass flex flex-col rounded-2xl p-1">
           <button
             onClick={() => mapRef.current?.zoomIn()}
@@ -1164,6 +1213,15 @@ function MapView({
           ◎
         </button>
       </div>
+
+      <MapModesSheet
+        open={modesOpen}
+        onClose={() => setModesOpen(false)}
+        styleId={styleId}
+        onStyleChange={changeStyle}
+        labels={mapLabels}
+        onLabelsChange={setMapLabels}
+      />
 
       {/* Scale / attribution strip. */}
       <div

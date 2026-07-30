@@ -46,8 +46,8 @@ export const TOP_BAR_H = 88
  * top of it.
  *
  * Budget at 390x844 with the greeting expanded:
- *   47 notch + 100 greeting + 6 + 40 categories + 6 + 36 menu = 235
- *   441 map band
+ *   47 notch + 10 pad + 100 greeting + 6 + 40 categories + 6 + 36 menu = 245
+ *   431 map band
  *   168 sheet at its lowest stop (the bottom nav overlays its lowest 90)
  * Keep these in step with the actual classes in MapTopBar / GreetingCard /
  * CategoryRow — they are measurements of those components, not free parameters.
@@ -58,6 +58,13 @@ export const CATEGORY_ROW_H = 40
 /** The ☰ row below the categories: a 36px (h-9) trigger, always on screen. */
 export const MENU_ROW_H = 36
 export const CHROME_GAP = 6
+/**
+ * Breathing room between the safe-area top and the greeting card.
+ *
+ * The notch inset alone puts the card's edge hard against the status bar — the
+ * inset is where content becomes *legal*, not where it looks intentional.
+ */
+export const CHROME_TOP_PAD = 10
 /** Inner height of the bottom nav, excluding its safe-area padding. */
 export const BOTTOM_NAV_H = 56
 
@@ -77,7 +84,7 @@ export function mobileTopInset({
   greeting: 'expanded' | 'minimized' | 'hidden'
   categories: boolean
 }): number {
-  let h = safeTop
+  let h = safeTop + CHROME_TOP_PAD
   if (greeting !== 'hidden') {
     h += greeting === 'expanded' ? GREETING_H : GREETING_H_MIN
   }
@@ -88,7 +95,7 @@ export function mobileTopInset({
 }
 
 /** Kept for the desktop-only callers that still want one number. */
-export const TOP_BAR_H_MOBILE = 236
+export const TOP_BAR_H_MOBILE = 246
 
 /**
  * The three mobile sheet stops, per §5 of the mobile rebuild:

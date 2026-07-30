@@ -2,9 +2,7 @@ import {
   CreditCard,
   Heart,
   Home,
-  Layers,
   LogOut,
-  Map,
   Menu,
   Navigation,
   Route,
@@ -14,7 +12,6 @@ import {
 
 import { LANDING_URL } from '../lib/api'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { MAP_STYLES } from '../lib/mapStyles'
 import type { CategorySlug } from '../lib/place'
 import { signOut } from '../lib/supabase'
 import { TIER_LABELS, useEntitlement } from '../lib/entitlement'
@@ -24,12 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 
@@ -43,8 +35,6 @@ type Props = {
   onSaved: () => void
   savedOpen: boolean
   onBuildItinerary: () => void
-  styleId: string
-  onStyleChange: (id: string) => void
   /** Mobile hides the pills here — they get their own floating row. */
   showCategories: boolean
 }
@@ -97,8 +87,6 @@ function MapTopBar({
   onSaved,
   savedOpen,
   onBuildItinerary,
-  styleId,
-  onStyleChange,
   showCategories,
 }: Props) {
   const { tier, hasAccess, credits } = useEntitlement()
@@ -148,25 +136,10 @@ function MapTopBar({
           Build Itinerary
         </DropdownMenuItem>
 
-        {/* View — the basemap switcher. It also lives in the sheet's search
-            stack as a Layers chip; this is the same setter, so the two can
-            never disagree. */}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className={menuItem}>
-            <Layers size={15} />
-            View
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-44 rounded-2xl border border-white/10 bg-popover/85 p-1.5 backdrop-blur-xl backdrop-saturate-150">
-            <DropdownMenuRadioGroup value={styleId} onValueChange={onStyleChange}>
-              {MAP_STYLES.map((s) => (
-                <DropdownMenuRadioItem key={s.id} value={s.id} className={menuItem}>
-                  <Map size={14} />
-                  {s.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        {/* No View submenu here any more. The basemap switcher is a map
+            control, not an account action, so it lives on the map — the globe
+            button above the zoom stack in MapView. One home for it, next to the
+            thing it changes. */}
 
         <DropdownMenuItem asChild className={menuItem}>
           <a href={`${LANDING_URL}/pricing`}>
@@ -224,8 +197,8 @@ function MapTopBar({
 
   // Phone: no banner. MapView renders <MapTopBar> inside its own chrome stack,
   // below the category row, and owns the positioning — all this contributes is
-  // the trigger, flush to the left gutter.
-  if (isMobile) return <div className="flex px-3">{menu}</div>
+  // the trigger, at the right gutter opposite the map controls.
+  if (isMobile) return <div className="flex w-full justify-end px-3">{menu}</div>
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 pad-safe-top pad-safe-x">

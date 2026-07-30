@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Layers, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 
 import { MAP_STYLES } from '../lib/mapStyles'
 import type { Place } from '../lib/place'
@@ -22,21 +22,12 @@ type Props = {
    */
   onFocusChange?: (focused: boolean) => void
   /**
-   * Drop the chip row, leaving just the field.
-   *
-   * For the sheet's lowest stop, where §5 asks for the search bar and nothing
-   * else. Done by omitting the chips rather than swapping to `variant="input"`
-   * so the <input> itself is never unmounted — remounting it mid-interaction
-   * would drop focus and the typed query at the exact moment focusing the field
-   * promotes the sheet to full height.
-   */
-  chipsHidden?: boolean
-  /**
-   * Phone layout: collapse the basemap switcher behind a chip.
+   * Phone layout: tighter spacing, and no basemap switcher.
    *
    * The four-up Satellite/Streets/Outdoor/Basic row is a whole line of a panel
    * that floats over the map, and it is a set-once preference — it does not
-   * earn permanent space on a 390px screen the way search and filters do.
+   * earn permanent space on a 390px screen the way search and filters do. The
+   * phone gets to it through the globe button over the map instead.
    */
   compact?: boolean
   /**
@@ -64,7 +55,6 @@ function MapSearchBar({
   styleId,
   onStyleChange,
   onFocusChange,
-  chipsHidden = false,
   compact = false,
   variant = 'stack',
   disabled = false,
@@ -72,7 +62,6 @@ function MapSearchBar({
 }: Props) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
-  const [layersOpen, setLayersOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // "/" focuses search, the convention in every map and docs app. Ignored while
@@ -121,10 +110,6 @@ function MapSearchBar({
     inputRef.current?.blur()
   }
 
-  const chipBase = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors'
-  const chipOff = `${chipBase} border border-white/8 bg-white/4 text-foreground hover:bg-white/8`
-  const chipOn = `${chipBase} border border-primary/30 bg-primary/15 text-primary`
-
   const layers = (
     <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
       {MAP_STYLES.map((s) => (
@@ -140,22 +125,6 @@ function MapSearchBar({
           {s.label}
         </button>
       ))}
-    </div>
-  )
-
-  // Just the Layers disclosure now. The Filters button and the active-filter
-  // chips that used to live here moved to FilterRow, which derives them from the
-  // data for every category instead of only beaches — see lib/filters.ts.
-  const chips = compact && !chipsHidden && (
-    <div className="flex flex-wrap gap-1.5">
-      <button
-        onClick={() => setLayersOpen((v) => !v)}
-        aria-expanded={layersOpen}
-        className={layersOpen ? chipOn : chipOff}
-      >
-        <Layers size={12} />
-        {MAP_STYLES.find((s) => s.id === styleId)?.label ?? 'Layers'}
-      </button>
     </div>
   )
 
@@ -233,13 +202,10 @@ function MapSearchBar({
     <div className={`relative flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
       {search}
 
-      {/* Map layers — always shown on desktop, behind the Layers chip on a
-          phone. Rendered before the chip row on desktop (where it is a
-          permanent control) and after it on a phone (where it is a disclosure
-          belonging to the chip that opened it). */}
+      {/* Map layers — desktop only, as a permanent control. The phone reaches
+          the same setter through the globe button over the map, which opens
+          MapModesSheet; a chip here as well was two controls for one setting. */}
       {!compact && layers}
-      {chips}
-      {compact && layersOpen && layers}
     </div>
   )
 }

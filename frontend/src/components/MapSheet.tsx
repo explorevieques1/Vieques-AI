@@ -1,4 +1,4 @@
-import { SHEET_SNAPS } from '../hooks/useMapInsets'
+import { SHEET_HIDDEN, SHEET_SNAPS } from '../hooks/useMapInsets'
 import { ResponsivePanel } from './ui/ResponsivePanel'
 
 type Props = {
@@ -26,6 +26,22 @@ type Props = {
  * hard swipe down threw away the category the user had picked.
  */
 function MapSheet({ title, snap, onSnapChange, children }: Props) {
+  /**
+   * At the lowest stop the sheet stops looking like a sheet.
+   *
+   * It pulls in from the screen edges and rounds all four corners, so what is
+   * left — the handle and the search field — reads as a floating search pill
+   * over the map, the way native Maps does it. Swipe up and it re-attaches to
+   * the edges and becomes the data panel again.
+   *
+   * Deliberately only insets and rounds: no height change. The snap value IS the
+   * sheet's visible outer height, and MapView derives the camera's bottom
+   * padding from it (see the max-h-[100dvh] note in ResponsivePanel), so a
+   * margin-bottom here would make every camera move wrong by that much. The
+   * float is horizontal + cosmetic; the vertical geometry is untouched.
+   */
+  const floating = snap === SHEET_HIDDEN
+
   return (
     <ResponsivePanel
       title={title}
@@ -33,6 +49,11 @@ function MapSheet({ title, snap, onSnapChange, children }: Props) {
       snapPoints={SHEET_SNAPS}
       activeSnapPoint={snap}
       onSnapChange={onSnapChange}
+      className={
+        floating
+          ? 'inset-x-3 rounded-3xl border border-white/10 shadow-2xl transition-[inset,border-radius] duration-200'
+          : 'transition-[inset,border-radius] duration-200'
+      }
     >
       {children}
     </ResponsivePanel>
