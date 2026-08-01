@@ -55,33 +55,74 @@ export const TOOLS = [
   {
     name: 'search_transport',
     description:
-      'Find transportation: car rentals, taxis, airlines, ferry, scooter/bike, water taxi. Use for "rent a car", "how do I get around", "taxi", "airport", "ferry".',
+      'Find transportation on Vieques. Use for "rent a car", "how do I get around", "taxi", "airport pickup". Only two categories currently have listings: car-rental and taxis. There are NO airline, ferry, water-taxi, or golf-cart listings in the database — if asked about those, say we do not have them listed rather than calling this tool with that category.',
     input_schema: {
       type: 'object',
       properties: {
         category: {
           type: 'string',
-          description:
-            "Transport slug: 'car-rental','taxis','airlines','ferry','scooter-bike','water-taxi'.",
+          enum: ['car-rental', 'taxis'],
+          description: "Transport slug. Only 'car-rental' and 'taxis' have listings.",
         },
       },
       required: ['category'],
     },
   },
   {
+    // Repointed away from activity_listings, which is empty. The real
+    // water-activity data lives in kayak_spots and snorkel_spots, so this tool
+    // reads those instead — see runTool below.
     name: 'search_activities',
     description:
-      'Find activities and things to do: snorkeling, diving, kayaking, fishing, sailing, bio bay, horseback riding, sunsets, nightlife.',
+      'Find water activities and things to do on Vieques: kayaking, the bioluminescent bay (bio bay), mangrove paddles, snorkeling, and reef spots. Use for "bio bay", "bioluminescent", "kayak", "paddle", "snorkel", "reef", "what is there to do".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['kayaking', 'snorkeling', 'all'],
+          description:
+            "Which kind of spot to return. 'kayaking' covers the bio bay and mangrove paddles. Defaults to 'all'.",
+        },
+      },
+    },
+  },
+  {
+    name: 'search_essentials',
+    description:
+      'Find practical everyday services on Vieques: groceries, convenience stores, pharmacy, gas stations, banks and ATMs, hardware stores, laundry, post office. Use for "where can I buy groceries", "is there a pharmacy", "where do I get gas", "ATM", "cash".',
     input_schema: {
       type: 'object',
       properties: {
         category: {
           type: 'string',
-          description:
-            "Activity slug: 'snorkeling','diving','kayaking','bio-bay','horseback-riding','sailing','fishing'.",
+          enum: [
+            'grocery-stores',
+            'convenience-stores',
+            'pharmacies',
+            'gas-stations',
+            'banks-atms',
+            'hardware-stores',
+            'laundry',
+            'post-office',
+          ],
+          description: 'Essential-service slug. Omit to return every essential listing.',
         },
       },
-      required: ['category'],
+    },
+  },
+  {
+    name: 'search_stays',
+    description:
+      'Find places to stay on Vieques: hotels, guesthouses, vacation rentals, and inns. Use for "where should I stay", "hotel", "guesthouse", "accommodation", "place to sleep".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        max_price: {
+          type: 'number',
+          description: 'Optional maximum nightly rate in USD to filter by.',
+        },
+      },
     },
   },
 ]
@@ -147,16 +188,74 @@ export async function runTool(pool, name, input) {
     return shape(rows, 'transport')
   }
 
+  // Activities read kayak_spots + snorkel_spots, NOT activity_listings.
+  //
+  // activity_listings has categories seeded but zero listings, so the original
+  // query could only ever return nothing — every "bio bay?" / "kayaking?"
+  // question answered "I don't have that listed" while six kayak spots and two
+  // snorkel spots sat in the database unreachable. These two tables carry their
+  // own lat/lng, so pins keep working without a join.
   if (name === 'search_activities') {
-    const { rows } = await pool.query(
-      `SELECT l.id, l.name, l.latitude, l.longitude, l.phones, l.description
-       FROM activity_listings l
-       JOIN activity_listing_categories lc ON lc.listing_id=l.id
-       JOIN activity_categories c ON c.id=lc.category_id
-       WHERE c.slug=$1 AND l.is_active=true ORDER BY l.name`,
-      [input.category],
-    )
+    const kind = input.kind || 'all'
+    const rows = []
+
+    if (kind === 'kayaking' || kind === 'all') {
+      const { rows: kayak } = await pool.query(
+        `SELECT id, name, latitude, longitude, launch_type, water_type,
+                rental_nearby, description
+           FROM kayak_spots WHERE is_active = true ORDER BY name`,
+      )
+      rows.push(...kayak.map((r) => ({ ...r, activity: 'kayaking' })))
+    }
+
+    if (kind === 'snorkeling' || kind === 'all') {
+      const { rows: snorkel } = await pool.query(
+        `SELECT s.id, s.name, s.latitude, s.longitude, s.difficulty,
+                s.entry_notes, s.offers_tours, s.description, b.name AS beach
+           FROM snorkel_spots s
+           LEFT JOIN beaches b ON b.id = s.beach_id
+          WHERE s.is_active = true ORDER BY s.name`,
+      )
+      rows.push(...snorkel.map((r) => ({ ...r, activity: 'snorkeling' })))
+    }
+
     return shape(rows, 'activity')
+  }
+
+  // Essentials: category optional. Without one, return every active listing —
+  // the whole set is small enough to hand the model at once.
+  if (name === 'search_essentials') {
+    const { rows } = await pool.query(
+      `SELECT l.id, l.name, l.latitude, l.longitude, l.phones, l.address,
+              l.hours, l.location_area
+         FROM essential_listings l
+         ${
+           input.category
+             ? `JOIN essential_listing_categories lc ON lc.listing_id=l.id
+                JOIN essential_categories c ON c.id=lc.category_id AND c.slug=$1`
+             : ''
+         }
+        WHERE l.is_active = true ORDER BY l.name`,
+      input.category ? [input.category] : [],
+    )
+    return shape(rows, 'essential')
+  }
+
+  if (name === 'search_stays') {
+    const params = []
+    let where = 'is_active = true'
+    if (input.max_price != null) {
+      params.push(input.max_price)
+      where += ` AND nightly_min IS NOT NULL AND nightly_min <= $${params.length}`
+    }
+    const { rows } = await pool.query(
+      `SELECT id, name, latitude, longitude, property_type, sleeps, bedrooms,
+              price_band, nightly_min, nightly_max, phones, website, booking_url,
+              location_area, description
+         FROM stay_listings WHERE ${where} ORDER BY name`,
+      params,
+    )
+    return shape(rows, 'stay')
   }
 
   // Unknown tool name → nothing to return (server.js treats this as no results).
@@ -172,7 +271,8 @@ export async function runTool(pool, name, input) {
  * the frontend can color/icon the marker.
  *
  * @param {object[]} rows  Raw query rows.
- * @param {string} kind    Category label ('beach','restaurant','transport','activity').
+ * @param {string} kind    Category label — 'beach', 'restaurant', 'transport',
+ *                         'activity', 'essential', or 'stay'.
  * @returns {{ listings: object[], pins: object[] }}
  */
 function shape(rows, kind) {

@@ -38,6 +38,7 @@ import cors from 'cors'
 import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
+import { runChatLoop, describeProviderError } from './aiProvider.js'
 import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
 import { requireAuth, requireTier, requireCredits, rateLimit } from './middleware.js'
 
@@ -48,6 +49,14 @@ import { requireAuth, requireTier, requireCredits, rateLimit } from './middlewar
 // Claude client. The API key stays server-side; the browser never sees it.
 // Falls back to '' so the process still boots if the key is missing — the AI
 // route will fail per-request rather than crashing the whole server on start.
+//
+// RESERVED FOR THE ITINERARY BUILDER (Exploration tier only). Ask AI does NOT
+// use this — /api/ai/chat runs on the cheap model via aiProvider.js. Claude is
+// ~10x the cost per token, so keeping it off the highest-traffic route is
+// deliberate: it is the premium the top tier pays for, not the default.
+// Currently unreferenced because the itinerary feature is still a stub
+// (MapView.tsx shows a "coming soon" toast) — do not delete.
+// eslint-disable-next-line no-unused-vars
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
 
 const app = express()
@@ -889,10 +898,16 @@ app.get(
 // ============================================================================
 //  AI CHAT ROUTE — POST /api/ai/chat
 // ============================================================================
-//  A Claude tool-use loop: the model calls the search tools defined in
-//  aiTools.js, we run them against Postgres, feed the rows back, and repeat
-//  until Claude produces a final text answer. The places it looked up are
-//  returned as `pins` so the map app can drop them on the map.
+//  A tool-use loop: the model calls the search tools defined in aiTools.js, we
+//  run them against Postgres, feed the rows back, and repeat until the model
+//  produces a final text answer. The places it looked up are returned as `pins`
+//  so the map app can drop them on the map.
+//
+//  MODEL: the cheap one (Gemini 2.5 Flash-Lite by default), via aiProvider.js.
+//  This is a lookup-and-summarize job over ~100 island records, not a reasoning
+//  job, so it does not warrant Claude pricing. Anthropic stays reserved for the
+//  Exploration tier's itinerary builder. Swapping providers — including to a
+//  self-hosted Ollama — is an env-var change; see aiProvider.js.
 //
 //  Body:    { messages: [{ role, content }, ...] }
 //  Returns: { reply: string, pins: [{ id, name, kind, latitude, longitude }] }
@@ -928,58 +943,28 @@ app.post('/api/ai/chat',
     const userMessages = Array.isArray(req.body?.messages) ? req.body.messages : []
     if (!userMessages.length) return res.status(400).json({ error: 'No messages' })
 
-    const messages = [...userMessages]   // running transcript we extend each turn
-    const allPins = []                    // every place any tool surfaced
-    let finalText = ''                    // Claude's latest natural-language reply
-
-    // Tool-use loop. Capped at 5 turns so a misbehaving model can't spin
-    // forever racking up token cost or hanging the request.
-    for (let i = 0; i < 5; i++) {
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+    // Runs on the CHEAP model (Gemini Flash-Lite by default), never Anthropic.
+    // Every tier's Ask AI goes through here; Claude is reserved for the
+    // Exploration-tier itinerary builder. See aiProvider.js for why.
+    let reply, pins
+    try {
+      ({ reply, pins } = await runChatLoop({
+        pool,
+        messages: userMessages,
+        systemPrompt: SYSTEM_PROMPT,
         tools: TOOLS,
-        messages,
-      })
-
-      // Capture any prose Claude wrote this turn (kept as the reply if the
-      // model stops here).
-      const textParts = response.content.filter((c) => c.type === 'text').map((c) => c.text)
-      if (textParts.length) finalText = textParts.join('\n')
-
-      // No tool calls → Claude has finished reasoning; exit the loop.
-      const toolUses = response.content.filter((c) => c.type === 'tool_use')
-      if (toolUses.length === 0) break
-
-      // Echo the assistant turn back into the transcript, then run each tool and
-      // return its rows as tool_result messages so Claude can read them next turn.
-      messages.push({ role: 'assistant', content: response.content })
-      const toolResults = []
-      for (const tu of toolUses) {
-        const { listings, pins } = await runTool(pool, tu.name, tu.input || {})
-        allPins.push(...pins)
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: tu.id,
-          // Cap payload size so a huge result set can't blow the context window.
-          content: JSON.stringify(listings).slice(0, 6000),
-        })
-      }
-      messages.push({ role: 'user', content: toolResults })
+        runTool,
+      }))
+    } catch (e) {
+      // Upstream failure (bad key, exhausted quota, provider outage). Return
+      // BEFORE the credit deduction below so the user is not charged for our
+      // outage, and never leak the raw provider message to the browser.
+      const { status, body } = describeProviderError(e)
+      return res.status(status).json(body)
     }
 
-    // De-dupe pins by "kind:id" so a place mentioned by two tools maps once.
-    const seen = new Set()
-    const pins = allPins.filter((p) => {
-      const k = p.kind + ':' + p.id
-      if (seen.has(k)) return false
-      seen.add(k)
-      return true
-    })
-
     // Meter the message only now that we have an answer to hand back. Deducting
-    // up front would charge the user for our outage — an Anthropic 500, a
+    // up front would charge the user for our outage — a provider 500, a
     // timeout, or a tool-loop bug would silently eat their allowance.
     //
     // The ledger is append-only: this negative row IS the deduction, and
@@ -999,7 +984,7 @@ app.post('/api/ai/chat',
     )
 
     res.json({
-      reply: finalText || 'Sorry, I could not find an answer.',
+      reply: reply || 'Sorry, I could not find an answer.',
       pins,
       // Lets the chat pane show "12 messages left" without a second round trip.
       creditsRemaining: Number(bal[0]?.balance ?? 0),
