@@ -169,6 +169,19 @@ export type ActivityListing = {
   location_area: string | null
   latitude: number | null
   longitude: number | null
+  /**
+   * True when the row is a mappable physical place. Set by a trigger from
+   * lat/lng, so it is never out of step with the coordinates — see
+   * db/migrations/0035_activity_location_images.sql.
+   *
+   * False means a real business with no walk-in address (a bio bay operator
+   * that picks you up, a charter that meets at a dock) — it belongs in the
+   * directory list but not on the map.
+   */
+  has_location: boolean
+  /** Photo URLs; the first is the card image. Empty for most operators. */
+  images: string[]
+  image_credit: string | null
   price_info: string | null
   hours: string | null
 }

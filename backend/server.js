@@ -322,7 +322,8 @@ app.get('/api/activities/:slug', requireAuth, requireTier(pool, 'activities'), a
   try {
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.website, l.address,
-              l.location_area, l.latitude, l.longitude, l.price_info, l.hours
+              l.location_area, l.latitude, l.longitude, l.has_location,
+              l.images, l.image_credit, l.price_info, l.hours
        FROM activity_listings l
        JOIN activity_listing_categories lc ON lc.listing_id = l.id
        JOIN activity_categories c ON c.id = lc.category_id

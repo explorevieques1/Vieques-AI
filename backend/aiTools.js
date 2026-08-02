@@ -69,20 +69,47 @@ export const TOOLS = [
     },
   },
   {
-    // Repointed away from activity_listings, which is empty. The real
-    // water-activity data lives in kayak_spots and snorkel_spots, so this tool
-    // reads those instead — see runTool below.
+    // Reads two different sources and merges them, because activities are two
+    // different kinds of thing (see 0035_activity_location_images.sql):
+    //
+    //   - 'kayaking' and 'snorkeling' are geographic spots with zone polygons,
+    //     so they live in kayak_spots / snorkel_spots.
+    //   - everything else — bio bay operators, horseback riding, charters,
+    //     galleries, landmarks — is an ordinary activity_listings row.
+    //
+    // The enum previously held only the two water kinds, so the model could not
+    // ask about horseback riding even once the rows existed. Keep this list in
+    // step with the activity_categories table.
     name: 'search_activities',
     description:
-      'Find water activities and things to do on Vieques: kayaking, the bioluminescent bay (bio bay), mangrove paddles, snorkeling, and reef spots. Use for "bio bay", "bioluminescent", "kayak", "paddle", "snorkel", "reef", "what is there to do".',
+      'Find things to do on Vieques: kayaking, the bioluminescent bay (bio bay), mangrove paddles, snorkeling and reef spots, horseback riding, sailing charters, fishing, landmarks, viewpoints, sunset spots, art galleries, yoga, nightlife and stargazing. Use for "bio bay", "bioluminescent", "kayak", "snorkel", "horseback", "what is there to do", "things to see".',
     input_schema: {
       type: 'object',
       properties: {
         kind: {
           type: 'string',
-          enum: ['kayaking', 'snorkeling', 'all'],
+          enum: [
+            'kayaking',
+            'snorkeling',
+            'hiking',
+            'fishing',
+            'camping',
+            'sailing',
+            'bio-bay',
+            'horseback-riding',
+            'view-points',
+            'landmarks',
+            'art-galleries',
+            'sunsets',
+            'wellness-yoga',
+            'nightlife',
+            'local-markets',
+            'stargazing',
+            'adventures',
+            'all',
+          ],
           description:
-            "Which kind of spot to return. 'kayaking' covers the bio bay and mangrove paddles. Defaults to 'all'.",
+            "Which kind of activity to return. 'kayaking' covers mangrove paddles; 'bio-bay' returns the tour operators that run bioluminescent bay trips. Defaults to 'all'.",
         },
       },
     },
@@ -188,13 +215,14 @@ export async function runTool(pool, name, input) {
     return shape(rows, 'transport')
   }
 
-  // Activities read kayak_spots + snorkel_spots, NOT activity_listings.
+  // Activities merge three sources: the two water-spot tables, which carry
+  // zone geometry and therefore live on their own, plus activity_listings for
+  // every operator and point of interest.
   //
-  // activity_listings has categories seeded but zero listings, so the original
-  // query could only ever return nothing — every "bio bay?" / "kayaking?"
-  // question answered "I don't have that listed" while six kayak spots and two
-  // snorkel spots sat in the database unreachable. These two tables carry their
-  // own lat/lng, so pins keep working without a join.
+  // The water branches came first because activity_listings was empty — every
+  // "bio bay?" question answered "I don't have that listed" while six kayak
+  // spots sat unreachable. Now both are read, so a question about horseback
+  // riding finds its rows and a question about kayaking still finds the spots.
   if (name === 'search_activities') {
     const kind = input.kind || 'all'
     const rows = []
@@ -217,6 +245,39 @@ export async function runTool(pool, name, input) {
           WHERE s.is_active = true ORDER BY s.name`,
       )
       rows.push(...snorkel.map((r) => ({ ...r, activity: 'snorkeling' })))
+    }
+
+    // Operators and points of interest. 'kayaking'/'snorkeling' are excluded
+    // here only when asked for specifically — under 'all' the listings join
+    // still returns e.g. a guided-snorkel outfitter, which is a business rather
+    // than a spot and so belongs in the answer alongside the reefs.
+    if (kind !== 'kayaking' && kind !== 'snorkeling') {
+      const listingParams = kind === 'all' ? [] : [kind]
+      // Aggregated rather than joined flat: a listing in several categories
+      // (an outfitter doing snorkel + kayak + fishing) would otherwise come
+      // back once per category and Claude would describe it three times.
+      const { rows: listings } = await pool.query(
+        `SELECT l.id, l.name, l.description, l.phones, l.website, l.address,
+                l.location_area, l.price_info, l.hours, l.has_location,
+                l.latitude, l.longitude,
+                array_agg(c.slug ORDER BY c.sort_order) AS activity
+           FROM activity_listings l
+           JOIN activity_listing_categories lc ON lc.listing_id = l.id
+           JOIN activity_categories c ON c.id = lc.category_id
+          WHERE l.is_active = true
+            ${
+              kind === 'all'
+                ? ''
+                : `AND EXISTS (
+                     SELECT 1 FROM activity_listing_categories lc2
+                       JOIN activity_categories c2 ON c2.id = lc2.category_id
+                      WHERE lc2.listing_id = l.id AND c2.slug = $1)`
+            }
+          GROUP BY l.id
+          ORDER BY l.name`,
+        listingParams,
+      )
+      rows.push(...listings)
     }
 
     return shape(rows, 'activity')

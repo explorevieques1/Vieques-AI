@@ -426,8 +426,12 @@ export function activityToPlace(a: ActivityListing, slug: string): Place {
     kind: 'activity',
     name: a.name,
     subtitle: a.location_area ?? undefined,
-    latitude: a.latitude,
-    longitude: a.longitude,
+    // Gated on has_location like every other listing category: an operator
+    // with no walk-in address still lists, it just does not get a pin.
+    latitude: a.has_location ? a.latitude : null,
+    longitude: a.has_location ? a.longitude : null,
+    photo: a.images?.[0],
+    photoCredit: a.image_credit ?? undefined,
     tags: [a.price_info].filter((t): t is string => !!t),
     stats: stats(
       ['Price', a.price_info],
