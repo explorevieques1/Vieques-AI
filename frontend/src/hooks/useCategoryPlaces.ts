@@ -43,6 +43,10 @@ export type Subcategory = { slug: string; label: string }
  * Vacation tier. Kept as a set so the `locked` check and the fetch branches
  * below cannot drift apart — adding a third water activity means adding its
  * slug here and one fetch branch, not hunting for every `=== 'snorkeling'`.
+ *
+ * Also decides who gets the "Book a Tour" half of the toggle: these are the
+ * subs where a spots dataset and tour companies both exist, so the toggle has
+ * two real sides. MapView's `waterActivity` mirrors this for rendering.
  */
 const WATER_SUBS = new Set(['snorkeling', 'kayaking'])
 
@@ -88,16 +92,17 @@ export function useCategoryPlaces(
    */
   canWaterZones: boolean,
   /**
-   * Which half of the snorkelling "Go Yourself / Book a Tour" toggle is active.
+   * Which half of the "Go Yourself / Book a Tour" toggle is active.
    *
-   * These are two different datasets, not one list filtered two ways:
-   * 'all' fetches snorkel_spots (places you swim to), 'tours' fetches the
-   * activity listings tagged 'snorkeling' (companies that take you). It is an
-   * argument to the hook rather than a filter in MapView because the answer
-   * changes what gets *requested* — the old client-side `offers_tours` filter
-   * could only ever show spots, which is why "Book a Tour" listed snorkel spots.
+   * These are two different datasets, not one list filtered two ways: 'all'
+   * fetches the activity's own spots table (places you paddle or swim to),
+   * 'tours' fetches the activity listings tagged with that slug (companies
+   * that take you). It is an argument to the hook rather than a filter in
+   * MapView because the answer changes what gets *requested* — the old
+   * client-side `offers_tours` filter could only ever show spots, which is why
+   * "Book a Tour" listed snorkel spots.
    *
-   * Ignored for every category except activities/snorkeling.
+   * Ignored for everything except the WATER_SUBS activities.
    */
   tourFilter: 'all' | 'tours' = 'all',
   /**
@@ -229,28 +234,32 @@ export function useCategoryPlaces(
         // ('snorkeling', 'hiking', 'kayaking') exist purely to put them in the
         // chip row; nothing joins them to a listing.
 
-        // Snorkelling is its own dataset (spots + zone polygons), not an
-        // activity listing. Gate it before the request so a free-tier user
-        // gets the upsell instead of a 402 in the console.
+        // "Book a Tour", for either water activity.
+        //
+        // The toggle picks the dataset, not a filter over one dataset. The
+        // tours half is the ordinary activity directory filtered to companies
+        // tagged with that activity, which is why it goes through the same
+        // fetch every other subcategory uses — no special endpoint, and no
+        // per-activity operators table. One company can be tagged snorkeling
+        // AND kayaking AND bio-bay, so Abes appears under all three with one
+        // shared record: db/migrations/0038_activity_multi_category.sql.
+        //
+        // Ahead of the spots branches below because for these two subs the
+        // answer is the same, and duplicating it once per activity is how the
+        // snorkel-only version drifted in the first place.
+        if (WATER_SUBS.has(subSlug!) && tourFilter === 'tours') {
+          fetchActivityListings(subSlug!).then(
+            (rows) => finish(rows.map((r) => activityToPlace(r, subSlug!))),
+            fail,
+          )
+          break
+        }
+
+        // "Go Yourself" — each water activity's own dataset (spots + zone
+        // polygons), not activity listings. Gated before the request so a
+        // free-tier user gets the upsell instead of a 402 in the console.
         if (subSlug === 'snorkeling') {
-          // The toggle picks the dataset, not a filter over one dataset.
-          //
-          // "Go Yourself" is the spots table — places you swim to, with the
-          // zone polygons that make snorkelling a Vacation-tier feature.
-          // "Book a Tour" is the ordinary activity directory filtered to
-          // companies tagged 'snorkeling', which is why it goes through the
-          // same fetch every other activity subcategory uses. One company can
-          // be tagged snorkeling AND kayaking AND bio-bay, so Black Beard
-          // Sports appears under each with one shared record — see
-          // db/migrations/0038_activity_multi_category.sql.
-          if (tourFilter === 'tours') {
-            fetchActivityListings('snorkeling').then(
-              (rows) => finish(rows.map((r) => activityToPlace(r, 'snorkeling'))),
-              fail,
-            )
-          } else {
-            fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
-          }
+          fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
           break
         }
         // Kayaking is the same shape as snorkelling — put-in pins with hazard

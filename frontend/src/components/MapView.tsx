@@ -210,6 +210,14 @@ function MapView({
 
   const snorkelling = category === 'activities' && subSlug === 'snorkeling'
   const kayaking = category === 'activities' && subSlug === 'kayaking'
+  /**
+   * The two activities that are a spots-plus-zones dataset *and* have tour
+   * companies in the directory — so both get the "Go Yourself / Book a Tour"
+   * toggle. Mirrors WATER_SUBS in useCategoryPlaces, which decides the fetch;
+   * this decides whether the control is drawn. Hiking is the counterexample:
+   * its own dataset, but nobody sells a guided trail listing yet.
+   */
+  const waterActivity = snorkelling || kayaking
 
   // ---------------------------------------------------------------------------
   //  Derived list: snorkel tour toggle, distance, sort
@@ -935,9 +943,10 @@ function MapView({
           blurb="See every snorkeling zone, where to enter the water, depth and difficulty — plus the Bio Bay moon-phase guide."
         />
       )}
-      {/* Same gate for kayaking. No "Book a Tour" toggle below it: that filters
-          on `offers_tours`, a snorkel_spots-only column (0006) — kayak
-          operators are ordinary activity_listings rows. */}
+      {/* Same gate for kayaking, and since 0038 the same toggle too: kayak tour
+          companies are activity_listings rows tagged 'kayaking', exactly as
+          snorkel ones are tagged 'snorkeling'. One company tagged both appears
+          under both. */}
       {kayaking && locked && (
         <UpsellOverlay
           feature="kayak_zones"
@@ -945,7 +954,7 @@ function MapView({
           blurb="Every put-in on the island with the hazards, wildlife areas and routes mapped — plus what the water is doing before you launch."
         />
       )}
-      {snorkelling && !locked && (
+      {waterActivity && !locked && (
         <div className="flex gap-1 rounded-2xl border border-white/6 bg-white/3 p-1">
           {(['all', 'tours'] as const).map((f) => (
             <button
