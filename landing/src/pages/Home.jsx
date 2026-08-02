@@ -70,34 +70,18 @@ export default function Home() {
             </div>
           </div>
 
-          {/* phone mockup: real iPhone bezel component, app screen as children */}
+          {/* phone mockup: real iPhone bezel wrapping a real device screenshot.
+              The capture is 1170x2532 (iPhone 15, 9:19.5) — the same aspect the
+              frame locks to — so it fills the glass with nothing cropped. */}
           <div className="phone-wrap">
-            <IOSPhoneFrame width={272} theme="dark">
-              <div className="app-screen">
-                <div className="phone-head">
-                  <strong style={{ fontFamily: 'var(--font-head)', fontSize: '13px' }}>Vieques <span style={{ color: 'var(--accent)' }}>AI</span></strong>
-                  <div className="seg"><span className="on">Street</span><span>Satellite</span></div>
-                </div>
-                <div className="chips">
-                  <span className="chip on">All</span><span className="chip">🏖️ Beaches</span><span className="chip">🍽️ Food</span>
-                </div>
-                <div className="map-area">
-                  <div className="pin" style={{ left: '18%', top: '46%', animationDelay: '.15s' }}>🏖️</div>
-                  <div className="pin" style={{ left: '44%', top: '28%', animationDelay: '.3s' }}>🍽️</div>
-                  <div className="pin" style={{ left: '66%', top: '52%', animationDelay: '.45s' }}>🐢</div>
-                  <div className="pin" style={{ left: '80%', top: '30%', animationDelay: '.6s' }}>✨</div>
-                  <div className="pin" style={{ left: '33%', top: '70%', animationDelay: '.75s' }}>🛻</div>
-                </div>
-                <div className="chat">
-                  <q>Where can I swim with turtles?</q>
-                  <p>Try <b>Playa la Chiva</b> — calm water and a mapped snorkeling zone where turtles feed. <b>Showing 3 pins →</b></p>
-                </div>
-                <div className="ask">
-                  <span style={{ color: 'var(--accent)' }}>✦</span>
-                  <input placeholder="Ask the island anything…" aria-label="Ask the island anything" />
-                  <span className="send">↑</span>
-                </div>
-              </div>
+            <IOSPhoneFrame width={272} theme="dark" screenshot>
+              <img
+                className="phone-shot"
+                src="/app-screenshot.jpg"
+                alt="The Vieques AI map on iPhone, showing beach pins across the island and a blue dot marking the viewer's live location"
+                width={1170}
+                height={2532}
+              />
             </IOSPhoneFrame>
           </div>
         </div>

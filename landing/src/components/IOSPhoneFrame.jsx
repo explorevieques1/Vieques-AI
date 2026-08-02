@@ -14,6 +14,12 @@
 //   theme      'dark' | 'light' (default 'dark') — status-bar icon color
 //   className  string     — passes through to outer wrapper
 //   style      object     — extra outer wrapper styles
+//   screenshot boolean    — children are a real device screenshot. Suppresses
+//                           the drawn status bar and home indicator and removes
+//                           the safe-area padding, so the image fills the glass
+//                           edge to edge. A screenshot already contains its own
+//                           clock, signal icons and home bar; leaving ours on
+//                           would double them and inset the image by ~88px.
 //
 // Notes:
 //   • Renders at any size — pass `width` (aspect is locked to 9:19.5,
@@ -33,6 +39,7 @@ export default function IOSPhoneFrame({
   theme = 'dark',
   className,
   style,
+  screenshot = false,
 }) {
   // iPhone 15 physical aspect ratio: 9 : 19.5
   const aspect = 19.5 / 9;
@@ -117,7 +124,8 @@ export default function IOSPhoneFrame({
             flexDirection: 'column',
           }}
         >
-          {/* status bar */}
+          {/* status bar — omitted for screenshots, which bring their own */}
+          {!screenshot && (
           <div
             style={{
               position: 'absolute',
@@ -169,14 +177,15 @@ export default function IOSPhoneFrame({
               <BatteryIcon width={26 * s} height={12 * s} color={iconColor} />
             </div>
           </div>
+          )}
 
           {/* app content — screen safe area (below status bar, above home indicator) */}
           <div
             className="ios-screen"
             style={{
               flex: 1,
-              paddingTop: 54 * s,
-              paddingBottom: 34 * s,
+              paddingTop: screenshot ? 0 : 54 * s,
+              paddingBottom: screenshot ? 0 : 34 * s,
               position: 'relative',
               overflow: 'hidden',
             }}
@@ -184,7 +193,8 @@ export default function IOSPhoneFrame({
             {children}
           </div>
 
-          {/* home indicator */}
+          {/* home indicator — omitted for screenshots, which bring their own */}
+          {!screenshot && (
           <div
             aria-hidden
             style={{
@@ -199,6 +209,7 @@ export default function IOSPhoneFrame({
               zIndex: 20,
             }}
           />
+          )}
 
           {/* glossy screen highlight (very subtle) */}
           <div
