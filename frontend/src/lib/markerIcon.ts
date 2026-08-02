@@ -73,6 +73,40 @@ export const SERVICE_ICONS: Record<string, MarkerStyle> = {
 // Fallback used when a slug has no specific icon.
 export const DEFAULT_ICON: MarkerStyle = { emoji: '📍', color: '#a855f7' }
 
+/** iOS-style "you are here": a solid blue dot under a slow expanding halo. */
+export const USER_DOT_COLOR = '#1a73e8'
+
+/**
+ * Builds the live-location dot.
+ *
+ * Same three-node discipline as makeMarkerEl: MapLibre writes translate() to
+ * the outer element, so the halo's scale animation has to live on a child.
+ * `pointer-events:none` throughout — the dot is a readout, not a target, and
+ * must never swallow a tap meant for a place pin underneath it.
+ */
+export function makeUserDotEl(): HTMLDivElement {
+  const outer = document.createElement('div')
+  outer.style.cssText = 'width:18px;height:18px;pointer-events:none;'
+
+  const halo = document.createElement('div')
+  halo.style.cssText = `
+    position:absolute;inset:0;border-radius:50%;
+    background:${USER_DOT_COLOR};pointer-events:none;
+    animation:user-dot-pulse 2.4s ease-out infinite;
+  `
+  outer.appendChild(halo)
+
+  const dot = document.createElement('div')
+  dot.style.cssText = `
+    position:relative;width:18px;height:18px;box-sizing:border-box;
+    background:${USER_DOT_COLOR};border:3px solid white;border-radius:50%;
+    box-shadow:0 0 0 1px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.45);
+  `
+  outer.appendChild(dot)
+
+  return outer
+}
+
 export function makeMarkerEl(
   { emoji, color }: MarkerStyle,
   /** Selected pins get the larger teal badge + pulse ring from the mockups. */

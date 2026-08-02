@@ -589,16 +589,18 @@ export function snorkelToPlace(s: SnorkelSpot): Place {
     subtitle: s.difficulty ? `Difficulty · ${s.difficulty}` : undefined,
     latitude: s.latitude,
     longitude: s.longitude,
-    tags: [s.difficulty, s.depth, s.offers_tours ? 'tours' : null].filter(
-      (t): t is string => !!t,
-    ),
+    tags: [s.difficulty, s.offers_tours ? 'tours' : null].filter((t): t is string => !!t),
+    // Difficulty and entry lead (how hard / how to get in), then the in-water
+    // conditions: water, depth, and what you can expect to see.
     stats: stats(
       ['Difficulty', s.difficulty],
-      ['Depth', s.depth],
-      ['Water', s.water],
       ['Entry', s.entry_notes],
+      ['Water', s.water],
+      ['Depth', s.depth],
       ['Sights', s.sights],
     ),
+    // Five possible stats now; the panel's default cap of 4 would drop Sights.
+    statLimit: 8,
     description: s.description ?? undefined,
     contact: {},
     icon: ACTIVITY_ICONS['snorkeling'],

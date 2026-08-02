@@ -19,7 +19,7 @@ import {
 } from '../lib/place'
 import { milesBetween } from '../lib/geo'
 import { deriveFilters, matchesFilters } from '../lib/filters'
-import { makeMarkerEl } from '../lib/markerIcon'
+import { makeMarkerEl, makeUserDotEl } from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
@@ -143,6 +143,8 @@ function MapView({
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<maplibregl.Marker[]>([])
   const routeMarkersRef = useRef<maplibregl.Marker[]>([])
+  /** The live-location dot — kept out of markersRef so clearMarkers() can't wipe it. */
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null)
 
   const [styleId, setStyleId] = useState(DEFAULT_MAP_STYLE)
   /** The Map Modes card (basemap + overlays), opened by the globe button. */
@@ -420,16 +422,48 @@ function MapView({
     }
   }, [mapLabels, styleId])
 
-  // Ask for location once, opportunistically. Denial is fine — distance labels
-  // simply don't render rather than showing a made-up number.
+  // Follow the user's location for as long as the map is mounted. Denial is
+  // fine — distance labels simply don't render rather than showing a made-up
+  // number, and the blue dot below stays off the map.
+  //
+  // watchPosition rather than a single getCurrentPosition: the dot is only
+  // honest if it keeps up while you drive across the island, and the browser
+  // fires the first fix immediately either way. enableHighAccuracy is on
+  // because a ~1km network fix is useless for "which beach am I standing on".
   useEffect(() => {
     if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
+    const id = navigator.geolocation.watchPosition(
       (pos) => setUserLoc([pos.coords.longitude, pos.coords.latitude]),
       () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10_000 },
     )
+    return () => navigator.geolocation.clearWatch(id)
   }, [])
+
+  // The blue "you are here" dot. Its own ref and its own effect, for the same
+  // reason as suggestionMarkerRef — clearMarkers() wipes markersRef every time
+  // the result set changes, and the user's own position should outlive that.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !userLoc) return
+
+    const marker = new maplibregl.Marker({
+      element: makeUserDotEl(),
+      anchor: 'center',
+    })
+      .setLngLat(userLoc)
+      .addTo(map)
+    userMarkerRef.current = marker
+
+    return () => {
+      marker.remove()
+      userMarkerRef.current = null
+    }
+    // No readiness flag in the deps: the lifecycle effect above assigns
+    // mapRef.current synchronously and is declared first, so it has already
+    // run by the time this one does. Markers may be added before 'load' —
+    // MapLibre queues them onto the canvas itself, not onto a style layer.
+  }, [userLoc])
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
