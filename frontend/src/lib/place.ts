@@ -30,7 +30,6 @@ import type {
   KayakSpot,
   RestaurantListing,
   ServiceListing,
-  SnorkelOperator,
   SnorkelSpot,
   StayListing,
   Suggestion,
@@ -596,54 +595,6 @@ export function snorkelToPlace(s: SnorkelSpot): Place {
     contact: {},
     icon: ACTIVITY_ICONS['snorkeling'],
     raw: s,
-  }
-}
-
-/**
- * Snorkel tour operator → Place.
- *
- * `latitude`/`longitude` are null by construction — a tour company is a phone
- * number, not a destination — which puts these outside `isMappable` and so out
- * of the marker, bounds and distance passes automatically. The results list
- * renders them like any other card; the map simply has nothing to draw, and
- * "Sort: Nearest" falls back to name for them (MapView's distance comparator
- * already handles a missing distance that way).
- *
- * The stat grid leads with what someone deciding between eight companies
- * actually compares — how long, how much, where they leave from — and
- * `tour_details` becomes the description because it is the prose field.
- */
-export function operatorToPlace(o: SnorkelOperator): Place {
-  const contact: PlaceContact = {
-    phones: o.phone ? [o.phone] : undefined,
-    website: o.website ?? undefined,
-    email: o.email ?? undefined,
-  }
-  return {
-    id: `snorkel-operator:${o.id}`,
-    kind: 'snorkel',
-    name: o.name,
-    // The phone is the point of these cards, so it goes in the grey line under
-    // the title where every other kind puts its most identifying detail.
-    subtitle: o.phone ?? undefined,
-    latitude: null,
-    longitude: null,
-    tags: ['tours', ...(o.duration ? [o.duration] : [])],
-    stats: stats(
-      ['Phone', o.phone],
-      ['Duration', o.duration],
-      ['Price', o.price_info],
-      ['Departs', o.departure],
-      ['Spots', o.spots.length ? o.spots.join(', ') : null],
-      ['Booking', o.booking_notes],
-    ),
-    statLimit: 6,
-    // Seeded operators have neither field yet — the photo carries only names
-    // and numbers — so fall back through both before giving up.
-    description: o.tour_details ?? o.description ?? undefined,
-    contact,
-    icon: ACTIVITY_ICONS['snorkeling'],
-    raw: o,
   }
 }
 

@@ -11,7 +11,6 @@ import {
   fetchRestaurantListings,
   fetchServiceCategories,
   fetchServiceListings,
-  fetchSnorkelOperators,
   fetchSnorkelSpots,
   fetchStayCategories,
   fetchStays,
@@ -27,7 +26,6 @@ import {
   categoryMeta,
   essentialToPlace,
   kayakToPlace,
-  operatorToPlace,
   restaurantToPlace,
   serviceToPlace,
   snorkelToPlace,
@@ -93,11 +91,11 @@ export function useCategoryPlaces(
    * Which half of the snorkelling "Go Yourself / Book a Tour" toggle is active.
    *
    * These are two different datasets, not one list filtered two ways:
-   * 'all' fetches snorkel_spots (places you swim to), 'tours' fetches
-   * snorkel_tour_operators (companies that take you). It is an argument to the
-   * hook rather than a filter in MapView because the answer changes what gets
-   * *requested* — the old client-side `offers_tours` filter could only ever
-   * show spots, which is why "Book a Tour" listed snorkel spots.
+   * 'all' fetches snorkel_spots (places you swim to), 'tours' fetches the
+   * activity listings tagged 'snorkeling' (companies that take you). It is an
+   * argument to the hook rather than a filter in MapView because the answer
+   * changes what gets *requested* — the old client-side `offers_tours` filter
+   * could only ever show spots, which is why "Book a Tour" listed snorkel spots.
    *
    * Ignored for every category except activities/snorkeling.
    */
@@ -235,10 +233,21 @@ export function useCategoryPlaces(
         // activity listing. Gate it before the request so a free-tier user
         // gets the upsell instead of a 402 in the console.
         if (subSlug === 'snorkeling') {
-          // The toggle picks the dataset, not a filter over one dataset:
-          // "Book a Tour" wants the companies, "Go Yourself" wants the spots.
+          // The toggle picks the dataset, not a filter over one dataset.
+          //
+          // "Go Yourself" is the spots table — places you swim to, with the
+          // zone polygons that make snorkelling a Vacation-tier feature.
+          // "Book a Tour" is the ordinary activity directory filtered to
+          // companies tagged 'snorkeling', which is why it goes through the
+          // same fetch every other activity subcategory uses. One company can
+          // be tagged snorkeling AND kayaking AND bio-bay, so Black Beard
+          // Sports appears under each with one shared record — see
+          // db/migrations/0038_activity_multi_category.sql.
           if (tourFilter === 'tours') {
-            fetchSnorkelOperators().then((rows) => finish(rows.map(operatorToPlace)), fail)
+            fetchActivityListings('snorkeling').then(
+              (rows) => finish(rows.map((r) => activityToPlace(r, 'snorkeling'))),
+              fail,
+            )
           } else {
             fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
           }
