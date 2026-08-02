@@ -28,6 +28,7 @@ import type { ShellMode } from '../lib/shell'
 import { useAiChat } from '../lib/aiChat'
 import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
 import type { Favorites } from '../hooks/useFavorites'
+import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useSafeArea } from '../hooks/useSafeArea'
 import { daypart, useSuggestion } from '../hooks/useSuggestion'
@@ -198,6 +199,14 @@ function MapView({
     canWaterZones,
   )
 
+  /**
+   * Island-wide search index — every category, fetched once on first focus.
+   *
+   * Separate from `rawPlaces` on purpose: that is the category the user is
+   * *looking at*, and search has to find things they have not navigated to yet.
+   */
+  const islandSearch = useIslandSearch()
+
   const snorkelling = category === 'activities' && subSlug === 'snorkeling'
   const kayaking = category === 'activities' && subSlug === 'kayaking'
 
@@ -248,7 +257,15 @@ function MapView({
 
   // Collapsed counts as closed for the camera: the map really does have that
   // width back, and padding for a panel that isn't there parks pins off-centre.
-  const resultsOpen = category != null && !resultsCollapsed
+  //
+  // No longer `category != null`: the desktop left panel is now always mounted
+  // in Explore (it carries the search bar), so it occupies that width whether
+  // or not a category is loaded — and the camera has to know, or every pin
+  // frames itself underneath the panel on a cold start.
+  // Saved takes the same slot at the same width, so it counts too.
+  const resultsOpen = !isMobile
+    ? mode === 'saved' || !resultsCollapsed
+    : category != null && !resultsCollapsed
   const detailOpen = selected != null
 
   /**
@@ -505,6 +522,44 @@ function MapView({
       }
     },
     [category, onModeChange],
+  )
+
+  /**
+   * Open a search hit that may belong to a category the app is not in.
+   *
+   * Selecting the place is not enough on its own: the detail panel would show
+   * the right place while the results list behind it still held the old
+   * category, and the marker effect draws `places` — so the pin the user just
+   * flew to would not be on the map. Setting the category and subcategory
+   * first makes the hit a normal member of the loaded set, and the panel
+   * behind it the list it actually came from.
+   *
+   * `selectCategory` is deliberately not reused here: it clears `selected` and
+   * resets the subcategory, which is exactly what a *pill* tap means and
+   * exactly the opposite of this. Here the destination is the point.
+   */
+  const openSearchHit = useCallback(
+    (hit: SearchHit) => {
+      setCategory(hit.category)
+      setSubSlug(hit.sub)
+      // Chips are derived per category, so any left from the previous one
+      // would filter on tags this list has never heard of — and could hide the
+      // very place the user just picked.
+      setTagFilters(new Set())
+      setTourFilter('all')
+      setResultsCollapsed(false)
+      setZoneLegend([])
+      // A hit is an Explore result; if the user searched from the chat or
+      // their profile, the sheet has to come back to the map.
+      onModeChange('explore')
+      const map = mapRef.current
+      if (map) {
+        removeAllZones(map)
+        removeTrails(map)
+      }
+      selectPlace(hit.place)
+    },
+    [onModeChange, selectPlace],
   )
 
   /** A chip tap must not leave the user staring at a sheet they cannot see. */
@@ -835,12 +890,15 @@ function MapView({
     <MapSearchBar
       places={places}
       onSelect={selectPlace}
-      // Search matches against the loaded category only, so with nothing loaded
-      // there is nothing it could ever find. Disabled it says so ("Pick a
-      // category to search…"); enabled it would take focus, promote the sheet to
-      // full height, and then cover the category row it is telling the user to
-      // use — a dead end reachable in two taps from a cold start.
-      disabled={!category}
+      // Search now runs against the whole-island index rather than the loaded
+      // category, so it is never disabled. It used to be (`disabled={!category}`),
+      // which made the pills the only way to get anything on screen — and on
+      // desktop, any moment where those pills are unreachable left the app with
+      // no working input at all. That was the dead end; searching every category
+      // is what removes it, rather than a better message on a dead field.
+      index={islandSearch}
+      onIndexStart={islandSearch.start}
+      onSelectHit={openSearchHit}
       placeholder={
         category ? `Search ${categoryMeta(category).label.toLowerCase()}…` : 'Search the island…'
       }
@@ -1144,16 +1202,30 @@ function MapView({
             </ResponsivePanel>
           )}
 
-          {mode !== 'saved' && category && !resultsCollapsed && (
+          {/* The left panel is no longer gated on `category`.
+              It used to be, which meant a cold-start desktop had no panel and
+              therefore no search field — the pills were the only input in the
+              app, so anything that covered them (see ProfilePanel's backdrop,
+              which tied MapTopBar on z-index) left nothing to type into. The
+              panel now always exists in Explore and always carries the search
+              bar; the results below it are what appear once a category is
+              picked. */}
+          {mode !== 'saved' && !resultsCollapsed && (
             <ResponsivePanel
               variant="floating"
               side="left"
-              title={categoryMeta(category).label}
+              title={category ? categoryMeta(category).label : 'Explore Vieques'}
               desktopWidth="sm:w-[344px]"
-              onClose={() => selectCategory(null)}
+              onClose={category ? () => selectCategory(null) : undefined}
             >
               {exploreHeader}
-              {results}
+              {category ? (
+                results
+              ) : (
+                <p className="px-6 py-10 text-center text-sm leading-relaxed text-muted-foreground">
+                  Search for anywhere on the island, or pick a category above.
+                </p>
+              )}
             </ResponsivePanel>
           )}
 
@@ -1161,14 +1233,19 @@ function MapView({
               its count so collapsing never costs you the sense of what is on
               the map — and it is the only way back, so it sits exactly where
               the panel's own collapse button was. */}
-          {category && resultsCollapsed && (
+          {/* Not gated on `category` either, for the same reason: the panel can
+              now be collapsed with nothing loaded, and without this that would
+              fold away the only search field with no way back to it. */}
+          {resultsCollapsed && (
             <button
               onClick={() => setResultsCollapsed(false)}
               className="glass absolute left-5 top-[5.75rem] z-20 flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm text-foreground shadow-2xl hover:bg-white/5"
             >
               <PanelLeftOpen size={16} className="text-muted-foreground" />
-              {categoryMeta(category).label}
-              <span className="font-mono text-[10px] text-muted-foreground">{places.length}</span>
+              {category ? categoryMeta(category).label : 'Search'}
+              {category && (
+                <span className="font-mono text-[10px] text-muted-foreground">{places.length}</span>
+              )}
             </button>
           )}
 

@@ -283,3 +283,61 @@ html, body, #root {
     opacity: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Island search (components/MapSearchBar + hooks/useIslandSearch)
+   ---------------------------------------------------------------------------
+   The index is a fan-out over one endpoint per category, so the wait is real
+   and variable. These two do the reporting: `search-sweep` is the indefinite
+   "still working" motion riding on top of the determinate progress bar, and
+   `search-row` is what makes each category's results read as arriving rather
+   than blinking into place.
+
+   Both are CSS rather than a library: the sweep has to sit inside a 2px strip
+   the progress bar also occupies, and the row stagger is driven by an inline
+   animation-delay per item, which is awkward to express in Tailwind. */
+@keyframes search-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.search-sweep {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-primary) 70%, transparent),
+    transparent
+  );
+  animation: search-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes search-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.search-row {
+  animation: search-row-in 180ms ease-out both;
+}
+
+/* Motion here is decorative — the progress bar's width and the "Searching X…"
+   line already carry the same information without moving. */
+@media (prefers-reduced-motion: reduce) {
+  .search-sweep {
+    animation: none;
+    opacity: 0.5;
+  }
+  .search-row {
+    animation: none;
+  }
+}

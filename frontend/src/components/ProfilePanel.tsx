@@ -27,9 +27,17 @@ export default function ProfilePanel({ onClose }: Props) {
 
   return (
     <>
-      {/* Click-off backdrop */}
+      {/* Click-off backdrop.
+          `z-30` here was a tie with MapTopBar's banner row, which is also z-30
+          and is painted EARLIER (App renders ProfilePanel after MapView), so
+          the scrim won the tiebreak and buried the category pills — the app's
+          only way to load a result set. Closing the panel restored them, but
+          the pills were unreachable for as long as it was open, and the same
+          tie made them un-clickable through the backdrop. z-35 keeps the
+          scrim above the map and its panels (z-20) while staying below the
+          chrome the user has to be able to reach. */}
       <div
-        className="absolute inset-0 z-30 bg-background/60 backdrop-blur-sm"
+        className="absolute inset-0 z-35 bg-background/60 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden="true"
       />
