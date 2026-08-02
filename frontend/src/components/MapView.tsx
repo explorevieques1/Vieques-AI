@@ -197,6 +197,7 @@ function MapView({
     category,
     subSlug,
     canWaterZones,
+    tourFilter,
   )
 
   /**
@@ -224,10 +225,12 @@ function MapView({
   }, [rawPlaces, userLoc])
 
   const places = useMemo(() => {
+    // No `offers_tours` filter here any more. The toggle now selects which
+    // dataset useCategoryPlaces fetches — spots vs operators — so by the time
+    // rows arrive they are already the right kind. Filtering on `offers_tours`
+    // at this layer was what made "Book a Tour" show snorkel spots: it could
+    // only ever narrow the spot list, never reach the companies.
     let list = rawPlaces
-    if (snorkelling && tourFilter === 'tours') {
-      list = list.filter((p) => (p.raw as { offers_tours?: boolean }).offers_tours)
-    }
     if (tagFilters.size > 0) list = list.filter((p) => matchesFilters(p, tagFilters))
     const sorted = [...list]
     sorted.sort((a, b) => {
@@ -240,7 +243,7 @@ function MapView({
       return da - db
     })
     return sorted
-  }, [rawPlaces, snorkelling, tourFilter, tagFilters, sort, distances])
+  }, [rawPlaces, tagFilters, sort, distances])
 
   /**
    * Chips for the current category, counted over the *unfiltered* list.
@@ -947,7 +950,18 @@ function MapView({
           {(['all', 'tours'] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setTourFilter(f)}
+              onClick={() => {
+                if (f === tourFilter) return
+                setTourFilter(f)
+                // The two halves are different datasets, so anything held over
+                // from the other one is stale: a selected spot (and the zone
+                // polygons it drew) means nothing once the list is companies,
+                // and vice versa. Same cleanup selectCategory does.
+                setSelected(null)
+                setZoneLegend([])
+                const map = mapRef.current
+                if (map) removeAllZones(map)
+              }}
               className={`flex-1 rounded-xl py-1.5 text-xs transition-colors ${
                 tourFilter === f
                   ? 'bg-primary font-semibold text-primary-foreground'

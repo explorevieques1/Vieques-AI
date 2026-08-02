@@ -354,6 +354,42 @@ app.get('/api/snorkel-spots', requireAuth, requireTier(pool, 'snorkel_zones'), a
   }
 })
 
+// Snorkel tour operators — the companies behind the "Book a Tour" toggle.
+//
+// These are businesses, not places: no latitude/longitude, because they pick
+// you up rather than being somewhere you walk to. The frontend renders them as
+// unmappable Places (Place.latitude === null), so they list in the panel
+// without dropping a pin. See db/migrations/0036_snorkel_tour_operators.sql.
+//
+// `spots` is the list of snorkel spots each operator serves, aggregated from
+// the join table. Empty array rather than [null] when an operator is linked to
+// nothing — FILTER strips the null row a plain array_agg would leave behind.
+//
+// Same tier gate as the spots: "Book a Tour" sits inside the snorkelling panel,
+// which is Vacation-tier, so both halves of the toggle gate identically.
+app.get('/api/snorkel-operators', requireAuth, requireTier(pool, 'snorkel_zones'), async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.id, o.name, o.phone, o.email, o.website, o.description,
+              o.tour_details, o.duration, o.price_info, o.departure,
+              o.booking_notes,
+              COALESCE(
+                array_agg(s.name ORDER BY s.name) FILTER (WHERE s.name IS NOT NULL),
+                '{}'
+              ) AS spots
+         FROM snorkel_tour_operators o
+         LEFT JOIN snorkel_spot_operators so ON so.operator_id = o.id
+         LEFT JOIN snorkel_spots s ON s.id = so.spot_id AND s.is_active = true
+        WHERE o.is_active = true
+        GROUP BY o.id
+        ORDER BY o.name`
+    )
+    res.json(rows)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Zones for one snorkel spot, returned as a GeoJSON FeatureCollection
 app.get('/api/snorkel-spots/:id/zones', requireAuth, requireTier(pool, 'snorkel_zones'), async (req, res) => {
   try {

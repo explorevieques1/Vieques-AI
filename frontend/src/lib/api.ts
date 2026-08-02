@@ -231,6 +231,35 @@ export async function fetchSnorkelSpots(): Promise<SnorkelSpot[]> {
   return res.json()
 }
 
+/**
+ * A snorkel tour company — the "Book a Tour" half of the snorkelling toggle.
+ *
+ * No latitude/longitude, unlike every other listing type: these operators pick
+ * you up. They become Places with `latitude: null`, which `isMappable` filters
+ * out of the marker pass, so they list without a pin.
+ */
+export type SnorkelOperator = {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  website: string | null
+  description: string | null
+  tour_details: string | null
+  duration: string | null
+  price_info: string | null
+  departure: string | null
+  booking_notes: string | null
+  /** Names of the spots this operator runs trips to; `[]` if none linked yet. */
+  spots: string[]
+}
+
+export async function fetchSnorkelOperators(): Promise<SnorkelOperator[]> {
+  const res = await apiFetch(`/api/snorkel-operators`)
+  if (!res.ok) throw new Error(`Snorkel operators failed: ${res.status}`)
+  return res.json()
+}
+
 export async function fetchSnorkelZones(spotId: string): Promise<ZoneFeatureCollection> {
   const res = await apiFetch(`/api/snorkel-spots/${spotId}/zones`)
   if (!res.ok) throw new Error(`Snorkel zones failed: ${res.status}`)

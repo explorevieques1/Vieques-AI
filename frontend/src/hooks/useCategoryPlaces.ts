@@ -11,6 +11,7 @@ import {
   fetchRestaurantListings,
   fetchServiceCategories,
   fetchServiceListings,
+  fetchSnorkelOperators,
   fetchSnorkelSpots,
   fetchStayCategories,
   fetchStays,
@@ -26,6 +27,7 @@ import {
   categoryMeta,
   essentialToPlace,
   kayakToPlace,
+  operatorToPlace,
   restaurantToPlace,
   serviceToPlace,
   snorkelToPlace,
@@ -88,6 +90,19 @@ export function useCategoryPlaces(
    */
   canWaterZones: boolean,
   /**
+   * Which half of the snorkelling "Go Yourself / Book a Tour" toggle is active.
+   *
+   * These are two different datasets, not one list filtered two ways:
+   * 'all' fetches snorkel_spots (places you swim to), 'tours' fetches
+   * snorkel_tour_operators (companies that take you). It is an argument to the
+   * hook rather than a filter in MapView because the answer changes what gets
+   * *requested* — the old client-side `offers_tours` filter could only ever
+   * show spots, which is why "Book a Tour" listed snorkel spots.
+   *
+   * Ignored for every category except activities/snorkeling.
+   */
+  tourFilter: 'all' | 'tours' = 'all',
+  /**
    * Server-side beach filters.
    *
    * Unused by the UI since the filter chips became client-side and category-wide
@@ -129,7 +144,9 @@ export function useCategoryPlaces(
     !meta!.comingSoon &&
     !(meta!.hasSubcategories && !subSlug)
 
-  const requestKey = `${category}|${subSlug}|${JSON.stringify(beachFilters)}`
+  // `tourFilter` is part of the key: it selects a different endpoint, so
+  // leaving it out would serve spots from cache after a toggle to tours.
+  const requestKey = `${category}|${subSlug}|${tourFilter}|${JSON.stringify(beachFilters)}`
   const fresh = cache?.key === requestKey
   const places = shouldFetch && fresh ? cache!.rows : []
   const loading = shouldFetch && !fresh
@@ -218,7 +235,13 @@ export function useCategoryPlaces(
         // activity listing. Gate it before the request so a free-tier user
         // gets the upsell instead of a 402 in the console.
         if (subSlug === 'snorkeling') {
-          fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
+          // The toggle picks the dataset, not a filter over one dataset:
+          // "Book a Tour" wants the companies, "Go Yourself" wants the spots.
+          if (tourFilter === 'tours') {
+            fetchSnorkelOperators().then((rows) => finish(rows.map(operatorToPlace)), fail)
+          } else {
+            fetchSnorkelSpots().then((rows) => finish(rows.map(snorkelToPlace)), fail)
+          }
           break
         }
         // Kayaking is the same shape as snorkelling — put-in pins with hazard
