@@ -74,7 +74,7 @@ export default function Home() {
               The capture is 1170x2532 (iPhone 15, 9:19.5) — the same aspect the
               frame locks to — so it fills the glass with nothing cropped. */}
           <div className="phone-wrap">
-            <IOSPhoneFrame width={272} theme="dark" screenshot>
+            <IOSPhoneFrame width={340} theme="dark" screenshot>
               <img
                 className="phone-shot"
                 src="/app-screenshot.jpg"
