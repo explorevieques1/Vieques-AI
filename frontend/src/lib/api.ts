@@ -205,6 +205,9 @@ export type SnorkelSpot = {
   description: string | null
   difficulty: string | null
   entry_notes: string | null
+  sights: string | null
+  depth: 'shallow' | 'deep' | null
+  water: string | null
   latitude: number
   longitude: number
   offers_tours: boolean

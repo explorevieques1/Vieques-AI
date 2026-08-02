@@ -343,6 +343,7 @@ app.get('/api/snorkel-spots', requireAuth, requireTier(pool, 'snorkel_zones'), a
   try {
     const { rows } = await pool.query(
       `SELECT id, name, beach_id, description, difficulty, entry_notes,
+              sights, depth, water,
               latitude, longitude, offers_tours
        FROM snorkel_spots
        WHERE is_active = true AND latitude IS NOT NULL

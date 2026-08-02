@@ -589,8 +589,16 @@ export function snorkelToPlace(s: SnorkelSpot): Place {
     subtitle: s.difficulty ? `Difficulty · ${s.difficulty}` : undefined,
     latitude: s.latitude,
     longitude: s.longitude,
-    tags: [s.difficulty, s.offers_tours ? 'tours' : null].filter((t): t is string => !!t),
-    stats: stats(['Difficulty', s.difficulty], ['Entry', s.entry_notes]),
+    tags: [s.difficulty, s.depth, s.offers_tours ? 'tours' : null].filter(
+      (t): t is string => !!t,
+    ),
+    stats: stats(
+      ['Difficulty', s.difficulty],
+      ['Depth', s.depth],
+      ['Water', s.water],
+      ['Entry', s.entry_notes],
+      ['Sights', s.sights],
+    ),
     description: s.description ?? undefined,
     contact: {},
     icon: ACTIVITY_ICONS['snorkeling'],
