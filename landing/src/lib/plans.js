@@ -77,52 +77,55 @@ export const TRAVELER_FEATURE_GROUPS = [
   },
 ]
 
-export const BUSINESS_FEATURE_GROUPS = [
-  {
-    group: 'Listing',
-    rows: [
-      { label: 'Pin on the island map',           values: { business_claimed: true, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Name, category, location',        values: { business_claimed: true, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Verified badge',                  values: { business_claimed: true, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Hours, phone, address',           values: { business_claimed: true, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Self-serve editing',              values: { business_claimed: 'Monthly', business_basic: 'Anytime', business_featured: 'Anytime', business_partner: 'Anytime' } },
-      { label: 'Photo gallery',                   values: { business_claimed: '1 photo', business_basic: '8 photos', business_featured: '25 photos', business_partner: 'Unlimited' } },
-      { label: 'Full description',                values: { business_claimed: false, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Menu / price list',               values: { business_claimed: false, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Website & social links',          values: { business_claimed: false, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Booking / reservation link',      values: { business_claimed: false, business_basic: true, business_featured: true, business_partner: 'Direct handoff' } },
-    ],
-  },
-  {
-    group: 'Visibility',
-    rows: [
-      { label: 'Appears in search & filters',     values: { business_claimed: true, business_basic: true, business_featured: true, business_partner: true } },
-      { label: 'Sort tiebreak priority',          hint: 'Disclosed on every paid placement — ranking is never sold', values: { business_claimed: false, business_basic: false, business_featured: true, business_partner: true } },
-      { label: 'Featured badge & custom marker',  values: { business_claimed: false, business_basic: false, business_featured: true, business_partner: true } },
-      { label: 'Category spotlight slot',         values: { business_claimed: false, business_basic: false, business_featured: '1/month', business_partner: '4/month' } },
-      { label: 'Homepage placement',              values: { business_claimed: false, business_basic: false, business_featured: false, business_partner: true } },
-      { label: 'Seasonal promo banners',          values: { business_claimed: false, business_basic: false, business_featured: '2/year', business_partner: 'Unlimited' } },
-    ],
-  },
-  {
-    group: 'Data',
-    rows: [
-      { label: 'Profile views',                   values: { business_claimed: false, business_basic: 'Monthly', business_featured: 'Weekly', business_partner: 'Real-time' } },
-      { label: 'Directions, clicks & calls',      values: { business_claimed: false, business_basic: false, business_featured: true, business_partner: true } },
-      { label: 'Search terms that surfaced you',  values: { business_claimed: false, business_basic: false, business_featured: false, business_partner: true } },
-      { label: 'Quarterly performance report',    values: { business_claimed: false, business_basic: false, business_featured: false, business_partner: true } },
-    ],
-  },
-  {
-    group: 'Operations',
-    rows: [
-      { label: 'Locations included',              values: { business_claimed: '1', business_basic: '1', business_featured: '1', business_partner: 'Up to 5' } },
-      { label: 'Event calendar',                  values: { business_claimed: false, business_basic: false, business_featured: '3 active', business_partner: 'Unlimited' } },
-      { label: 'Team seats',                      values: { business_claimed: '1', business_basic: '1', business_featured: '2', business_partner: '5' } },
-      { label: 'Support',                         values: { business_claimed: 'Email', business_basic: 'Email', business_featured: 'Priority', business_partner: 'Named contact' } },
-    ],
-  },
-]
+// ============================================================================
+//  BUSINESS — NOT FOR SALE YET
+// ============================================================================
+//  The priced business ladder (BUSINESS_PLANS + BUSINESS_FEATURE_GROUPS) was
+//  removed from this file deliberately. It advertised four tiers and 30+
+//  features against a product that does not exist: there is no claim flow, no
+//  business dashboard, and no analytics anywhere in the codebase.
+//
+//  It was also broken in a way that would have gone unnoticed until a refund
+//  request. The plans in backend/payments.js declare tiers 'basic', 'featured'
+//  and 'partner', and NONE of those have an entry in FEATURES — so bestTier()
+//  resolves a paying business subscriber all the way down to 'free'. A $149/mo
+//  Island Partner would have been charged monthly and received the free tier.
+//
+//  So the pricing page collects an email instead of a card. What is below is a
+//  PREVIEW: deliberately unpriced and marked as upcoming, because publishing a
+//  price we have not validated against a real product is how you end up honour-
+//  bound to a number that does not work.
+//
+//  TO RE-INTRODUCE PAID BUSINESS PLANS, all of these must be true:
+//    1. FEATURES in backend/payments.js has entries for basic/featured/partner,
+//       and bestTier()'s rank map includes them.
+//    2. A business can actually claim and edit a listing.
+//    3. The analytics those tiers promise are real.
+//  Until then this stays a waitlist. See PLATFORM.md §8 Phase 5.
+// ============================================================================
+
+/** What we tell business owners is coming, with no prices attached. */
+export const BUSINESS_PREVIEW = {
+  headline: 'Get found by people already on the island',
+  blurb:
+    'We are building a way for Vieques businesses to claim their listing, keep their ' +
+    'hours and photos current, and see how many travelers found them through the app. ' +
+    'It is not ready yet — leave your email and we will come to you first.',
+  // Phrased as intentions, not entitlements. No ✓/✗ matrix, because a matrix
+  // implies tiers you can buy today.
+  planned: [
+    'Claim your listing and keep it accurate yourself',
+    'Photos, menu, hours, and booking links',
+    'A verified badge travelers can trust',
+    'See how many people viewed you and tapped for directions',
+    'Event and seasonal promotion slots',
+  ],
+  // The honesty line. Keep it: it is the reason a business owner trusts the
+  // rest of the page, and it is the commitment the AI assistant already keeps.
+  promise:
+    'Paid placement will never buy its way into an AI recommendation. When ranking ' +
+    'is influenced by payment we will label it, every time.',
+}
 
 /**
  * The traveler ladder. `key: 'free'` is the only entry with no backend plan —
@@ -169,59 +172,30 @@ export const TRAVELER_PLANS = [
   },
 ]
 
-export const BUSINESS_PLANS = [
-  {
-    key: 'business_claimed',
-    name: 'Claimed',
-    tagline: 'Claim what we already list',
-    price: '$0',
-    unit: 'free forever',
-    cta: 'Claim my listing',
-    checkout: false,
-  },
-  {
-    key: 'business_basic',
-    name: 'Basic',
-    tagline: 'Kiosks, food trucks, small operators',
-    price: '$19',
-    unit: '/month · $190/yr',
-    cta: 'List my business',
-    checkout: true,
-  },
-  {
-    key: 'business_featured',
-    name: 'Featured',
-    tagline: 'Restaurants, dive shops, tour operators',
-    price: '$59',
-    unit: '/month · $590/yr',
-    cta: 'Get Featured',
-    checkout: true,
-    featured: true,
-    badge: 'Recommended',
-  },
-  {
-    key: 'business_partner',
-    name: 'Island Partner',
-    tagline: 'Hotels and multi-location operators',
-    price: '$149',
-    unit: '/month · $1,490/yr',
-    cta: 'Become a Partner',
-    checkout: true,
-  },
-]
-
 /** Add-ons, sold after purchase rather than on the main ladder. */
 export const ADDONS = [
   { key: 'credits', name: 'AI Credit Pack', price: '$4.99', blurb: '+30 Ask AI messages. Never expire.' },
   { key: 'extend',  name: 'Extend Trip',    price: '$4.99', blurb: '+7 days on an active Vacation pass.' },
 ]
 
-/** Human labels for every plan key, for the success + account pages. */
+/**
+ * Human labels for every plan key, for the success + account pages.
+ *
+ * The business_* keys stay here even though those plans are no longer sold.
+ * They are not dead code: backend/payments.js still defines them and the
+ * subscriptions CHECK constraint (0021) still accepts them, so any row created
+ * while they were purchasable must still render with a name rather than a raw
+ * slug on someone's account page.
+ */
 export const PLAN_LABELS = {
   free: 'Free',
   day_trip: 'Day Trip',
   vacation: 'Vacation',
   exploration: 'Exploration',
+  // Retired from the catalog before the three-tier ladder (0021 keeps it in the
+  // CHECK constraint for exactly this reason). Production still holds an active
+  // row on this key, and without a label the account page prints the raw slug.
+  traveler: 'Traveler',
   credits: 'AI Credit Pack',
   extend: 'Trip Extension',
   business_claimed: 'Claimed Listing',

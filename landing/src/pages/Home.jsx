@@ -182,7 +182,7 @@ export default function Home() {
         <div className={aud==='traveler'?'plans':'plans hidden'}>
           <div className="plan">
             <h3>Day Trip</h3><p className="sub">Off the ferry and back by dark</p>
-            <div className="price">$6.99<small>one-time · 48 hours</small></div>
+            <div className="price">$7.99<small>one-time · 24 hours</small></div>
             <ul>
               <li>Full beach &amp; restaurant profiles</li><li>Directions &amp; road conditions</li>
               <li>Essentials and transport</li><li>Smart filters &amp; search</li>
@@ -192,7 +192,7 @@ export default function Home() {
           <div className="plan featured">
             <span className="badge">Most popular</span>
             <h3>Vacation</h3><p className="sub">Everything you need for your stay</p>
-            <div className="price">$12.99<small>one-time · 7 days</small></div>
+            <div className="price">$13.99<small>one-time · 7 days</small></div>
             <ul>
               <li>Everything in Day Trip</li><li>25 Ask AI messages</li>
               <li>All snorkeling zones &amp; spot detail</li><li>Bio Bay moon-phase guide</li>
@@ -210,40 +210,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* BUSINESS */}
+        {/* BUSINESS — not for sale yet.
+            The three priced cards that used to sit here (Basic $19, Featured
+            $59, Island Partner $149) were removed: nothing delivers them, and
+            the tiers they grant are absent from FEATURES in payments.js, so a
+            paying subscriber resolved to the free tier. See lib/plans.js. */}
         <div className={aud==='business'?'plans':'plans hidden'}>
-          <div className="plan">
-            <h3>Basic</h3><p className="sub">Kiosks, food trucks, small operators</p>
-            <div className="price">$19<small>/month · $190/yr</small></div>
+          <div className="plan" style={{ gridColumn: '1 / -1', maxWidth: 560, margin: '0 auto' }}>
+            <h3>Coming soon for businesses</h3>
+            <p className="sub">Claim your listing, keep it current, and see who found you.</p>
             <ul>
-              <li>Your pin on the island map</li><li>Full profile: hours, prices, contact</li>
-              <li>Appears in filters &amp; search</li><li>Update your listing anytime</li>
+              <li>Claim and edit your own listing</li><li>Photos, hours, menu &amp; booking links</li>
+              <li>A verified badge travelers trust</li><li>See views and taps for directions</li>
             </ul>
-            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('business_basic')}>List My Business</button>
-          </div>
-          <div className="plan featured">
-            <span className="badge">Recommended</span>
-            <h3>Featured</h3><p className="sub">Restaurants, dive shops, tour operators</p>
-            <div className="price">$59<small>/month · $590/yr</small></div>
-            <ul>
-              <li>Everything in Basic</li><li>Featured badge &amp; custom marker</li>
-              <li>Monthly category spotlight</li><li>Engagement analytics</li>
-            </ul>
-            <button className="btn btn-primary btn-lg" onClick={() => choosePlan('business_featured')}>Get Featured</button>
-          </div>
-          <div className="plan">
-            <h3>Island Partner</h3><p className="sub">Hotels and multi-location operators</p>
-            <div className="price">$149<small>/month · $1,490/yr</small></div>
-            <ul>
-              <li>Everything in Featured</li><li>Up to 5 locations</li>
-              <li>Homepage placement</li><li>Search-term data &amp; quarterly report</li>
-            </ul>
-            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('business_partner')}>Become a Partner</button>
+            <Link to="/pricing?for=business" className="btn btn-primary btn-lg">Join the waitlist</Link>
           </div>
         </div>
 
         <p className="center" style={{ marginTop: 22 }}>
-          <Link to="/pricing" className="link">Compare every feature →</Link>
+          <Link to="/pricing" className="link">
+            {aud === 'business' ? 'See what we’re building →' : 'Compare every feature →'}
+          </Link>
         </p>
       </section>
 
@@ -254,9 +241,20 @@ export default function Home() {
         <Link to="/signup" className="btn btn-primary btn-lg">Start Exploring</Link>
       </section>
 
+      {/* Legal links are Link, not <a href>, so they route client-side instead
+          of reloading the SPA. They sit in the footer because that is where
+          Stripe (and everyone else) looks for them. */}
       <footer className="footer">
         <span className="brand" style={{ fontSize: '16px' }}>Vieques<span> AI</span></span>
-        <nav><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#pricing">For Businesses</a><a href="mailto:hello@explorevieques.org">Contact</a></nav>
+        <nav>
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          <Link to="/pricing?for=business">For Businesses</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/refunds">Refunds</Link>
+          <a href="mailto:hello@explorevieques.org">Contact</a>
+        </nav>
         <span>© 2026 Vieques AI · Made on the island 🇵🇷</span>
       </footer>
     </>

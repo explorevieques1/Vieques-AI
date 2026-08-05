@@ -81,12 +81,15 @@ const supabaseAuth = createClient(
 export const PLANS = {
   // ── Travelers (one-time passes) ───────────────────────────────────────────
   day_trip: {
-    name: 'Day Trip', amount: 699, mode: 'payment', tier: 'day_trip',
-    description: 'Full island access for 48 hours',
-    grants: { type: 'access', days: 2, aiMessages: 0 },
+    name: 'Day Trip', amount: 799, mode: 'payment', tier: 'day_trip',
+    description: 'Full island access for 24 hours',
+    // days:1 is the 24 hours the page advertises. This previously read 2 while
+    // every customer-facing surface said 24 hours — the grant is what actually
+    // expires the pass, so it is the number that has to match the copy.
+    grants: { type: 'access', days: 1, aiMessages: 0 },
   },
   vacation: {
-    name: 'Vacation', amount: 1299, mode: 'payment', tier: 'vacation',
+    name: 'Vacation', amount: 1399, mode: 'payment', tier: 'vacation',
     description: 'Everything you need for your stay — 7 days, 25 Ask AI messages',
     grants: { type: 'access', days: 7, aiMessages: 25 },
   },
@@ -352,16 +355,31 @@ export async function handleWebhook(pool, req, res) {
 /**
  * Grant whatever a plan promised, inside a single DB transaction.
  *
- * IDEMPOTENT by design: Stripe delivers webhooks at-least-once (it retries on
- * timeout), so we key on `stripe_session_id` and bail early if that session was
- * already fulfilled — otherwise a retry would grant access twice or double the
- * credits. The guard is enforced by a unique index on
- * subscriptions.stripe_session_id (see db/migrations/0020) plus
- * `ON CONFLICT DO NOTHING` here, so two concurrent deliveries of the same
- * event can't both win a SELECT-then-INSERT race and double-grant. Access
- * plans write a `subscriptions` row (with an expiry for time-boxed plans);
- * credit packs additionally write a `credit_transactions` row. Any failure
- * rolls the whole thing back.
+ * IDEMPOTENCY. Stripe delivers webhooks at-least-once (it retries on timeout,
+ * and can redeliver), so every grant must be safe to replay. The guard is the
+ * INSERT into `fulfillments` below: a unique index on stripe_session_id means a
+ * concurrent or later redelivery loses the race *in the database*, gets
+ * rowCount 0, and returns without granting anything. Doing the check as an
+ * INSERT rather than a SELECT-then-INSERT is what makes it atomic.
+ *
+ * WHY `fulfillments` AND NOT `subscriptions` (db/migrations/0042).
+ * This guard used to be the INSERT into `subscriptions`, which forced every
+ * purchase to manufacture a subscription row just to have something to key on.
+ * For the two add-ons that was actively wrong: neither confers a pass, but both
+ * got a row with a NULL expires_at — and NULL means *open-ended* to
+ * getEntitlement() and requireEntitlement(). A $4.99 credit pack therefore
+ * bought permanent access worth $24.99. Separating "was this session
+ * processed?" from "does this user hold a pass?" is what fixes it.
+ *
+ * WHAT EACH GRANT SHAPE DOES NOW — exactly one of:
+ *   • access  → INSERT a subscriptions row (expiry set for time-boxed plans,
+ *               NULL only for genuine open-ended subscription plans), plus any
+ *               bundled AI messages.
+ *   • credits → INSERT a credit_transactions row ONLY. No subscriptions row.
+ *   • extend  → UPDATE an existing pass's expiry ONLY. No subscriptions row.
+ *
+ * Any failure rolls the whole thing back, including the fulfillments row, so a
+ * failed delivery is retried rather than being recorded as done.
  *
  * @param {import('pg').Pool} pool
  * @param {{ userId: string, planKey: string, plan: object, session: object }} ctx
@@ -372,55 +390,80 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
   try {
     await client.query('BEGIN')
 
-    // Time-boxed access (e.g. traveler = 30 days) gets an expiry; subscription
-    // access is open-ended (null) and governed by Stripe's subscription status.
-    const expiresAt =
-      plan.grants?.type === 'access' && plan.grants?.days
+    const grantType = plan.grants?.type
+
+    // ---- The idempotency guard -------------------------------------------
+    // Claim this Stripe session before doing anything that grants value. A
+    // redelivery loses here and we return having changed nothing. `outcome` is
+    // corrected below once we know what actually applied.
+    const claimed = await client.query(
+      `INSERT INTO public.fulfillments
+         (stripe_session_id, user_id, plan, outcome, amount_total)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (stripe_session_id) DO NOTHING`,
+      [session.id, userId, planKey, grantType || 'noop', session.amount_total ?? null],
+    )
+    if (claimed.rowCount === 0) { await client.query('COMMIT'); return }
+
+    // ---- access: the only shape that confers a pass ----------------------
+    if (grantType === 'access') {
+      // Time-boxed passes get an expiry. NULL is reserved for genuinely
+      // open-ended plans (recurring subscriptions, governed by Stripe status)
+      // — it must never be reachable by an add-on.
+      const expiresAt = plan.grants.days
         ? new Date(Date.now() + plan.grants.days * 86400_000) // days → ms
         : null
 
-    // Duplicate-delivery guard: the unique index on stripe_session_id makes
-    // this INSERT the atomic idempotency check — a concurrent retry of the
-    // same event loses the race here (not in an earlier SELECT) and gets
-    // rowCount 0, so we commit the no-op and skip the credit grant below.
-    const inserted = await client.query(
-      `INSERT INTO public.subscriptions
-         (user_id, plan, status, expires_at,
-          stripe_customer_id, stripe_subscription_id, stripe_session_id)
-       VALUES ($1, $2, 'active', $3, $4, $5, $6)
-       ON CONFLICT (stripe_session_id) DO NOTHING`,
-      [userId, planKey, expiresAt, session.customer, session.subscription || null, session.id]
-    )
-    if (inserted.rowCount === 0) { await client.query('COMMIT'); return }
+      await client.query(
+        `INSERT INTO public.subscriptions
+           (user_id, plan, status, expires_at,
+            stripe_customer_id, stripe_subscription_id, stripe_session_id)
+         VALUES ($1, $2, 'active', $3, $4, $5, $6)
+         ON CONFLICT (stripe_session_id) DO NOTHING`,
+        [userId, planKey, expiresAt, session.customer, session.subscription || null, session.id],
+      )
 
-    // How many Ask AI messages this purchase is worth. Two shapes grant them:
-    //   • an access pass with a bundled allowance (vacation = 25, exploration = 150)
-    //   • a standalone credit pack (the add-on)
-    // Both land in the same append-only ledger, so the balance is just SUM().
-    const credits =
-      plan.grants?.type === 'credits' ? plan.grants.amount
-      : plan.grants?.type === 'access' ? (plan.grants.aiMessages || 0)
-      : 0
+      // Bundled Ask AI allowance (vacation = 25, exploration = 150).
+      const bundled = plan.grants.aiMessages || 0
+      if (bundled > 0) {
+        await client.query(
+          `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
+           VALUES ($1, $2, 'purchase', $3)`,
+          [userId, bundled, session.id],
+        )
+      }
+    }
 
-    if (credits > 0) {
+    // ---- credits: ledger only, never a subscriptions row ------------------
+    else if (grantType === 'credits') {
       await client.query(
         `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
          VALUES ($1, $2, 'purchase', $3)`,
-        [userId, credits, session.id]
+        [userId, plan.grants.amount, session.id],
       )
     }
 
-    // The Extend add-on pushes out the expiry of the pass the user already
-    // holds rather than granting a new one. Guarded to active, unexpired rows
-    // so it can't resurrect a pass that already lapsed.
-    if (plan.grants?.type === 'extend') {
-      await client.query(
+    // ---- extend: mutate an existing pass, never create one -----------------
+    else if (grantType === 'extend') {
+      // Guarded to active, unexpired rows so it cannot resurrect a lapsed pass.
+      // If the user holds nothing, this legitimately affects 0 rows — recorded
+      // as 'noop' so the mismatch is visible when reconciling against Stripe
+      // rather than silently swallowed. (Worth a refund follow-up: they paid
+      // for days they could not receive.)
+      const extended = await client.query(
         `UPDATE public.subscriptions
             SET expires_at = expires_at + ($2 || ' days')::interval
           WHERE user_id = $1 AND status = 'active'
             AND expires_at IS NOT NULL AND expires_at > now()`,
-        [userId, String(plan.grants.days)]
+        [userId, String(plan.grants.days)],
       )
+      if (extended.rowCount === 0) {
+        await client.query(
+          `UPDATE public.fulfillments SET outcome = 'noop' WHERE stripe_session_id = $1`,
+          [session.id],
+        )
+        console.warn(`extend purchased with no active pass: user=${userId} session=${session.id}`)
+      }
     }
 
     await client.query('COMMIT')

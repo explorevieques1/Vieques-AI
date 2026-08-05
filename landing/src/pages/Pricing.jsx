@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
-import { startCheckout } from '../lib/api.js'
+import { startCheckout, joinBusinessWaitlist } from '../lib/api.js'
 import {
-  TRAVELER_PLANS, BUSINESS_PLANS,
-  TRAVELER_FEATURE_GROUPS, BUSINESS_FEATURE_GROUPS,
+  TRAVELER_PLANS,
+  TRAVELER_FEATURE_GROUPS,
+  BUSINESS_PREVIEW,
   ADDONS,
 } from '../lib/plans.js'
 
@@ -17,10 +18,111 @@ function FeatureValue({ value }) {
   return <span style={styles.val}>{value}</span>
 }
 
+/**
+ * The business tab. Collects an email instead of a card.
+ *
+ * There is no pricing here on purpose — see the long note in lib/plans.js. The
+ * business product does not exist yet, and the plans that used to sit on this
+ * tab would have charged $19–$149/month for the free tier. Publishing a price
+ * before the product is real also commits us to a number we have not tested.
+ */
+function BusinessWaitlist() {
+  const [email, setEmail] = useState('')
+  const [businessName, setBusinessName] = useState('')
+  const [note, setNote] = useState('')
+  const [state, setState] = useState('idle') // idle | sending | done
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    setState('sending')
+    try {
+      await joinBusinessWaitlist({ email, businessName, note })
+      setState('done')
+    } catch (err) {
+      setError(err.message || 'Could not save your details.')
+      setState('idle')
+    }
+  }
+
+  // Confirmation replaces the form entirely rather than sitting above it — a
+  // form still on screen after a successful submit reads as "it didn't work".
+  if (state === 'done') {
+    return (
+      <div style={styles.bizWrap}>
+        <div style={styles.bizCard}>
+          <div style={styles.bizCheck} aria-hidden="true">✓</div>
+          <h3 style={styles.bizDoneTitle}>You're on the list</h3>
+          <p style={styles.bizBlurb}>
+            We'll email <strong style={{ color: '#e2e8f0' }}>{email}</strong> when business
+            listings open up. No charge, and nothing else in the meantime.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={styles.bizWrap}>
+      <div style={styles.bizCard}>
+        <span style={styles.bizTag}>In development</span>
+        <h3 style={styles.bizTitle}>{BUSINESS_PREVIEW.headline}</h3>
+        <p style={styles.bizBlurb}>{BUSINESS_PREVIEW.blurb}</p>
+
+        <ul style={styles.bizList}>
+          {BUSINESS_PREVIEW.planned.map((item) => (
+            <li key={item} style={styles.bizItem}>
+              <span style={styles.bizDot} aria-hidden="true" />
+              {item}
+            </li>
+          ))}
+        </ul>
+
+        <form onSubmit={submit} style={styles.bizForm}>
+          <label htmlFor="biz-email" style={styles.bizLabel}>Email</label>
+          <input
+            id="biz-email" type="email" required value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@yourbusiness.com"
+            style={styles.bizInput}
+          />
+
+          <label htmlFor="biz-name" style={styles.bizLabel}>Business name <span style={styles.bizOpt}>optional</span></label>
+          <input
+            id="biz-name" type="text" value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            placeholder="e.g. Kiosko La Pared"
+            style={styles.bizInput}
+          />
+
+          <label htmlFor="biz-note" style={styles.bizLabel}>What would you want from it? <span style={styles.bizOpt}>optional</span></label>
+          <textarea
+            id="biz-note" rows={3} value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Tells us what to build first."
+            style={{ ...styles.bizInput, resize: 'vertical', minHeight: 72 }}
+          />
+
+          {error && <p style={styles.error}>{error}</p>}
+
+          <button type="submit" style={styles.bizBtn} disabled={state === 'sending'}>
+            {state === 'sending' ? 'Adding you…' : 'Join the waitlist'}
+          </button>
+        </form>
+
+        <p style={styles.bizPromise}>{BUSINESS_PREVIEW.promise}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function Pricing() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [aud, setAud] = useState('traveler')
+  // ?for=business opens straight on the waitlist tab — the homepage's business
+  // CTA links here, and dropping those visitors on the traveler tab loses them.
+  const [aud, setAud] = useState(params.get('for') === 'business' ? 'business' : 'traveler')
   const [session, setSession] = useState(null)
   const [busy, setBusy] = useState(null) // which plan is processing
   const [error, setError] = useState('')
@@ -52,8 +154,6 @@ export default function Pricing() {
   }
 
   const isTraveler = aud === 'traveler'
-  const plans = isTraveler ? TRAVELER_PLANS : BUSINESS_PLANS
-  const groups = isTraveler ? TRAVELER_FEATURE_GROUPS : BUSINESS_FEATURE_GROUPS
 
   return (
     <main style={styles.wrap}>
@@ -63,11 +163,13 @@ export default function Pricing() {
 
         <div style={styles.head}>
           <span style={styles.eyebrow}>Pricing</span>
-          <h1 style={styles.h1}>Simple pricing for your trip — or your business</h1>
+          <h1 style={styles.h1}>
+            {isTraveler ? 'Simple pricing for your trip' : 'Business listings are coming'}
+          </h1>
           <p style={styles.sub}>
             {isTraveler
               ? 'Less than one Bio Bay tour. Less than half a day of jeep rental.'
-              : "Get found by the people already on the island, looking for exactly what you sell."}
+              : 'Not open yet — tell us where to reach you and you’ll be first in.'}
           </p>
         </div>
 
@@ -81,55 +183,57 @@ export default function Pricing() {
           <button role="tab" aria-selected={!isTraveler}
             style={!isTraveler ? styles.tOn : styles.tOff}
             onClick={() => setAud('business')}>For Businesses</button>
+          {/* No "soon" badge on the tab itself — the tab is a filter, and the
+              state belongs on the panel it opens, which says it plainly. */}
         </div>
 
-        {/* ---- Plan cards. Each card carries the FULL feature matrix so the
-                columns line up and you can read across to compare. ---- */}
-        <div style={styles.plans}>
-          {plans.map((p) => (
-            <div key={p.key} style={{ ...styles.plan, ...(p.featured ? styles.planFeatured : {}) }}>
-              {p.badge && <span style={styles.badge}>{p.badge}</span>}
-
-              <div style={styles.planHead}>
-                <h3 style={styles.planName}>{p.name}</h3>
-                <p style={styles.tagline}>{p.tagline}</p>
-                <div style={styles.price}>{p.price}<small style={styles.unit}>{p.unit}</small></div>
-              </div>
-
-              <button
-                style={p.featured ? styles.btnPrimary : styles.btnGhost}
-                onClick={() => choose(p)}
-                disabled={busy === p.key}
-              >
-                {busy === p.key ? 'Redirecting…' : p.cta}
-              </button>
-
-              <div style={styles.matrix}>
-                {groups.map((g) => (
-                  <div key={g.group}>
-                    <div style={styles.groupLabel}>{g.group}</div>
-                    {g.rows.map((row) => {
-                      const value = row.values[p.key]
-                      const off = value === false || value === null
-                      return (
-                        <div key={row.label} style={styles.row}>
-                          <span style={{ ...styles.rowLabel, ...(off ? styles.rowLabelOff : {}) }}
-                            title={row.hint || undefined}>
-                            {row.label}
-                          </span>
-                          <FeatureValue value={value} />
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {isTraveler && (
+        {isTraveler ? (
           <>
+            {/* ---- Plan cards. Each card carries the FULL feature matrix so the
+                    columns line up and you can read across to compare. ---- */}
+            <div style={styles.plans}>
+              {TRAVELER_PLANS.map((p) => (
+                <div key={p.key} style={{ ...styles.plan, ...(p.featured ? styles.planFeatured : {}) }}>
+                  {p.badge && <span style={styles.badge}>{p.badge}</span>}
+
+                  <div style={styles.planHead}>
+                    <h3 style={styles.planName}>{p.name}</h3>
+                    <p style={styles.tagline}>{p.tagline}</p>
+                    <div style={styles.price}>{p.price}<small style={styles.unit}>{p.unit}</small></div>
+                  </div>
+
+                  <button
+                    style={p.featured ? styles.btnPrimary : styles.btnGhost}
+                    onClick={() => choose(p)}
+                    disabled={busy === p.key}
+                  >
+                    {busy === p.key ? 'Redirecting…' : p.cta}
+                  </button>
+
+                  <div style={styles.matrix}>
+                    {TRAVELER_FEATURE_GROUPS.map((g) => (
+                      <div key={g.group}>
+                        <div style={styles.groupLabel}>{g.group}</div>
+                        {g.rows.map((row) => {
+                          const value = row.values[p.key]
+                          const off = value === false || value === null
+                          return (
+                            <div key={row.label} style={styles.row}>
+                              <span style={{ ...styles.rowLabel, ...(off ? styles.rowLabelOff : {}) }}
+                                title={row.hint || undefined}>
+                                {row.label}
+                              </span>
+                              <FeatureValue value={value} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div style={styles.addons}>
               <h4 style={styles.addonsTitle}>Add-ons</h4>
               <div style={styles.addonGrid}>
@@ -152,21 +256,26 @@ export default function Pricing() {
               Exploration includes 150 Ask AI messages per pass — enough that most travelers
               never think about it. Passes are one-time purchases, not subscriptions.
             </p>
+
+            {!session && (
+              <p style={styles.foot}>
+                You'll create an account before paying. <Link to="/login" style={styles.link}>Already have one?</Link>
+              </p>
+            )}
+
+            {/* The refund terms belong next to the buy button, not only in the
+                homepage footer — this is the page where someone is deciding to
+                pay, and "what if my ferry is cancelled" is the question they
+                have right now. */}
+            <p style={styles.legalFoot}>
+              Trip fell through? Unused passes are refundable within 7 days — see our{' '}
+              <Link to="/refunds" style={styles.link}>refund policy</Link>. By buying you agree to our{' '}
+              <Link to="/terms" style={styles.link}>terms</Link> and{' '}
+              <Link to="/privacy" style={styles.link}>privacy policy</Link>.
+            </p>
           </>
-        )}
-
-        {!isTraveler && (
-          <p style={styles.finePrint}>
-            Paid placement never buys its way into an AI recommendation. Featured and Partner
-            listings break ties among results we already consider equally relevant, and every
-            paid placement is visibly labeled.
-          </p>
-        )}
-
-        {!session && (
-          <p style={styles.foot}>
-            You'll create an account before paying. <Link to="/login" style={styles.link}>Already have one?</Link>
-          </p>
+        ) : (
+          <BusinessWaitlist />
         )}
       </div>
     </main>
@@ -222,6 +331,33 @@ const styles = {
   addonBtn: { padding: '9px 16px', borderRadius: 9, background: 'transparent', color: '#67e8f9', border: '1px solid rgba(6,182,212,.35)', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' },
 
   finePrint: { textAlign: 'center', color: '#64748b', fontSize: 12.5, maxWidth: 620, margin: '28px auto 0', lineHeight: 1.55 },
+  legalFoot: { textAlign: 'center', color: '#64748b', fontSize: 12, maxWidth: 620, margin: '18px auto 0', lineHeight: 1.6 },
   foot: { textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 20 },
   link: { color: '#67e8f9', fontWeight: 600 },
+
+  // ---- Business waitlist ----------------------------------------------------
+  // Narrower than the traveler grid on purpose: one column of prose and a form
+  // reads as an invitation, where a full-width panel would imply a product
+  // catalog that isn't there.
+  bizWrap: { display: 'flex', justifyContent: 'center' },
+  bizCard: { width: '100%', maxWidth: 560, padding: '30px 28px', borderRadius: 18, background: '#111c33', border: '1px solid rgba(148,163,184,.14)' },
+  bizTag: { display: 'inline-block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#fcd34d', border: '1px solid rgba(252,211,77,.3)', background: 'rgba(252,211,77,.08)', padding: '5px 11px', borderRadius: 999 },
+  bizTitle: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 22, margin: '16px 0 10px', lineHeight: 1.25 },
+  bizBlurb: { color: '#94a3b8', fontSize: 14, lineHeight: 1.6, margin: 0 },
+
+  bizList: { listStyle: 'none', padding: 0, margin: '20px 0 24px', display: 'flex', flexDirection: 'column', gap: 9 },
+  bizItem: { display: 'flex', alignItems: 'flex-start', gap: 10, color: '#cbd5e1', fontSize: 13.5, lineHeight: 1.45 },
+  // A neutral dot, not a ✓. A checkmark would read as "included", and none of
+  // these are included yet — that distinction is the whole point of this tab.
+  bizDot: { width: 5, height: 5, borderRadius: '50%', background: '#475569', marginTop: 7, flexShrink: 0 },
+
+  bizForm: { display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 22, borderTop: '1px solid rgba(148,163,184,.12)' },
+  bizLabel: { color: '#94a3b8', fontSize: 12.5, fontWeight: 600, marginTop: 8 },
+  bizOpt: { color: '#64748b', fontWeight: 500, fontSize: 11.5 },
+  bizInput: { width: '100%', padding: '11px 13px', borderRadius: 10, background: '#0f172a', border: '1px solid rgba(148,163,184,.2)', color: '#e2e8f0', fontSize: 14, fontFamily: 'inherit', outline: 'none' },
+  bizBtn: { marginTop: 18, padding: '12px 20px', borderRadius: 10, border: 'none', background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 14, cursor: 'pointer', width: '100%' },
+  bizPromise: { color: '#64748b', fontSize: 12, lineHeight: 1.55, margin: '20px 0 0', paddingTop: 16, borderTop: '1px solid rgba(148,163,184,.08)' },
+
+  bizCheck: { width: 40, height: 40, borderRadius: '50%', background: 'rgba(6,182,212,.12)', border: '1px solid rgba(6,182,212,.35)', color: '#67e8f9', display: 'grid', placeItems: 'center', fontSize: 19, fontWeight: 800, marginBottom: 16 },
+  bizDoneTitle: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 21, margin: '0 0 10px' },
 }

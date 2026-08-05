@@ -561,6 +561,69 @@ app.post('/api/checkout', (req, res) => createCheckoutSession(pool, req, res))
 // Returns { hasAccess, plans, credits } for the signed-in user.
 app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
 
+// ----------------------------------------------------------------------------
+//  POST /api/business-waitlist — business interest capture
+// ----------------------------------------------------------------------------
+//  Replaces the business checkout flow. The business plans in PLANS are not
+//  sold right now: nothing delivers them, and their tiers ('basic', 'featured',
+//  'partner') are absent from FEATURES, so bestTier() would resolve a paying
+//  subscriber down to 'free'. Until the dashboard exists we collect the email
+//  instead of the card.
+//
+//  DELIBERATELY UNAUTHENTICATED. The people signing up are business owners who
+//  found the marketing site, not users with accounts — requiring a login here
+//  would cost most of the signups. That makes this the only write endpoint
+//  reachable without a JWT, so it carries its own defences:
+//    • rateLimit keyed on req.ip (no req.user to key on)
+//    • length caps on every field, so the table can't be used as free storage
+//    • the insert goes through the pg pool, never the anon key — the table has
+//      RLS on with no policy (0041), so PostgREST cannot reach it at all
+// ----------------------------------------------------------------------------
+app.post('/api/business-waitlist', rateLimit({ windowMs: 60_000, max: 5 }), async (req, res) => {
+  try {
+    const clean = (v, max) => {
+      const s = typeof v === 'string' ? v.trim() : ''
+      return s ? s.slice(0, max) : null
+    }
+
+    const email = clean(req.body?.email, 254) // RFC 5321 max length
+    // Intentionally permissive: one @ with something either side. Strict regex
+    // validation rejects real addresses and the confirmation email is the real
+    // check anyway.
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' })
+    }
+
+    const businessName = clean(req.body?.businessName, 120)
+    const businessType = clean(req.body?.businessType, 60)
+    const note = clean(req.body?.note, 1000)
+    const interestedIn = clean(req.body?.interestedIn, 40)
+
+    // Re-submitting updates the existing row rather than erroring — someone
+    // adding their business name on a second pass is refining their entry, not
+    // making a mistake. COALESCE keeps previously-supplied values when the new
+    // submission leaves a field blank.
+    await pool.query(
+      `INSERT INTO public.business_waitlist
+         (email, business_name, business_type, note, interested_in)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (lower(email)) DO UPDATE SET
+         business_name = COALESCE(EXCLUDED.business_name, public.business_waitlist.business_name),
+         business_type = COALESCE(EXCLUDED.business_type, public.business_waitlist.business_type),
+         note          = COALESCE(EXCLUDED.note,          public.business_waitlist.note),
+         interested_in = COALESCE(EXCLUDED.interested_in, public.business_waitlist.interested_in)`,
+      [email, businessName, businessType, note, interestedIn],
+    )
+
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('business waitlist error:', e.message)
+    // Generic message: a duplicate-key or constraint detail here would confirm
+    // whether a given business has already signed up.
+    res.status(500).json({ error: 'Could not save your details. Please try again.' })
+  }
+})
+
 
 // Transportation categories for the sidebar
 app.get('/api/transport-categories', requireAuth, requireTier(pool, 'transport'), async (_req, res) => {
