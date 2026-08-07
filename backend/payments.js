@@ -30,10 +30,22 @@
 
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
+import { fail } from './httpError.js'
 
-// Server-side Stripe client. `|| ''` lets the process boot even if the key is
-// unset (individual requests fail instead of crashing on startup).
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '')
+// Server-side Stripe client, built at import time.
+//
+// There is no `|| ''` fallback here any more. It used to be documented as
+// letting the process boot without a key, but Stripe v22 throws
+// "Neither apiKey nor config.authenticator provided" on an empty string just
+// as it does on undefined — so the fallback bought nothing and cost a great
+// deal: the throw comes from inside node_modules during module evaluation,
+// naming neither STRIPE_SECRET_KEY nor this file, and Railway surfaces it as a
+// bare failed health check.
+//
+// env.js now checks STRIPE_SECRET_KEY (and friends) before this module is ever
+// evaluated, and exits with the variable named. Passing the value straight
+// through keeps Stripe's own error as the backstop if that check is bypassed.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 // Where Stripe sends the browser back after checkout. Both /success and
 // /pricing are LANDING routes (see landing/src/App.jsx) — the map app has no
@@ -44,10 +56,11 @@ const LANDING_URL = process.env.LANDING_URL || 'http://localhost:5174'
 // Supabase client used ONLY to verify a user's JWT (auth.getUser). The anon key
 // is enough — verifying a token needs no elevated privileges, and we never use
 // this client to read or write protected tables.
-const supabaseAuth = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_ANON_KEY || ''
-)
+//
+// Same story as the Stripe client above: createClient('', '') throws
+// "supabaseUrl is required." at import, so the old `|| ''` guards only
+// obscured which variable was missing. env.js validates both first.
+const supabaseAuth = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
 
 // ----------------------------------------------------------------------------
 //  Plan catalog — the single source of truth for pricing
@@ -77,6 +90,9 @@ const supabaseAuth = createClient(
 //  public.subscriptions — see db/migrations/0021_pricing_tiers.sql. Without
 //  that, checkout succeeds and fulfillment throws, so the customer pays and
 //  gets nothing.
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 export const PLANS = {
   // ── Travelers (one-time passes) ───────────────────────────────────────────
@@ -110,7 +126,9 @@ export const PLANS = {
     description: '7 more days on your current pass',
     grants: { type: 'extend', days: 7 },
   },
-
+  // ----------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------
+  // ----------------------------------------------------------------------------
   // ── Businesses (recurring) ────────────────────────────────────────────────
   business_basic: {
     name: 'Basic', amount: 1900, mode: 'subscription', interval: 'month', tier: 'basic',
@@ -283,8 +301,10 @@ export async function createCheckoutSession(pool, req, res) {
 
     res.json({ url: session.url })
   } catch (e) {
-    console.error('checkout error:', e.message)
-    res.status(500).json({ error: e.message })
+    // Log the full error, return a fixed string. A Stripe exception message can
+    // name internal resources and config; the browser has no use for it.
+    console.error('checkout error:', e)
+    res.status(500).json({ error: 'Could not start checkout. Please try again.' })
   }
 }
 
@@ -348,7 +368,7 @@ export async function handleWebhook(pool, req, res) {
     res.json({ received: true })
   } catch (e) {
     console.error('webhook handling error:', e.message)
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 }
 
@@ -518,6 +538,6 @@ export async function getEntitlement(pool, req, res) {
       credits: bal[0]?.balance ?? 0,
     })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'getEntitlement', e)
   }
 }

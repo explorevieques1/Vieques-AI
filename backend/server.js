@@ -40,7 +40,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { runChatLoop, describeProviderError } from './aiProvider.js'
 import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
-import { requireAuth, requireTier, requireCredits, rateLimit } from './middleware.js'
+import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
+import { fail } from './httpError.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -60,6 +61,24 @@ import { requireAuth, requireTier, requireCredits, rateLimit } from './middlewar
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
 
 const app = express()
+
+// ----------------------------------------------------------------------------
+//  Proxy trust — REQUIRED for rate limiting to work at all in production
+// ----------------------------------------------------------------------------
+//  Railway (like every managed host) terminates TLS at a load balancer and
+//  forwards to this process. Without this line Express reports the balancer's
+//  address as req.ip for EVERY request, so the IP-keyed limiters collapse into
+//  one global bucket: the unauthenticated /api/business-waitlist limiter (5 per
+//  minute) becomes 5 per minute for the entire internet, and one script locks
+//  out every real visitor. With it, Express reads the client address from the
+//  X-Forwarded-For header the balancer sets.
+//
+//  The value is the number of proxy hops to trust, NOT `true`. `true` trusts
+//  the whole chain, and since anyone can send an X-Forwarded-For header, that
+//  lets a caller spoof their own IP and sidestep the limiter entirely. 1 = trust
+//  exactly the one hop we actually have. Raise it only if a CDN is added in
+//  front, and only by the number of proxies added.
+app.set('trust proxy', 1)
 
 // ----------------------------------------------------------------------------
 //  Postgres connection pool
@@ -300,7 +319,7 @@ app.get('/api/beaches', requireAuth, requireTier(pool, 'beach_names'), async (re
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/beaches', e)
   }
 })
 
@@ -313,7 +332,7 @@ app.get('/api/activity-categories', requireAuth, requireTier(pool, 'activities')
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/activity-categories', e)
   }
 })
 
@@ -333,7 +352,7 @@ app.get('/api/activities/:slug', requireAuth, requireTier(pool, 'activities'), a
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/activities/:slug', e)
   }
 })
 
@@ -351,7 +370,7 @@ app.get('/api/snorkel-spots', requireAuth, requireTier(pool, 'snorkel_zones'), a
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/snorkel-spots', e)
   }
 })
 
@@ -390,7 +409,7 @@ app.get('/api/snorkel-spots/:id/zones', requireAuth, requireTier(pool, 'snorkel_
     }))
     res.json({ type: 'FeatureCollection', features })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/snorkel-spots/:id/zones', e)
   }
 })
 
@@ -422,7 +441,7 @@ app.get('/api/kayak-spots', requireAuth, requireTier(pool, 'kayak_zones'), async
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/kayak-spots', e)
   }
 })
 
@@ -450,7 +469,7 @@ app.get('/api/kayak-spots/:id/zones', requireAuth, requireTier(pool, 'kayak_zone
     }))
     res.json({ type: 'FeatureCollection', features })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/kayak-spots/:id/zones', e)
   }
 })
 
@@ -509,7 +528,7 @@ app.get('/api/trails', requireAuth, requireTier(pool, 'activities'), async (_req
     }))
     res.json({ type: 'FeatureCollection', features })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/trails', e)
   }
 })
 
@@ -522,7 +541,7 @@ app.get('/api/service-categories', requireAuth, requireTier(pool, 'activities'),
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/service-categories', e)
   }
 })
 
@@ -544,7 +563,7 @@ app.get('/api/services/:slug', requireAuth, requireTier(pool, 'activities'), asy
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/services/:slug', e)
   }
 })
 
@@ -633,7 +652,7 @@ app.get('/api/transport-categories', requireAuth, requireTier(pool, 'transport')
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/transport-categories', e)
   }
 })
 
@@ -662,7 +681,7 @@ app.get('/api/transport/:slug', requireAuth, requireTier(pool, 'transport'), asy
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/transport/:slug', e)
   }
 })
 
@@ -675,7 +694,7 @@ app.get('/api/restaurant-categories', requireAuth, requireTier(pool, ['restauran
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/restaurant-categories', e)
   }
 })
 
@@ -697,7 +716,7 @@ app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_pr
     // "Restaurant profiles — 3 preview"). Paid tiers get the full list.
     res.json(tierHas(req.tier, 'restaurants') ? rows : rows.slice(0, 3))
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/restaurants/:slug', e)
   }
 })
 
@@ -727,7 +746,7 @@ app.get('/api/stay-categories', requireAuth, requireTier(pool, ['stay_preview', 
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/stay-categories', e)
   }
 })
 
@@ -761,7 +780,7 @@ app.get('/api/stays', requireAuth, requireTier(pool, ['stay_preview', 'stays']),
     )
     res.json(tierHas(req.tier, 'stays') ? rows : rows.slice(0, 3))
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/stays', e)
   }
 })
 
@@ -949,7 +968,7 @@ function tripadvisorRoute(table, label) {
       res.json({ ...payload, fetched_at: new Date().toISOString() })
     } catch (e) {
       console.error(`${label} Tripadvisor error:`, e)
-      res.status(500).json({ error: e.message })
+      res.status(500).json({ error: 'Something went wrong. Please try again.' })
     }
   }
 }
@@ -1010,14 +1029,41 @@ FORMATTING RULES (important — your answer shows in a narrow mobile chat pane):
 // here: Day Trip holds an active subscription but is allocated 0 AI messages,
 // while the free tier holds no subscription but gets 3. Only the ledger balance
 // answers "may this person ask a question?" correctly.
+//
+// Middleware order matters: rateLimit runs BEFORE requireCredits so a caller
+// hammering this route is shed on an in-memory Map lookup rather than after a
+// database round-trip. requireCredits is the expensive gate — it writes — so it
+// goes last, once we know we intend to serve the request.
 app.post('/api/ai/chat',
   requireAuth,
-  requireCredits(pool),
   rateLimit({ windowMs: 60_000, max: 10 }),
+  requireCredits(pool),
   async (req, res) => {
   try {
     const userMessages = Array.isArray(req.body?.messages) ? req.body.messages : []
-    if (!userMessages.length) return res.status(400).json({ error: 'No messages' })
+    if (!userMessages.length) {
+      await refundCredit(pool, req.user.id, req.creditRef)
+      return res.status(400).json({ error: 'No messages' })
+    }
+
+    // Bound the payload before it reaches the model. express.json()'s 100kb
+    // default is a transport limit, not a cost limit: 100kb of conversation
+    // history, 10 times a minute, is a real token bill per user. Reject the
+    // oversized case outright rather than silently truncating, so the client
+    // can trim its history instead of wondering why context went missing.
+    const MAX_MESSAGES = 40
+    const MAX_CHARS = 12_000
+    const totalChars = userMessages.reduce(
+      (n, m) => n + (typeof m?.content === 'string' ? m.content.length : 0),
+      0,
+    )
+    const shapeOk = userMessages.every(
+      (m) => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant'),
+    )
+    if (!shapeOk || userMessages.length > MAX_MESSAGES || totalChars > MAX_CHARS) {
+      await refundCredit(pool, req.user.id, req.creditRef)
+      return res.status(400).json({ error: 'Message history is too long or malformed.' })
+    }
 
     // Runs on the CHEAP model (Gemini Flash-Lite by default), never Anthropic.
     // Every tier's Ask AI goes through here; Claude is reserved for the
@@ -1032,24 +1078,18 @@ app.post('/api/ai/chat',
         runTool,
       }))
     } catch (e) {
-      // Upstream failure (bad key, exhausted quota, provider outage). Return
-      // BEFORE the credit deduction below so the user is not charged for our
-      // outage, and never leak the raw provider message to the browser.
+      // Upstream failure (bad key, exhausted quota, provider outage). The
+      // credit was already reserved by requireCredits, so hand it back — the
+      // user must not pay for our outage. Never leak the raw provider message.
+      await refundCredit(pool, req.user.id, req.creditRef)
       const { status, body } = describeProviderError(e)
       return res.status(status).json(body)
     }
 
-    // Meter the message only now that we have an answer to hand back. Deducting
-    // up front would charge the user for our outage — a provider 500, a
-    // timeout, or a tool-loop bug would silently eat their allowance.
-    //
-    // The ledger is append-only: this negative row IS the deduction, and
-    // credit_balances is SUM(amount) over it. No balance column to race on.
-    await pool.query(
-      `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
-       VALUES ($1, -1, 'ai_query', $2)`,
-      [req.user.id, `chat_${Date.now()}`],
-    )
+    // No deduction here any more: requireCredits already wrote the -1 row
+    // before the model ran. Metering after the fact was the double-spend — the
+    // balance check and the write sat on opposite sides of a multi-second call,
+    // so concurrent requests both passed the check. See middleware.js.
 
     // Read the balance back in a separate statement rather than a RETURNING
     // subquery — a subquery in RETURNING runs against the statement's start
@@ -1066,8 +1106,12 @@ app.post('/api/ai/chat',
       creditsRemaining: Number(bal[0]?.balance ?? 0),
     })
   } catch (e) {
+    // Reached only if something after the model call threw (the balance read,
+    // the response write). The reservation stands or falls with the answer, so
+    // refund it — we cannot confirm the user got anything.
+    await refundCredit(pool, req.user.id, req.creditRef)
     console.error('AI chat error:', e)
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -1139,7 +1183,7 @@ app.post('/api/directions', requireAuth, requireTier(pool, 'directions'), async 
     })
   } catch (e) {
     console.error('Directions error:', e)
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
 })
 
@@ -1152,7 +1196,7 @@ app.get('/api/essential-categories', requireAuth, requireTier(pool, 'essentials'
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/essential-categories', e)
   }
 })
 
@@ -1172,7 +1216,7 @@ app.get('/api/essentials/:slug', requireAuth, requireTier(pool, 'essentials'), a
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/essentials/:slug', e)
   }
 })
 
@@ -1305,7 +1349,7 @@ app.get('/api/suggestion', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'No suggestions available.' })
     res.json(rows[0])
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/suggestion', e)
   }
 })
 
@@ -1377,7 +1421,7 @@ app.get('/api/favorites', requireAuth, async (req, res) => {
     )
     res.json(rows)
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'GET /api/favorites', e)
   }
 })
 
@@ -1404,7 +1448,7 @@ app.put('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async (r
     )
     res.json(rows[0])
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'PUT /api/favorites/:placeId', e)
   }
 })
 
@@ -1421,7 +1465,7 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
     ])
     res.json({ ok: true })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    fail(res, 'DELETE /api/favorites/:placeId', e)
   }
 })
 
