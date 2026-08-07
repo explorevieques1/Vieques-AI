@@ -150,7 +150,11 @@ function MapView({
   /** The Map Modes card (basemap + overlays), opened by the globe button. */
   const [modesOpen, setModesOpen] = useState(false)
   const [mapLabels, setMapLabels] = useState(true)
-  const [category, setCategory] = useState<CategorySlug | null>(null)
+  // Beaches on launch. A null category renders an empty results pane, which
+  // reads as "the app failed to load" rather than "pick something" — and
+  // beaches are what the island is for. `useCategoryPlaces` fetches from this
+  // on mount, so the list is populated by first paint with no extra effect.
+  const [category, setCategory] = useState<CategorySlug | null>('beaches')
   const [subSlug, setSubSlug] = useState<string | null>(null)
   const [selected, setSelected] = useState<Place | null>(null)
   /**
@@ -188,9 +192,14 @@ function MapView({
   const suggestionMarkerRef = useRef<maplibregl.Marker | null>(null)
 
   // Mobile sheet geometry. The sheet's *visible* height drives the map's bottom
-  // padding, so a pin never ends up underneath it. Starts at HIDDEN: the app
-  // opens on the map with just the search bar, not on a half-covered screen.
-  const [snap, setSnap] = useState<string | number | null>(SHEET_HIDDEN)
+  // padding, so a pin never ends up underneath it.
+  //
+  // Starts at PREVIEW to match the default `category` above. This used to open
+  // at HIDDEN so the app showed a bare map — but the two settings have to
+  // agree: preloading beaches into a sheet the user cannot see is the same
+  // blank first screen with an extra fetch. PREVIEW is the peek height, so the
+  // map is still the larger half.
+  const [snap, setSnap] = useState<string | number | null>(SHEET_PREVIEW)
 
   const part = daypart()
   const { suggestion, loading: loadingSuggestion, next: nextSuggestion } = useSuggestion(part)
