@@ -1368,13 +1368,13 @@ app.get('/api/suggestion', requireAuth, async (req, res) => {
 //  and break the Saved list for itself.
 // ============================================================================
 
-const PLACE_KINDS = new Set([
+export const PLACE_KINDS = new Set([
   'beach', 'restaurant', 'stay', 'activity', 'service',
-  'transport', 'essential', 'snorkel', 'trail',
+  'transport', 'essential', 'snorkel', 'kayak', 'trail',
 ])
 
 /** Split 'beach:3' into its parts, or null if it isn't a valid Place.id. */
-function parsePlaceId(raw) {
+export function parsePlaceId(raw) {
   const id = String(raw || '')
   if (!/^[a-z]+:[A-Za-z0-9._-]+$/.test(id)) return null
   const [kind, ...rest] = id.split(':')
@@ -1391,7 +1391,7 @@ function parsePlaceId(raw) {
  * to park megabytes in someone else's database. Lengths are capped for the same
  * reason.
  */
-function shapeSnapshot(input) {
+export function shapeSnapshot(input) {
   const src = input && typeof input === 'object' ? input : {}
   const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : undefined)
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
