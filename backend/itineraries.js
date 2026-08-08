@@ -11,6 +11,7 @@
  */
 import { parsePlaceId, shapeSnapshot } from './server.js'
 import { requireAuth, requireTier } from './middleware.js'
+import { fail } from './httpError.js'
 
 const MAX_TRIP_DAYS = 14
 const MAX_TITLE = 80
@@ -110,8 +111,7 @@ export function mountItineraries(app, pool) {
       )
       res.json(rows.map(toTrip))
     } catch (e) {
-      console.error('[itineraries:list]', e)
-      res.status(500).json({ error: 'Could not load your trips.' })
+      fail(res, 'itineraries:list', e)
     }
   })
 
@@ -130,8 +130,7 @@ export function mountItineraries(app, pool) {
       )
       res.status(201).json(toTrip(rows[0]))
     } catch (e) {
-      console.error('[itineraries:create]', e)
-      res.status(500).json({ error: 'Could not create the trip.' })
+      fail(res, 'itineraries:create', e)
     }
   })
 
@@ -160,10 +159,15 @@ export function mountItineraries(app, pool) {
           WHERE id = $1 AND user_id = $2 RETURNING *`,
         [req.params.id, req.user.id, title, startDate, endDate],
       )
+      // The pre-check above and this UPDATE are two round trips, so the row
+      // can vanish between them (a concurrent DELETE, or the same user
+      // double-tapping delete then rename). Without this guard rows[0] is
+      // undefined and toTrip() throws reading row.start_date — caught below,
+      // but reported as a generic 500 instead of the 404 this actually is.
+      if (!rows[0]) return res.status(404).json({ error: 'Trip not found.' })
       res.json(toTrip(rows[0]))
     } catch (e) {
-      console.error('[itineraries:update]', e)
-      res.status(500).json({ error: 'Could not save the trip.' })
+      fail(res, 'itineraries:update', e)
     }
   })
 
@@ -177,8 +181,7 @@ export function mountItineraries(app, pool) {
       if (!rowCount) return res.status(404).json({ error: 'Trip not found.' })
       res.status(204).end()
     } catch (e) {
-      console.error('[itineraries:delete]', e)
-      res.status(500).json({ error: 'Could not delete the trip.' })
+      fail(res, 'itineraries:delete', e)
     }
   })
 
@@ -189,8 +192,7 @@ export function mountItineraries(app, pool) {
       if (!detail) return res.status(404).json({ error: 'Trip not found.' })
       res.json(detail)
     } catch (e) {
-      console.error('[itineraries:detail]', e)
-      res.status(500).json({ error: 'Could not load the trip.' })
+      fail(res, 'itineraries:detail', e)
     }
   })
 
@@ -262,8 +264,7 @@ export function mountItineraries(app, pool) {
       )
       res.json(await loadDetail(req.params.id, req.user.id))
     } catch (e) {
-      console.error('[itineraries:items]', e)
-      res.status(500).json({ error: 'Could not update the trip.' })
+      fail(res, 'itineraries:items', e)
     }
   })
 }
