@@ -42,6 +42,7 @@ import { runChatLoop, describeProviderError } from './aiProvider.js'
 import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
 import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
+import { mountItineraries } from './itineraries.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -1468,6 +1469,16 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
     fail(res, 'DELETE /api/favorites/:placeId', e)
   }
 })
+
+// ============================================================================
+//  TRIP PLANNER — six routes under /api/itineraries (backend/itineraries.js)
+// ============================================================================
+//  Exploration tier only, gated inside mountItineraries on 'itinerary'. Mounted
+//  here (after favorites, before the server starts listening) so it sits with
+//  the rest of the route registrations rather than before the app + pool it
+//  depends on exist.
+// ============================================================================
+mountItineraries(app, pool)
 
 // ----------------------------------------------------------------------------
 //  Start the server
