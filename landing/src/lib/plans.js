@@ -65,7 +65,6 @@ export const TRAVELER_FEATURE_GROUPS = [
       { label: 'Save favorites',                  values: { free: false,        day_trip: true,  vacation: true,      exploration: true } },
       { label: 'Multi-day itinerary builder',     values: { free: false,        day_trip: false, vacation: false,     exploration: true } },
       { label: 'Export itinerary',                hint: 'PDF or share link',    values: { free: false, day_trip: false, vacation: false, exploration: true } },
-      { label: 'Offline map pack',                values: { free: false,        day_trip: false, vacation: false,     exploration: true } },
     ],
   },
   {

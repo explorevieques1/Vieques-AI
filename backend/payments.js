@@ -169,7 +169,7 @@ export const FEATURES = {
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
                 'snorkel_zones', 'snorkel_detail', 'kayak_zones', 'biobay_guide', 'favorites',
                 'ai_chat', 'ai_history', 'support', 'support_priority',
-                'itinerary', 'itinerary_export', 'offline_maps'],
+                'itinerary', 'itinerary_export'],
 }
 
 /** Device limit per tier — see PRICING.md §4. */
@@ -353,6 +353,44 @@ export async function handleWebhook(pool, req, res) {
       }
     }
 
+    // ---- Failed / abandoned AI credit purchases --------------------------
+    // These events grant NOTHING — they exist purely so the purchase history
+    // can show a denied or abandoned attempt instead of silently omitting it.
+    // Before this, a declined card left no trace anywhere in the database.
+    //
+    // Scoped to credit plans on purpose: this table is the AI-spending
+    // receipt book. A failed pass purchase is out of scope here (fulfillments
+    // remains the all-plans audit log).
+    if (event.type === 'checkout.session.async_payment_failed' ||
+        event.type === 'checkout.session.expired') {
+      const session = event.data.object
+      const status = event.type === 'checkout.session.expired' ? 'expired' : 'denied'
+      await recordFailedCreditPurchase(pool, {
+        session,
+        status,
+        reason: session.last_payment_error?.message || null,
+      })
+    }
+
+    // payment_intent.payment_failed is the event a declined card actually
+    // fires for a standard (non-async) checkout. It carries no session, so we
+    // match on the PaymentIntent id recorded at fulfillment/checkout time —
+    // that is what idx_ai_credit_purchases_pi exists for. If no row matches,
+    // this was not a credit purchase and the UPDATE affects nothing.
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object
+      const reason = pi.last_payment_error?.message
+        || pi.last_payment_error?.code
+        || null
+      await pool.query(
+        `UPDATE public.ai_credit_purchases
+            SET status = 'denied', failure_reason = $2
+          WHERE stripe_payment_intent_id = $1
+            AND status <> 'confirmed'`,
+        [pi.id, reason],
+      )
+    }
+
     // Keep subscription status in sync (cancels, failed renewals, etc.)
     if (event.type === 'customer.subscription.deleted' ||
         event.type === 'customer.subscription.updated') {
@@ -370,6 +408,61 @@ export async function handleWebhook(pool, req, res) {
     console.error('webhook handling error:', e.message)
     res.status(500).json({ error: 'Something went wrong. Please try again.' })
   }
+}
+
+/**
+ * Record an AI credit purchase that did NOT succeed.
+ *
+ * Grants nothing and touches no ledger — the only effect is a visible row in
+ * the purchase history so a decline or an abandoned checkout is something the
+ * user (and support) can see, rather than an absence.
+ *
+ * WHY IT CAN INSERT AND NOT ONLY UPDATE. For a standard card checkout there is
+ * no earlier row to update: fulfill() never ran, so nothing was ever written.
+ * The failure event is the FIRST time this session is seen, which is why the
+ * plan/credits/price are reconstructed from metadata + the PLANS catalog here.
+ *
+ * WHY IT NEVER OVERWRITES A CONFIRMED ROW. Stripe's ordering is not guaranteed,
+ * and `checkout.session.expired` can arrive for a session that also completed.
+ * The WHERE on DO UPDATE makes a paid purchase terminal: once 'confirmed', no
+ * later failure event can flip it and make granted credits look unpaid.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {{ session: object, status: 'denied'|'expired', reason: string|null }} ctx
+ */
+async function recordFailedCreditPurchase(pool, { session, status, reason }) {
+  const userId = session.metadata?.supabase_user_id
+  const planKey = session.metadata?.plan
+  const plan = PLANS[planKey]
+
+  // Only AI credit packs belong in this table. Anything else — a pass, an
+  // extension, or a session with metadata we can't trust — is ignored.
+  if (!userId || !plan || plan.grants?.type !== 'credits') return
+
+  await pool.query(
+    `INSERT INTO public.ai_credit_purchases
+       (user_id, stripe_session_id, stripe_payment_intent_id, plan,
+        credits, amount_cents, currency, status, failure_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (stripe_session_id) DO UPDATE
+       SET status = EXCLUDED.status,
+           failure_reason = EXCLUDED.failure_reason,
+           stripe_payment_intent_id =
+             COALESCE(EXCLUDED.stripe_payment_intent_id,
+                      public.ai_credit_purchases.stripe_payment_intent_id)
+     WHERE public.ai_credit_purchases.status <> 'confirmed'`,
+    [
+      userId,
+      session.id,
+      session.payment_intent || null,
+      planKey,
+      plan.grants.amount,
+      session.amount_total ?? plan.amount,
+      session.currency || 'usd',
+      status,
+      reason,
+    ],
+  )
 }
 
 /**
@@ -461,6 +554,38 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
          VALUES ($1, $2, 'purchase', $3)`,
         [userId, plan.grants.amount, session.id],
       )
+
+      // The user-facing receipt (db/migrations/0044). Same transaction as the
+      // ledger grant above, so the two can never disagree about whether this
+      // purchase happened: status 'confirmed' here always has a matching +N
+      // credit_transactions row, because they commit or roll back together.
+      //
+      // UPSERT rather than plain INSERT because a session that took the async
+      // route may already have a 'pending' row from checkout.session.expired's
+      // sibling events; a completed payment is the terminal truth and wins.
+      await client.query(
+        `INSERT INTO public.ai_credit_purchases
+           (user_id, stripe_session_id, stripe_payment_intent_id, plan,
+            credits, amount_cents, currency, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed')
+         ON CONFLICT (stripe_session_id) DO UPDATE
+           SET status = 'confirmed',
+               failure_reason = NULL,
+               stripe_payment_intent_id =
+                 COALESCE(EXCLUDED.stripe_payment_intent_id,
+                          public.ai_credit_purchases.stripe_payment_intent_id)`,
+        [
+          userId,
+          session.id,
+          session.payment_intent || null,
+          planKey,
+          plan.grants.amount,
+          // Prefer what Stripe actually charged; fall back to the catalog
+          // price so the column stays NOT NULL even on a sparse test event.
+          session.amount_total ?? plan.amount,
+          session.currency || 'usd',
+        ],
+      )
     }
 
     // ---- extend: mutate an existing pass, never create one -----------------
@@ -507,6 +632,55 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
  * @param {import('express').Request} req   Auth: Bearer JWT.
  * @param {import('express').Response} res
  */
+/**
+ * AI credit purchase history — handler for GET /api/credits/history.
+ *
+ * Returns the signed-in user's AI credit purchases newest-first, including the
+ * ones that failed. This reads over the pg pool (which bypasses RLS), so the
+ * `WHERE user_id = $1` below is the ONLY thing scoping the result to the
+ * caller — it is load-bearing, not decorative. The user id comes from the
+ * verified JWT and never from the request.
+ *
+ * `amount_cents` is sent through as cents, not a formatted dollar string:
+ * currency formatting is a display concern and belongs where the locale is
+ * known, not baked into the API response.
+ *
+ * @param {import('pg').Pool} pool
+ * @param {import('express').Request} req   Auth: Bearer JWT.
+ * @param {import('express').Response} res
+ */
+export async function getCreditHistory(pool, req, res) {
+  try {
+    const user = await getUserFromAuthHeader(req)
+    if (!user) return res.status(401).json({ error: 'Not signed in' })
+
+    const { rows } = await pool.query(
+      `SELECT id, plan, credits, amount_cents, currency, status,
+              failure_reason, created_at
+         FROM public.ai_credit_purchases
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 100`,
+      [user.id],
+    )
+
+    // Only confirmed purchases represent credits the user actually received,
+    // so that is the only subtotal worth reporting. Summing every row would
+    // count declined cards as credits bought.
+    const totals = rows.reduce((acc, r) => {
+      if (r.status === 'confirmed') {
+        acc.creditsPurchased += r.credits
+        acc.spentCents += r.amount_cents
+      }
+      return acc
+    }, { creditsPurchased: 0, spentCents: 0 })
+
+    res.json({ purchases: rows, ...totals })
+  } catch (e) {
+    fail(res, 'getCreditHistory', e)
+  }
+}
+
 export async function getEntitlement(pool, req, res) {
   try {
     const user = await getUserFromAuthHeader(req)

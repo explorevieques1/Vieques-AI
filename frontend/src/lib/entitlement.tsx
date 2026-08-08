@@ -108,7 +108,6 @@ export const FEATURE_LABELS: [string, string][] = [
   ['favorites', 'Save favorites'],
   ['itinerary', 'Multi-day itinerary builder'],
   ['itinerary_export', 'Export itinerary'],
-  ['offline_maps', 'Offline map pack'],
 ]
 
 /**
@@ -134,5 +133,4 @@ export const FEATURE_MIN_TIER: Record<string, string> = {
   ai_history: 'vacation',
   itinerary: 'exploration',
   itinerary_export: 'exploration',
-  offline_maps: 'exploration',
 }

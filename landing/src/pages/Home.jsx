@@ -204,7 +204,7 @@ export default function Home() {
             <div className="price">$24.99<small>one-time · 30 days</small></div>
             <ul>
               <li>Everything in Vacation</li><li>150 Ask AI messages</li>
-              <li>Multi-day itinerary builder</li><li>Offline map pack</li>
+              <li>Multi-day itinerary builder</li><li>Export itinerary</li>
             </ul>
             <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('exploration')}>Get Exploration</button>
           </div>
