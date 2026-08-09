@@ -12,6 +12,8 @@
 import { parsePlaceId, shapeSnapshot } from './server.js'
 import { requireAuth, requireTier, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
+import PDFDocument from 'pdfkit'
+import { buildTripPdf, resolveItems, tripFilename } from './itineraryPdf.js'
 
 const MAX_TRIP_DAYS = 14
 const MAX_TITLE = 80
@@ -204,6 +206,51 @@ export function mountItineraries(app, pool) {
       fail(res, 'itineraries:detail', e)
     }
   })
+
+  // ---- EXPORT ---------------------------------------------------------
+  //  The Exploration tier's export. Gated on 'itinerary_export' rather than
+  //  'itinerary': the two slugs are separate rungs in payments.js and a
+  //  future tier could hold one without the other.
+  //
+  //  A lower rate limit than the mutating routes (10 vs 60): this is the
+  //  most expensive call in the file — loadDetail, up to ten resolve
+  //  queries, then document generation — and nobody exports the same trip
+  //  sixty times a minute.
+  //
+  //  Streams to res. Headers go out BEFORE any drawing, because once the
+  //  first chunk is written the status can no longer be changed — see the
+  //  catch below.
+  app.get('/api/itineraries/:id/export.pdf',
+    requireAuth, requireTier(pool, 'itinerary_export'), rateLimit({ max: 10 }),
+    async (req, res) => {
+      try {
+        const trip = await loadDetail(req.params.id, req.user.id)
+        if (!trip) return res.status(404).json({ error: 'Trip not found.' })
+
+        const resolved = await resolveItems(pool, trip.items)
+
+        res.setHeader('Content-Type', 'application/pdf')
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${tripFilename(trip.title)}"`,
+        )
+
+        const doc = new PDFDocument({ size: 'LETTER', margin: 54 })
+        doc.pipe(res)
+        buildTripPdf(doc, trip, resolved)
+        doc.end()
+      } catch (e) {
+        // If drawing threw after piping started, the response is already
+        // committed and a JSON error would corrupt the PDF stream. All that
+        // is left is to destroy the socket so the client sees a failed
+        // download rather than a truncated file it thinks is valid.
+        if (res.headersSent) {
+          console.error('[itineraries:export] after headers', e)
+          return res.destroy()
+        }
+        fail(res, 'itineraries:export', e)
+      }
+    })
 
   // ---- ADD / MOVE / REMOVE AN ITEM ------------------------------------
   //  One route, three actions, because all three are "the membership of
