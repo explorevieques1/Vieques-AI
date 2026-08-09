@@ -10,7 +10,7 @@
  * the SQL is the actual enforcement.
  */
 import { parsePlaceId, shapeSnapshot } from './server.js'
-import { requireAuth, requireTier } from './middleware.js'
+import { requireAuth, requireTier, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
 
 const MAX_TRIP_DAYS = 14
@@ -74,6 +74,15 @@ function validateTrip({ title, startDate, endDate }) {
 
 export function mountItineraries(app, pool) {
   const gate = [requireAuth, requireTier(pool, 'itinerary')]
+  // Same limit favorites' PUT/DELETE use (rateLimit({ max: 60 })) — 1/sec
+  // sustained is generous for a human dragging places around a trip, and
+  // matching the existing number keeps the two feature's limits legible
+  // together rather than inventing a new magic number. Reserved for the
+  // mutating routes only, same as favorites' GET being left unmetered: list
+  // and detail are cheap single-table reads with no write amplification,
+  // while items PUT below runs 3-4 queries plus a full loadDetail (2 more)
+  // per call and is the one path worth metering.
+  const mutate = [...gate, rateLimit({ max: 60 })]
 
   /** One trip with its items, or null when it is not this user's. */
   async function loadDetail(id, userId) {
@@ -116,7 +125,7 @@ export function mountItineraries(app, pool) {
   })
 
   // ---- CREATE ---------------------------------------------------------
-  app.post('/api/itineraries', ...gate, async (req, res) => {
+  app.post('/api/itineraries', ...mutate, async (req, res) => {
     const title = typeof req.body?.title === 'string' ? req.body.title.trim() : ''
     const startDate = parseDate(req.body?.startDate)
     const endDate = parseDate(req.body?.endDate)
@@ -135,7 +144,7 @@ export function mountItineraries(app, pool) {
   })
 
   // ---- RENAME / RE-DATE ----------------------------------------------
-  app.patch('/api/itineraries/:id', ...gate, async (req, res) => {
+  app.patch('/api/itineraries/:id', ...mutate, async (req, res) => {
     const cur = await pool.query(
       `SELECT * FROM public.itineraries WHERE id = $1 AND user_id = $2`,
       [req.params.id, req.user.id],
@@ -172,7 +181,7 @@ export function mountItineraries(app, pool) {
   })
 
   // ---- DELETE ---------------------------------------------------------
-  app.delete('/api/itineraries/:id', ...gate, async (req, res) => {
+  app.delete('/api/itineraries/:id', ...mutate, async (req, res) => {
     try {
       const { rowCount } = await pool.query(
         `DELETE FROM public.itineraries WHERE id = $1 AND user_id = $2`,
@@ -202,7 +211,7 @@ export function mountItineraries(app, pool) {
   //  which is what the client needs anyway to redraw the pins.
   //
   //  Body: { action: 'add'|'move'|'remove', placeId, dayIndex?, snapshot? }
-  app.put('/api/itineraries/:id/items', ...gate, async (req, res) => {
+  app.put('/api/itineraries/:id/items', ...mutate, async (req, res) => {
     const action = req.body?.action
     const parsed = parsePlaceId(req.body?.placeId)
     if (!parsed) return res.status(400).json({ error: 'Invalid place id.' })
@@ -226,17 +235,25 @@ export function mountItineraries(app, pool) {
       if (!own.rows[0]) return res.status(404).json({ error: 'Trip not found.' })
 
       if (action === 'remove') {
-        await pool.query(
+        // rowCount is checked below: a zero-row DELETE means this place
+        // isn't in the trip, which is not the same outcome as "removed it"
+        // and must not come back as a silent 200.
+        const { rowCount } = await pool.query(
           `DELETE FROM public.itinerary_items
             WHERE itinerary_id = $1 AND place_id = $2`,
           [req.params.id, parsed.id],
         )
+        if (!rowCount) return res.status(404).json({ error: 'That place is not in this trip.' })
       } else if (action === 'move') {
-        await pool.query(
+        // Same reasoning as remove — a zero-row UPDATE means there was
+        // nothing to move, and the client needs to be able to tell that
+        // apart from an actual move.
+        const { rowCount } = await pool.query(
           `UPDATE public.itinerary_items SET day_index = $3
             WHERE itinerary_id = $1 AND place_id = $2`,
           [req.params.id, parsed.id, dayIndex],
         )
+        if (!rowCount) return res.status(404).json({ error: 'That place is not in this trip.' })
       } else if (action === 'add') {
         // sort_order = current tail of that day, so a new item lands last.
         await pool.query(
