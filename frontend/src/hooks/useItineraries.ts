@@ -99,6 +99,12 @@ export function useItineraries(): Itineraries {
 
   const rename = useCallback(async (id: string, input: Partial<TripInput>) => {
     const before = trips
+    // Both trips and activeTrip get the optimistic edit, so both must roll
+    // back together on failure — otherwise the detail header (which renders
+    // from activeTrip) keeps showing the new name after the list has already
+    // reverted to the old one, which is exactly the "lie on screen" this
+    // hook's optimistic updates are meant to avoid.
+    const beforeActive = activeTrip
     // Optimistic: the header should show the new name as the sheet closes.
     setTrips((prev) => prev.map((t) => (t.id === id ? { ...t, ...input } as Trip : t)))
     setActiveTrip((a) => (a && a.id === id ? { ...a, ...input } as TripDetail : a))
@@ -109,13 +115,19 @@ export function useItineraries(): Itineraries {
       return true
     } catch (e) {
       setTrips(before)
+      setActiveTrip(beforeActive)
       setError(messageOf(e, 'Could not save the trip.'))
       return false
     }
-  }, [trips])
+  }, [trips, activeTrip])
 
   const remove = useCallback(async (id: string) => {
     const before = trips
+    // Same reasoning as rename: activeTrip is optimistically cleared below,
+    // so it must be restored alongside trips on failure, or a failed delete
+    // silently closes the trip the user was looking at even though it
+    // still exists on the server.
+    const beforeActive = activeTrip
     setTrips((prev) => prev.filter((t) => t.id !== id))
     setActiveTrip((a) => (a && a.id === id ? null : a))
     try {
@@ -123,10 +135,11 @@ export function useItineraries(): Itineraries {
       return true
     } catch (e) {
       setTrips(before)
+      setActiveTrip(beforeActive)
       setError(messageOf(e, 'Could not delete the trip.'))
       return false
     }
-  }, [trips])
+  }, [trips, activeTrip])
 
   /** Apply a server-returned detail to both the active trip and the list count. */
   const applyDetail = useCallback((detail: TripDetail) => {
