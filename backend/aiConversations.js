@@ -40,7 +40,17 @@ function toMessage(row) {
 export function titleFrom(text) {
   const flat = String(text || '').replace(/\s+/g, ' ').trim()
   if (!flat) return 'New conversation'
-  return flat.length <= MAX_TITLE ? flat : `${flat.slice(0, MAX_TITLE - 1)}…`
+  // Array.from() splits on code points, not UTF-16 code units, so a 4-byte
+  // emoji (a surrogate pair in JS strings) is never cut in half. Slicing the
+  // raw string with String#slice() operates on code units and can leave a
+  // lone high surrogate right before the ellipsis — it still satisfies
+  // `.length <= 80` in JS, but is invalid UTF-16 once serialized and can
+  // render as U+FFFD or break stricter JSON parsers. The DB CHECK
+  // (char_length(btrim(title)) BETWEEN 1 AND 80) also counts by character,
+  // not code unit, so code-point counting is the correct budget here too.
+  const chars = Array.from(flat)
+  if (chars.length <= MAX_TITLE) return chars.join('')
+  return `${chars.slice(0, MAX_TITLE - 1).join('')}…`
 }
 
 /**
@@ -64,55 +74,88 @@ export function titleFrom(text) {
 export async function persistTurn(pool, { userId, tier, conversationId, userText, replyText, pins }) {
   if (!tierHas(tier, 'ai_history')) return null
 
+  // A single client for the whole turn — including the append path, where a
+  // transaction is not strictly required (there is no second statement whose
+  // failure could orphan anything) — one client keeps the create and append
+  // branches structurally identical instead of one running on the pool and
+  // the other on a checked-out connection.
+  //
+  // client.release() MUST run even when everything above throws: a leaked
+  // client exhausts the pool and takes down every route in the app, which is
+  // strictly worse than the bug (an orphaned empty conversation row) this
+  // transaction exists to prevent. Hence the try/finally rather than relying
+  // on the outer catch alone.
+  const client = await pool.connect()
   try {
-    let id = null
+    try {
+      await client.query('BEGIN')
 
-    if (conversationId) {
-      const { rows } = await pool.query(
-        `SELECT id FROM public.ai_conversations WHERE id = $1 AND user_id = $2`,
-        [conversationId, userId],
+      let id = null
+
+      if (conversationId) {
+        const { rows } = await client.query(
+          `SELECT id FROM public.ai_conversations WHERE id = $1 AND user_id = $2`,
+          [conversationId, userId],
+        )
+        if (rows[0]) id = rows[0].id
+      }
+
+      if (!id) {
+        const { rows } = await client.query(
+          `INSERT INTO public.ai_conversations (user_id, title)
+           VALUES ($1, $2) RETURNING id`,
+          [userId, titleFrom(userText)],
+        )
+        id = rows[0].id
+      }
+
+      // Both messages of the turn in one statement, so a transcript can
+      // never hold a question without its answer. seq continues from the
+      // current tail; the UNIQUE (conversation_id, seq) constraint makes a
+      // concurrent double-send fail loudly here rather than silently
+      // reorder the transcript.
+      //
+      // The VALUES column is named `ord`, not `offset` — Postgres reserves
+      // OFFSET as a keyword, and using it as a bare column alias is a
+      // syntax error (verified directly against psql before shipping this).
+      //
+      // Wrapping the create-then-insert pair in BEGIN/COMMIT closes the
+      // window where the ai_conversations INSERT above commits under
+      // autocommit but this INSERT then fails (a dropped connection, or the
+      // seq unique violation below) — that used to leave a titled,
+      // zero-message conversation permanently in the user's list. Now
+      // either both rows land or neither does.
+      await client.query(
+        `INSERT INTO public.ai_messages (conversation_id, role, content, pins, seq)
+         SELECT $1, v.role, v.content, v.pins::jsonb,
+                COALESCE((SELECT max(seq) + 1 FROM public.ai_messages WHERE conversation_id = $1), 0)
+                  + v.ord
+           FROM (VALUES ('user', $2::text, '[]', 0),
+                        ('assistant', $3::text, $4::text, 1))
+                AS v(role, content, pins, ord)`,
+        [id, userText, replyText, JSON.stringify(Array.isArray(pins) ? pins : [])],
       )
-      if (rows[0]) id = rows[0].id
-    }
 
-    if (!id) {
-      const { rows } = await pool.query(
-        `INSERT INTO public.ai_conversations (user_id, title)
-         VALUES ($1, $2) RETURNING id`,
-        [userId, titleFrom(userText)],
+      await client.query(
+        `UPDATE public.ai_conversations SET updated_at = now() WHERE id = $1`,
+        [id],
       )
-      id = rows[0].id
+      await client.query('COMMIT')
+      return id
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {})
+      // Deliberately swallowed — see rule 1 above. This also covers the seq
+      // unique-constraint violation from two truly concurrent sends to the
+      // same conversation racing the "current tail" SELECT above: that is a
+      // KNOWN, ACCEPTED gap (the brief's rule 1 — the paid-for answer always
+      // wins over the transcript), not a bug to chase by making
+      // persistTurn throw. The losing turn is silently missing from
+      // history; the user still gets their reply.
+      console.error('[ai:persistTurn]', e)
+      return null
     }
-
-    // Both messages of the turn in one statement, so a transcript can never
-    // hold a question without its answer. seq continues from the current
-    // tail; the UNIQUE (conversation_id, seq) constraint makes a concurrent
-    // double-send fail loudly here rather than silently reorder the
-    // transcript.
-    //
-    // The VALUES column is named `ord`, not `offset` — Postgres reserves
-    // OFFSET as a keyword, and using it as a bare column alias is a syntax
-    // error (verified directly against psql before shipping this).
-    await pool.query(
-      `INSERT INTO public.ai_messages (conversation_id, role, content, pins, seq)
-       SELECT $1, v.role, v.content, v.pins::jsonb,
-              COALESCE((SELECT max(seq) + 1 FROM public.ai_messages WHERE conversation_id = $1), 0)
-                + v.ord
-         FROM (VALUES ('user', $2::text, '[]', 0),
-                      ('assistant', $3::text, $4::text, 1))
-              AS v(role, content, pins, ord)`,
-      [id, userText, replyText, JSON.stringify(Array.isArray(pins) ? pins : [])],
-    )
-
-    await pool.query(
-      `UPDATE public.ai_conversations SET updated_at = now() WHERE id = $1`,
-      [id],
-    )
-    return id
-  } catch (e) {
-    // Deliberately swallowed — see rule 1 above.
-    console.error('[ai:persistTurn]', e)
-    return null
+  } finally {
+    client.release()
   }
 }
 
