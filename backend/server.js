@@ -39,10 +39,11 @@ import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { runChatLoop, describeProviderError } from './aiProvider.js'
-import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, tierHas } from './payments.js'
+import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, tierHas, bestTier } from './payments.js'
 import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
 import { mountItineraries } from './itineraries.js'
+import { mountAiConversations, persistTurn } from './aiConversations.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -1110,11 +1111,36 @@ app.post('/api/ai/chat',
       [req.user.id],
     )
 
+    // History is written AFTER the answer exists and the credit is spent.
+    // persistTurn never throws — an unsaved transcript must not cost the
+    // user the reply they paid for. Returns null for the free tier, which
+    // has Ask AI but not 'ai_history'.
+    //
+    // req.tier is not set on this route (requireCredits gates it, not
+    // requireTier), so the tier is read here.
+    const { rows: subs } = await pool.query(
+      `SELECT plan FROM public.subscriptions
+        WHERE user_id = $1 AND status = 'active'
+          AND (expires_at IS NULL OR expires_at > now())`,
+      [req.user.id],
+    ).catch(() => ({ rows: [] }))
+
+    const conversationId = await persistTurn(pool, {
+      userId: req.user.id,
+      tier: bestTier(subs),
+      conversationId: req.body?.conversationId,
+      userText: userMessages[userMessages.length - 1]?.content ?? '',
+      replyText: reply || 'Sorry, I could not find an answer.',
+      pins,
+    })
+
     res.json({
       reply: reply || 'Sorry, I could not find an answer.',
       pins,
       // Lets the chat pane show "12 messages left" without a second round trip.
       creditsRemaining: Number(bal[0]?.balance ?? 0),
+      // null for tiers without 'ai_history' — the client then stays ephemeral.
+      conversationId,
     })
   } catch (e) {
     // Reached only if something after the model call threw (the balance read,
@@ -1489,6 +1515,7 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
 //  depends on exist.
 // ============================================================================
 mountItineraries(app, pool)
+mountAiConversations(app, pool)
 
 // ----------------------------------------------------------------------------
 //  Start the server
