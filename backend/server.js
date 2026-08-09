@@ -39,7 +39,7 @@ import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { runChatLoop, describeProviderError } from './aiProvider.js'
-import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
+import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, tierHas } from './payments.js'
 import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
 import { mountItineraries } from './itineraries.js'
@@ -580,6 +580,11 @@ app.post('/api/checkout', (req, res) => createCheckoutSession(pool, req, res))
 // GET /api/entitlement — the map app's paywall asks this "can this user in?"
 // Returns { hasAccess, plans, credits } for the signed-in user.
 app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
+
+// GET /api/credits/history — AI credit purchase receipts for the signed-in
+// user, failed attempts included. Returns { purchases, creditsPurchased,
+// spentCents }. Balance still comes from /api/entitlement — this is history.
+app.get('/api/credits/history', (req, res) => getCreditHistory(pool, req, res))
 
 // ----------------------------------------------------------------------------
 //  POST /api/business-waitlist — business interest capture
