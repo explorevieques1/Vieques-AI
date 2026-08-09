@@ -842,6 +842,30 @@ export async function mutateTripItem(
   return res.json()
 }
 
+/**
+ * Fetch a trip's PDF and hand it to the browser as a download.
+ *
+ * Not a plain <a href> or window.open: the route needs an Authorization
+ * header, and neither of those can send one. So the bytes come back through
+ * apiFetch and are handed over as an object URL instead.
+ */
+export async function downloadTripPdf(tripId: string, title: string): Promise<void> {
+  const res = await apiFetch(`/api/itineraries/${tripId}/export.pdf`)
+  if (!res.ok) await raise(res, 'Export failed')
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(title || 'trip').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Revoked on the next tick — Safari cancels the download if the URL is
+  // released synchronously after click().
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 // ---- date helpers -----------------------------------------------------------
 //  Dates are parsed as UTC noon, never local midnight. `new Date('2026-03-03')`
 //  is UTC midnight, which in Puerto Rico (UTC-4) is 8pm on March 2 — so a naive

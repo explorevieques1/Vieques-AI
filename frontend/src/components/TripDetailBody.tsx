@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Download, Loader2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 
 import type { Itineraries } from '../hooks/useItineraries'
 import {
-  formatDateRange, tripDayCount, tripDayDate,
+  downloadTripPdf, formatDateRange, tripDayCount, tripDayDate,
   type TripDetail, type TripItem,
 } from '../lib/api'
+import { useFeature } from '../lib/entitlement'
 import { tripItemToPlace, type Place } from '../lib/place'
 import PlaceCard from './PlaceCard'
 
@@ -33,7 +34,23 @@ export default function TripDetailBody({
   trip, itineraries, onBack, onSelect, onEdit, navPad = false,
 }: Props) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const canExport = useFeature('itinerary_export')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const dayCount = tripDayCount(trip)
+
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      await downloadTripPdf(trip.id, trip.title)
+    } catch {
+      setExportError('Could not build the PDF. Try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const buckets = useMemo<Bucket[]>(() => {
     const out: Bucket[] = []
@@ -89,6 +106,16 @@ export default function TripDetailBody({
             {trip.items.length} place{trip.items.length === 1 ? '' : 's'}
           </p>
         </div>
+        {canExport && (
+          <button
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            aria-label="Export trip as PDF"
+            className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-40"
+          >
+            {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+          </button>
+        )}
         <button
           onClick={onEdit}
           aria-label="Edit trip"
@@ -97,6 +124,12 @@ export default function TripDetailBody({
           <Pencil size={15} />
         </button>
       </div>
+
+      {exportError && (
+        <div className="mx-4 mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-foreground">
+          {exportError}
+        </div>
+      )}
 
       <div
         className={`scroll-contain scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-3 ${
