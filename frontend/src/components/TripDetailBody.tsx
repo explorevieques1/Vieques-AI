@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, ChevronLeft, Download, Loader2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Download, Loader2, Lock, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 
 import type { Itineraries } from '../hooks/useItineraries'
 import {
@@ -9,6 +9,7 @@ import {
 import { useFeature } from '../lib/entitlement'
 import { tripItemToPlace, type Place } from '../lib/place'
 import PlaceCard from './PlaceCard'
+import UpsellOverlay from './UpsellOverlay'
 
 type Props = {
   trip: TripDetail
@@ -37,9 +38,17 @@ export default function TripDetailBody({
   const canExport = useFeature('itinerary_export')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [showExportUpsell, setShowExportUpsell] = useState(false)
   const dayCount = tripDayCount(trip)
 
   async function handleExport() {
+    // Below Exploration, the button stays visible (a locked feature must be
+    // discoverable, not hidden — see UpsellOverlay's header comment) but
+    // reveals the upsell instead of attempting the request.
+    if (!canExport) {
+      setShowExportUpsell((v) => !v)
+      return
+    }
     if (exporting) return
     setExporting(true)
     setExportError(null)
@@ -106,16 +115,26 @@ export default function TripDetailBody({
             {trip.items.length} place{trip.items.length === 1 ? '' : 's'}
           </p>
         </div>
-        {canExport && (
-          <button
-            onClick={() => void handleExport()}
-            disabled={exporting}
-            aria-label="Export trip as PDF"
-            className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-40"
-          >
-            {exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-          </button>
-        )}
+        <button
+          onClick={() => void handleExport()}
+          disabled={exporting}
+          aria-label={
+            !canExport
+              ? 'Export itinerary — upgrade to Exploration'
+              : exporting
+                ? 'Exporting trip as PDF…'
+                : 'Export trip as PDF'
+          }
+          className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-white/8 hover:text-foreground disabled:opacity-40"
+        >
+          {exporting ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : !canExport ? (
+            <Lock size={15} />
+          ) : (
+            <Download size={15} />
+          )}
+        </button>
         <button
           onClick={onEdit}
           aria-label="Edit trip"
@@ -128,6 +147,16 @@ export default function TripDetailBody({
       {exportError && (
         <div className="mx-4 mt-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-foreground">
           {exportError}
+        </div>
+      )}
+
+      {showExportUpsell && !canExport && (
+        <div className="mx-4 mt-2">
+          <UpsellOverlay
+            feature="itinerary_export"
+            title="Export itinerary"
+            blurb="Take your trip offline as a printable PDF."
+          />
         </div>
       )}
 

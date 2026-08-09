@@ -192,6 +192,11 @@ app.use(cors({
     console.warn(`CORS: rejected origin ${origin} — allowed: ${ALLOWED_ORIGINS.join(', ')}`)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
+  // Without this, fetch()'s Response.headers cannot see Content-Disposition
+  // cross-origin — the browser strips every response header except a small
+  // "simple" allowlist unless the server explicitly exposes more. The PDF
+  // export route relies on reading the server's filename from this header.
+  exposedHeaders: ['Content-Disposition'],
 }))
 
 // ----------------------------------------------------------------------------

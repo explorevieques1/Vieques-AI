@@ -843,6 +843,16 @@ export async function mutateTripItem(
 }
 
 /**
+ * Pull the filename out of a `Content-Disposition: attachment; filename="…"` header.
+ * Returns null when the header is absent or doesn't match the expected shape.
+ */
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null
+  const match = /filename="([^"]+)"/.exec(header)
+  return match ? match[1] : null
+}
+
+/**
  * Fetch a trip's PDF and hand it to the browser as a download.
  *
  * Not a plain <a href> or window.open: the route needs an Authorization
@@ -853,11 +863,18 @@ export async function downloadTripPdf(tripId: string, title: string): Promise<vo
   const res = await apiFetch(`/api/itineraries/${tripId}/export.pdf`)
   if (!res.ok) await raise(res, 'Export failed')
 
+  // The server's tripFilename() is authoritative (dash-trimmed, 60-char
+  // capped) — prefer it over redoing the same slug logic here, which would
+  // only drift. Fall back to a local derivation if the header is missing.
+  const filename =
+    filenameFromContentDisposition(res.headers.get('Content-Disposition')) ||
+    `${(title || 'trip').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`
+
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${(title || 'trip').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   a.remove()
