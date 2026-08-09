@@ -35,6 +35,7 @@ import type {
   Suggestion,
   TrailFeature,
   TransportListing,
+  TripItem,
 } from './api'
 import {
   ACTIVITY_ICONS,
@@ -706,5 +707,32 @@ export function placeSnapshot(p: Place): FavoriteRow['snapshot'] {
     longitude: p.longitude,
     tags: p.tags,
     icon: p.icon,
+  }
+}
+
+/**
+ * A trip item's stored snapshot, rendered as a Place.
+ *
+ * Same trade as favoriteToPlace: the snapshot is the card, written when the
+ * place was added and allowed to go stale. Tapping the row loads the live
+ * record.
+ */
+export function tripItemToPlace(it: TripItem): Place {
+  const s = it.snapshot ?? {}
+  return {
+    id: it.placeId,
+    kind: (it.placeKind ?? 'activity') as PlaceKind,
+    name: s.name ?? 'Saved place',
+    subtitle: s.subtitle,
+    latitude: s.latitude ?? null,
+    longitude: s.longitude ?? null,
+    tags: Array.isArray(s.tags) ? s.tags : [],
+    stats: [],
+    contact: {},
+    icon: {
+      emoji: s.icon?.emoji ?? '📍',
+      color: s.icon?.color ?? '#38bdf8',
+    },
+    raw: s,
   }
 }

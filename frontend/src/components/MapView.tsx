@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import { Globe, PanelLeftOpen, Route, X } from 'lucide-react'
+import { Globe, PanelLeftOpen } from 'lucide-react'
 
 import {
   fetchDirections,
@@ -14,6 +14,7 @@ import {
   isMappable,
   categoryMeta,
   suggestionToPlace,
+  tripItemToPlace,
   type CategorySlug,
   type Place,
 } from '../lib/place'
@@ -28,6 +29,7 @@ import type { ShellMode } from '../lib/shell'
 import { useAiChat } from '../lib/aiChat'
 import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
 import type { Favorites } from '../hooks/useFavorites'
+import type { Itineraries } from '../hooks/useItineraries'
 import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useSafeArea } from '../hooks/useSafeArea'
@@ -43,8 +45,10 @@ import {
   SHEET_FULL,
   SHEET_HIDDEN,
   SHEET_PREVIEW,
+  type MapInsets,
 } from '../hooks/useMapInsets'
 import { useEntitlement, useFeature } from '../lib/entitlement'
+import AddToTripSheet from './AddToTripSheet'
 import AiChatBody from './AiChatBody'
 import BottomNav from './BottomNav'
 import CategoryRow from './CategoryRow'
@@ -95,6 +99,7 @@ type Props = {
   mode: ShellMode
   onModeChange: (m: ShellMode) => void
   favorites: Favorites
+  itineraries: Itineraries
   aiPins?: AiPin[]
   route?: DirectionsResult | null
   onRoute?: (r: DirectionsResult | null) => void
@@ -118,6 +123,7 @@ function MapView({
   mode,
   onModeChange,
   favorites,
+  itineraries,
   aiPins,
   route,
   onRoute,
@@ -131,6 +137,7 @@ function MapView({
   // 0033 are the real gates. One flag because both sit at the same tier; see
   // the note on useCategoryPlaces' `canWaterZones` parameter.
   const canWaterZones = useFeature('snorkel_zones')
+  const canPlanTrips = useFeature('itinerary')
   const isMobile = useIsMobile()
   const safeArea = useSafeArea()
   // Drives the amber dot on the nav's Profile cell — the nudge that used to sit
@@ -145,6 +152,37 @@ function MapView({
   const routeMarkersRef = useRef<maplibregl.Marker[]>([])
   /** The live-location dot — kept out of markersRef so clearMarkers() can't wipe it. */
   const userMarkerRef = useRef<maplibregl.Marker | null>(null)
+  /**
+   * The open trip's pins — its own ref for the same reason as userMarkerRef
+   * and suggestionMarkerRef: the category marker effect calls clearMarkers()
+   * on every `places` change, which would wipe these out from under the user
+   * while they still had a trip open.
+   */
+  const tripMarkersRef = useRef<maplibregl.Marker[]>([])
+  /**
+   * The id of the trip the camera last fitBounds()-ed to. Lets the trip-pin
+   * effect below fit the camera once per opened trip instead of once per
+   * `activeTrip` object identity — see the long comment on that effect.
+   */
+  const fittedTripIdRef = useRef<string | null>(null)
+  /**
+   * Latest `padding` / `selectPlace` closures, refreshed every render.
+   *
+   * Both are unstable identities (padding depends on `insets`, which depends
+   * on the mobile sheet's snap point; selectPlace depends on padding). The
+   * trip-pin effect needs to CALL the current version of each without being
+   * forced to re-run every time either identity changes — re-running on
+   * padding meant every sheet drag rebuilt every marker and re-fit the
+   * camera, and re-running on selectPlace meant tapping a pin flew the
+   * camera in (selectPlace) and immediately fought itself back out
+   * (the effect re-firing and fitBounds-ing to the whole trip). Reading
+   * through a ref decouples "have the freshest function" from "re-run the
+   * effect".
+   */
+  const selectPlaceRef = useRef<(p: Place) => void>(() => {})
+  const paddingRef = useRef<() => MapInsets>(() => ({
+    top: 0, bottom: 0, left: 0, right: 0,
+  }))
 
   const [styleId, setStyleId] = useState(DEFAULT_MAP_STYLE)
   /** The Map Modes card (basemap + overlays), opened by the globe button. */
@@ -178,8 +216,8 @@ function MapView({
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
   /** Mobile: the greeting card collapsed to a weather pill, giving the map 60px. */
   const [greetingMin, setGreetingMin] = useState(false)
-  /** Build Itinerary is a stub; this is its "coming soon" toast. */
-  const [itineraryNote, setItineraryNote] = useState(false)
+  /** The trip+day picker, opened from a place card or the detail panel. */
+  const [addToTripFor, setAddToTripFor] = useState<Place | null>(null)
   /**
    * Suggestion of the Day, held separately from `selected`.
    *
@@ -527,6 +565,15 @@ function MapView({
     },
     [padding],
   )
+
+  // Keep selectPlaceRef/paddingRef pointed at the latest closures every
+  // render, so effects that read `*Ref.current(...)` (see the trip-pin
+  // effect below) always call fresh logic without needing padding/selectPlace
+  // themselves in their dep arrays.
+  useEffect(() => {
+    selectPlaceRef.current = selectPlace
+    paddingRef.current = padding
+  })
 
   const clearSelection = useCallback(() => {
     setSelected(null)
@@ -894,6 +941,77 @@ function MapView({
       .addTo(map)
   }, [suggestionPin, selected?.id])
 
+  /**
+   * The open trip's places, as pins.
+   *
+   * Snapshots carry coordinates, so a trip draws its whole map in one pass
+   * with no per-place lookup. Items with no coordinates (a snapshot written
+   * before a place had them) are skipped rather than dropped at 0,0 in the
+   * Atlantic. Clicking a pin selects that place exactly like any other pin —
+   * it opens the detail panel via `selectPlace`, which flies/fits the camera
+   * to it, same as the results list.
+   *
+   * Kept in `tripMarkersRef`, not `markersRef`: the category marker effect
+   * calls clearMarkers() on every `places` change, which would wipe these out
+   * from under the user the moment they touched a filter chip. The cleanup
+   * below — removing every marker it added — is what makes "back clears the
+   * pins" work with no extra code: leaving a trip (activeTrip -> null) reruns
+   * this effect, and the cleanup from the previous run fires first.
+   *
+   * Deps are deliberately just `[itineraries.activeTrip]`, not padding or
+   * selectPlace (see selectPlaceRef/paddingRef above for why those two are
+   * unstable). `padding()` and `selectPlace` are read through the refs
+   * instead, so a sheet drag or a pin tap — both of which change padding's
+   * identity — rebuild nothing here.
+   *
+   * The camera fit is further gated on `fittedTripIdRef`, keyed on the trip's
+   * id rather than on `activeTrip` object identity: applyDetail() in
+   * useItineraries hands back a brand-new TripDetail object after every
+   * add/move/remove, so fitting on identity would re-frame the whole trip
+   * every time a single place was added or dragged to another day. Markers
+   * still rebuild on every items change (a new place needs a new pin) — only
+   * the fitBounds is once-per-trip.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    tripMarkersRef.current.forEach((m) => m.remove())
+    tripMarkersRef.current = []
+    if (!map || !itineraries.activeTrip) {
+      fittedTripIdRef.current = null
+      return
+    }
+
+    const tripPlaces = itineraries.activeTrip.items
+      .map(tripItemToPlace)
+      .filter(isMappable)
+
+    if (tripPlaces.length === 0) return
+
+    const markers = tripPlaces.map((p) => {
+      const el = makeMarkerEl(p.icon)
+      el.addEventListener('click', (e) => {
+        e.stopPropagation()
+        selectPlaceRef.current(p)
+      })
+      return new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([p.longitude, p.latitude])
+        .addTo(map)
+    })
+    tripMarkersRef.current = markers
+
+    if (fittedTripIdRef.current !== itineraries.activeTrip.id) {
+      fittedTripIdRef.current = itineraries.activeTrip.id
+      const b = new maplibregl.LngLatBounds()
+      tripPlaces.forEach((p) => b.extend([p.longitude, p.latitude]))
+      map.fitBounds(b, { padding: paddingRef.current(), maxZoom: 14 })
+    }
+
+    return () => {
+      markers.forEach((m) => m.remove())
+      tripMarkersRef.current = []
+    }
+  }, [itineraries.activeTrip])
+
   // Draw the directions route when one is provided; clear it when null.
   useEffect(() => {
     const map = mapRef.current
@@ -1125,6 +1243,7 @@ function MapView({
       onGetDirections={onRoute ? handleDirections : undefined}
       saved={favorites.ids.has(selected.id)}
       onToggleSave={favorites.toggle}
+      onAddToTrip={setAddToTripFor}
       extra={detailExtra(selected)}
       navPad
       {...detailLayout(selected)}
@@ -1134,10 +1253,13 @@ function MapView({
   ) : mode === 'saved' ? (
     <SavedBody
       favorites={favorites}
+      itineraries={itineraries}
       selectedId={null}
       onSelect={selectPlace}
       distances={distances}
       navPad
+      tripsLocked={!canPlanTrips}
+      onAddToTrip={setAddToTripFor}
     />
   ) : mode === 'profile' ? (
     <ProfileBody navPad />
@@ -1172,7 +1294,7 @@ function MapView({
             dirOpen={dirOpen}
             onSaved={onSaved}
             savedOpen={mode === 'saved'}
-            onBuildItinerary={() => setItineraryNote(true)}
+            onBuildItinerary={() => onModeChange('saved')}
             showCategories={!isMobile}
           />
         )
@@ -1260,10 +1382,13 @@ function MapView({
             >
               <SavedBody
                 favorites={favorites}
+                itineraries={itineraries}
                 selectedId={selected?.id ?? null}
                 onSelect={selectPlace}
                 distances={distances}
                 onClose={() => onModeChange('explore')}
+                tripsLocked={!canPlanTrips}
+                onAddToTrip={setAddToTripFor}
               />
             </ResponsivePanel>
           )}
@@ -1329,6 +1454,7 @@ function MapView({
                 onGetDirections={onRoute ? handleDirections : undefined}
                 saved={favorites.ids.has(selected.id)}
                 onToggleSave={favorites.toggle}
+                onAddToTrip={setAddToTripFor}
                 extra={detailExtra(selected)}
                 {...detailLayout(selected)}
               />
@@ -1416,23 +1542,12 @@ function MapView({
         © Explore Vieques · MapTiler · OpenStreetMap
       </div>
 
-      {/* Build Itinerary is a stub (§1). A toast rather than a disabled button:
-          a control that looks broken on every tier is worse than one that says
-          what it will be. */}
-      {itineraryNote && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-50 flex justify-center px-6 sm:bottom-8">
-          <div className="glass pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-foreground shadow-2xl">
-            <Route size={15} className="shrink-0 text-primary" />
-            Itinerary building is coming soon.
-            <button
-              onClick={() => setItineraryNote(false)}
-              className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label="Dismiss"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
+      {addToTripFor && (
+        <AddToTripSheet
+          place={addToTripFor}
+          itineraries={itineraries}
+          onClose={() => setAddToTripFor(null)}
+        />
       )}
     </div>
   )

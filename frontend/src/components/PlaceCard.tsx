@@ -1,4 +1,4 @@
-import { Heart } from 'lucide-react'
+import { CalendarPlus, Heart } from 'lucide-react'
 
 import { formatMiles } from '../lib/geo'
 import type { Place } from '../lib/place'
@@ -13,6 +13,8 @@ type Props = {
   saved?: boolean
   /** When given, the card grows a heart in its top-right corner. */
   onToggleSave?: (p: Place) => void
+  /** Optional "add to trip" affordance, beside the heart. */
+  onAddToTrip?: (p: Place) => void
 }
 
 /**
@@ -26,7 +28,9 @@ type Props = {
  * the two fight over the click and saving a place also selects it. So the
  * selector button and the heart are siblings, and the heart stops propagation.
  */
-function PlaceCard({ place, selected, onSelect, distanceMi, saved, onToggleSave }: Props) {
+function PlaceCard({
+  place, selected, onSelect, distanceMi, saved, onToggleSave, onAddToTrip,
+}: Props) {
   return (
     <div className="relative shrink-0">
       <button
@@ -46,9 +50,10 @@ function PlaceCard({ place, selected, onSelect, distanceMi, saved, onToggleSave 
           {place.icon.emoji}
         </span>
 
-        {/* pr-7 keeps a long name from running under the heart. Only paid when
-            the heart is actually there. */}
-        <span className={`min-w-0 flex-1 ${onToggleSave ? 'pr-7' : ''}`}>
+        {/* pr-7 keeps a long name from running under the heart; pr-14 leaves room
+            for the add-to-trip button beside it too. Only paid when one of the
+            corner buttons is actually there. */}
+        <span className={`min-w-0 flex-1 ${onToggleSave && onAddToTrip ? 'pr-14' : onToggleSave ? 'pr-7' : ''}`}>
           <span className="block truncate text-sm font-semibold text-foreground">{place.name}</span>
           {place.subtitle && (
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">
@@ -80,6 +85,23 @@ function PlaceCard({ place, selected, onSelect, distanceMi, saved, onToggleSave 
           </span>
         )}
       </button>
+
+      {onAddToTrip && (
+        <button
+          onClick={(e) => {
+            // Same reasoning as the heart below: stop the click from bubbling
+            // to the selector button underneath.
+            e.stopPropagation()
+            onAddToTrip(place)
+          }}
+          aria-label={`Add ${place.name} to a trip`}
+          className={`absolute top-2 z-10 grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground ${
+            onToggleSave ? 'right-9' : 'right-2'
+          }`}
+        >
+          <CalendarPlus size={15} />
+        </button>
+      )}
 
       {onToggleSave && (
         <button

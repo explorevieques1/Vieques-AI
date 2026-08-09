@@ -39,9 +39,10 @@ import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { runChatLoop, describeProviderError } from './aiProvider.js'
-import { createCheckoutSession, handleWebhook, getEntitlement, tierHas } from './payments.js'
+import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, tierHas } from './payments.js'
 import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
+import { mountItineraries } from './itineraries.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -579,6 +580,11 @@ app.post('/api/checkout', (req, res) => createCheckoutSession(pool, req, res))
 // GET /api/entitlement — the map app's paywall asks this "can this user in?"
 // Returns { hasAccess, plans, credits } for the signed-in user.
 app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
+
+// GET /api/credits/history — AI credit purchase receipts for the signed-in
+// user, failed attempts included. Returns { purchases, creditsPurchased,
+// spentCents }. Balance still comes from /api/entitlement — this is history.
+app.get('/api/credits/history', (req, res) => getCreditHistory(pool, req, res))
 
 // ----------------------------------------------------------------------------
 //  POST /api/business-waitlist — business interest capture
@@ -1368,13 +1374,13 @@ app.get('/api/suggestion', requireAuth, async (req, res) => {
 //  and break the Saved list for itself.
 // ============================================================================
 
-const PLACE_KINDS = new Set([
+export const PLACE_KINDS = new Set([
   'beach', 'restaurant', 'stay', 'activity', 'service',
-  'transport', 'essential', 'snorkel', 'trail',
+  'transport', 'essential', 'snorkel', 'kayak', 'trail',
 ])
 
 /** Split 'beach:3' into its parts, or null if it isn't a valid Place.id. */
-function parsePlaceId(raw) {
+export function parsePlaceId(raw) {
   const id = String(raw || '')
   if (!/^[a-z]+:[A-Za-z0-9._-]+$/.test(id)) return null
   const [kind, ...rest] = id.split(':')
@@ -1391,7 +1397,7 @@ function parsePlaceId(raw) {
  * to park megabytes in someone else's database. Lengths are capped for the same
  * reason.
  */
-function shapeSnapshot(input) {
+export function shapeSnapshot(input) {
   const src = input && typeof input === 'object' ? input : {}
   const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : undefined)
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
@@ -1468,6 +1474,16 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
     fail(res, 'DELETE /api/favorites/:placeId', e)
   }
 })
+
+// ============================================================================
+//  TRIP PLANNER — six routes under /api/itineraries (backend/itineraries.js)
+// ============================================================================
+//  Exploration tier only, gated inside mountItineraries on 'itinerary'. Mounted
+//  here (after favorites, before the server starts listening) so it sits with
+//  the rest of the route registrations rather than before the app + pool it
+//  depends on exist.
+// ============================================================================
+mountItineraries(app, pool)
 
 // ----------------------------------------------------------------------------
 //  Start the server

@@ -125,12 +125,9 @@ function MapTopBar({
           </a>
         </DropdownMenuItem>
 
-        {/* Build Itinerary. It used to be a button in the banner; the banner is
-            gone on mobile and this is a once-a-trip action, not a per-tap one,
-            so the menu is where it belongs. Still UI only — deliberately NOT
-            wired to useFeature('itinerary'): that slug exists but nothing behind
-            it does, so gating it would render a locked row on every tier, which
-            reads as broken software rather than an upsell. */}
+        {/* Build Itinerary → Saved ▸ Trips. Not gated here: TripsBody renders the
+            upsell itself, which keeps the row present on every tier and explains
+            what Exploration buys instead of showing a dead lock. */}
         <DropdownMenuItem onSelect={onBuildItinerary} className={menuItem}>
           <Route size={15} />
           Build Itinerary

@@ -741,3 +741,147 @@ export async function removeFavorite(placeId: string): Promise<void> {
   })
   if (!res.ok) return raise(res, 'Remove failed')
 }
+
+// ----------------------------------------------------------------------------
+//  TRIP PLANNER
+// ----------------------------------------------------------------------------
+
+/** Snapshot of a place as stored on a trip item — the card, not the record. */
+export type TripSnapshot = {
+  kind?: string
+  name?: string
+  subtitle?: string
+  latitude?: number | null
+  longitude?: number | null
+  tags?: string[]
+  icon?: { emoji?: string; color?: string }
+}
+
+export type Trip = {
+  id: string
+  title: string
+  /** ISO yyyy-mm-dd, or null for a dateless "someday" list. */
+  startDate: string | null
+  endDate: string | null
+  itemCount: number
+  updatedAt: string
+}
+
+export type TripItem = {
+  placeId: string
+  placeKind: string
+  placeRef: string
+  /** null = Unscheduled. May exceed the trip's current length — see below. */
+  dayIndex: number | null
+  sortOrder: number
+  snapshot: TripSnapshot
+}
+
+export type TripDetail = Trip & { items: TripItem[] }
+
+export type TripInput = {
+  title: string
+  startDate?: string | null
+  endDate?: string | null
+}
+
+export type TripItemMutation = {
+  action: 'add' | 'move' | 'remove'
+  placeId: string
+  dayIndex?: number | null
+  snapshot?: TripSnapshot
+}
+
+export async function fetchTrips(): Promise<Trip[]> {
+  const res = await apiFetch('/api/itineraries')
+  if (!res.ok) return raise(res, 'Trips failed')
+  return res.json()
+}
+
+export async function fetchTrip(id: string): Promise<TripDetail> {
+  const res = await apiFetch(`/api/itineraries/${encodeURIComponent(id)}`)
+  if (!res.ok) return raise(res, 'Trip failed')
+  return res.json()
+}
+
+export async function createTrip(input: TripInput): Promise<Trip> {
+  const res = await apiFetch('/api/itineraries', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) return raise(res, 'Create trip failed')
+  return res.json()
+}
+
+export async function updateTrip(id: string, input: Partial<TripInput>): Promise<Trip> {
+  const res = await apiFetch(`/api/itineraries/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) return raise(res, 'Update trip failed')
+  return res.json()
+}
+
+export async function deleteTrip(id: string): Promise<void> {
+  const res = await apiFetch(`/api/itineraries/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) return raise(res, 'Delete trip failed')
+}
+
+export async function mutateTripItem(
+  id: string,
+  body: TripItemMutation,
+): Promise<TripDetail> {
+  const res = await apiFetch(`/api/itineraries/${encodeURIComponent(id)}/items`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) return raise(res, 'Trip item update failed')
+  return res.json()
+}
+
+// ---- date helpers -----------------------------------------------------------
+//  Dates are parsed as UTC noon, never local midnight. `new Date('2026-03-03')`
+//  is UTC midnight, which in Puerto Rico (UTC-4) is 8pm on March 2 — so a naive
+//  local render shows every trip starting the day before it does. Noon is far
+//  enough from both boundaries that no timezone shifts the calendar day.
+
+function atNoon(iso: string): Date {
+  return new Date(`${iso}T12:00:00Z`)
+}
+
+/** How many day sections a trip has. 0 when it is dateless. */
+export function tripDayCount(t: Pick<Trip, 'startDate' | 'endDate'>): number {
+  if (!t.startDate || !t.endDate) return 0
+  const days = Math.round(
+    (atNoon(t.endDate).getTime() - atNoon(t.startDate).getTime()) / 86400000,
+  ) + 1
+  return days > 0 ? days : 0
+}
+
+/** The calendar date of day `i` (0-based), or null on a dateless trip. */
+export function tripDayDate(
+  t: Pick<Trip, 'startDate' | 'endDate'>,
+  i: number,
+): Date | null {
+  if (!t.startDate) return null
+  const d = atNoon(t.startDate)
+  d.setUTCDate(d.getUTCDate() + i)
+  return d
+}
+
+/** "Mar 3–7" · "Mar 30 – Apr 2" · "No dates" */
+export function formatDateRange(t: Pick<Trip, 'startDate' | 'endDate'>): string {
+  if (!t.startDate || !t.endDate) return 'No dates'
+  const a = atNoon(t.startDate)
+  const b = atNoon(t.endDate)
+  const mon = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+  const day = (d: Date) => d.getUTCDate()
+  if (t.startDate === t.endDate) return `${mon(a)} ${day(a)}`
+  return a.getUTCMonth() === b.getUTCMonth()
+    ? `${mon(a)} ${day(a)}–${day(b)}`
+    : `${mon(a)} ${day(a)} – ${mon(b)} ${day(b)}`
+}
