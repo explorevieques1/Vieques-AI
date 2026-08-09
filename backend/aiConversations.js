@@ -143,6 +143,15 @@ export async function persistTurn(pool, { userId, tier, conversationId, userText
       await client.query('COMMIT')
       return id
     } catch (e) {
+      // If ROLLBACK itself throws (the connection died in the narrow window
+      // between the failed write above and this call), the swallow here
+      // means the just-inserted ai_conversations row can survive as an
+      // orphan — a titled conversation with zero messages, visible in LIST.
+      // Accepted, not hardened: reaching this requires a connection failure
+      // in that exact window, and when a connection dies that way Postgres
+      // generally aborts the transaction server-side regardless of whether
+      // our ROLLBACK lands. The swallow stays deliberate either way — see
+      // rule 1 — so persistTurn's never-throw contract holds even here.
       await client.query('ROLLBACK').catch(() => {})
       // Deliberately swallowed — see rule 1 above. This also covers the seq
       // unique-constraint violation from two truly concurrent sends to the
