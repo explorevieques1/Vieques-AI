@@ -5,6 +5,7 @@ import DirectionsPanel from './components/DirectionsPanel'
 import ProfilePanel from './components/ProfilePanel'
 import { useFavorites } from './hooks/useFavorites'
 import { useIsMobile } from './hooks/useIsMobile'
+import { useItineraries } from './hooks/useItineraries'
 import { AiChatProvider } from './lib/aiChat'
 import { type AiPin, type DirectionsResult } from './lib/api'
 import type { ShellMode } from './lib/shell'
@@ -38,6 +39,10 @@ function App() {
   // are the same set — otherwise hearting a place would not show up in Saved
   // until a reload.
   const favorites = useFavorites()
+  // Same lift, same reason: opening a trip has to be one shared piece of
+  // state so the map's pins and the Saved ▸ Trips list agree about which
+  // trip (if any) is open.
+  const itineraries = useItineraries()
 
   /**
    * The only way `mode` changes.
@@ -66,6 +71,7 @@ function App() {
             mode={mode}
             onModeChange={changeMode}
             favorites={favorites}
+            itineraries={itineraries}
             aiPins={aiPins}
             route={route}
             onRoute={setRoute}
