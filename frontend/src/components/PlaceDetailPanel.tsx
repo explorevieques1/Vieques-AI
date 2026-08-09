@@ -1,4 +1,5 @@
 import {
+  CalendarPlus,
   ChevronDown,
   ChevronLeft,
   Clock,
@@ -54,6 +55,8 @@ type Props = {
   /** Optional so callers that don't offer saving render no heart. */
   saved?: boolean
   onToggleSave?: (p: Place) => void
+  /** Opens the trip + day picker for this place. */
+  onAddToTrip?: (p: Place) => void
   /** Mobile: pad the sticky action bar so it clears the bottom nav. */
   navPad?: boolean
 }
@@ -118,6 +121,7 @@ function PlaceDetailPanel({
   statsPosition = 'top',
   saved = false,
   onToggleSave,
+  onAddToTrip,
   navPad = false,
 }: Props) {
   const mappable = isMappable(place)
@@ -340,25 +344,36 @@ function PlaceDetailPanel({
             navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
           }`}
         >
-          {onGetDirections ? (
-            <button
-              onClick={() => onGetDirections(place)}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent-sky text-[15px] font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-opacity hover:opacity-90"
-            >
-              <Navigation size={17} />
-              Get Directions
-            </button>
-          ) : (
-            <a
-              href={gmaps!}
-              target="_blank"
-              rel="noreferrer"
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent-sky text-[15px] font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-opacity hover:opacity-90"
-            >
-              <Navigation size={17} />
-              Get Directions
-            </a>
-          )}
+          <div className="flex gap-2">
+            {onGetDirections ? (
+              <button
+                onClick={() => onGetDirections(place)}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent-sky text-[15px] font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-opacity hover:opacity-90"
+              >
+                <Navigation size={17} />
+                Get Directions
+              </button>
+            ) : (
+              <a
+                href={gmaps!}
+                target="_blank"
+                rel="noreferrer"
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent-sky text-[15px] font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-opacity hover:opacity-90"
+              >
+                <Navigation size={17} />
+                Get Directions
+              </a>
+            )}
+            {onAddToTrip && (
+              <button
+                onClick={() => onAddToTrip(place)}
+                className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-foreground hover:bg-white/5"
+              >
+                <CalendarPlus size={15} />
+                Add to trip
+              </button>
+            )}
+          </div>
         </div>
       )}
     </>

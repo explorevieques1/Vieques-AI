@@ -1189,6 +1189,7 @@ function MapView({
       onGetDirections={onRoute ? handleDirections : undefined}
       saved={favorites.ids.has(selected.id)}
       onToggleSave={favorites.toggle}
+      onAddToTrip={setAddToTripFor}
       extra={detailExtra(selected)}
       navPad
       {...detailLayout(selected)}
@@ -1399,6 +1400,7 @@ function MapView({
                 onGetDirections={onRoute ? handleDirections : undefined}
                 saved={favorites.ids.has(selected.id)}
                 onToggleSave={favorites.toggle}
+                onAddToTrip={setAddToTripFor}
                 extra={detailExtra(selected)}
                 {...detailLayout(selected)}
               />
