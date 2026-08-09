@@ -45,6 +45,7 @@ import {
   SHEET_FULL,
   SHEET_HIDDEN,
   SHEET_PREVIEW,
+  type MapInsets,
 } from '../hooks/useMapInsets'
 import { useEntitlement, useFeature } from '../lib/entitlement'
 import AddToTripSheet from './AddToTripSheet'
@@ -158,6 +159,30 @@ function MapView({
    * while they still had a trip open.
    */
   const tripMarkersRef = useRef<maplibregl.Marker[]>([])
+  /**
+   * The id of the trip the camera last fitBounds()-ed to. Lets the trip-pin
+   * effect below fit the camera once per opened trip instead of once per
+   * `activeTrip` object identity — see the long comment on that effect.
+   */
+  const fittedTripIdRef = useRef<string | null>(null)
+  /**
+   * Latest `padding` / `selectPlace` closures, refreshed every render.
+   *
+   * Both are unstable identities (padding depends on `insets`, which depends
+   * on the mobile sheet's snap point; selectPlace depends on padding). The
+   * trip-pin effect needs to CALL the current version of each without being
+   * forced to re-run every time either identity changes — re-running on
+   * padding meant every sheet drag rebuilt every marker and re-fit the
+   * camera, and re-running on selectPlace meant tapping a pin flew the
+   * camera in (selectPlace) and immediately fought itself back out
+   * (the effect re-firing and fitBounds-ing to the whole trip). Reading
+   * through a ref decouples "have the freshest function" from "re-run the
+   * effect".
+   */
+  const selectPlaceRef = useRef<(p: Place) => void>(() => {})
+  const paddingRef = useRef<() => MapInsets>(() => ({
+    top: 0, bottom: 0, left: 0, right: 0,
+  }))
 
   const [styleId, setStyleId] = useState(DEFAULT_MAP_STYLE)
   /** The Map Modes card (basemap + overlays), opened by the globe button. */
@@ -541,6 +566,15 @@ function MapView({
     [padding],
   )
 
+  // Keep selectPlaceRef/paddingRef pointed at the latest closures every
+  // render, so effects that read `*Ref.current(...)` (see the trip-pin
+  // effect below) always call fresh logic without needing padding/selectPlace
+  // themselves in their dep arrays.
+  useEffect(() => {
+    selectPlaceRef.current = selectPlace
+    paddingRef.current = padding
+  })
+
   const clearSelection = useCallback(() => {
     setSelected(null)
     setSnap(SHEET_PREVIEW)
@@ -923,12 +957,29 @@ function MapView({
    * below — removing every marker it added — is what makes "back clears the
    * pins" work with no extra code: leaving a trip (activeTrip -> null) reruns
    * this effect, and the cleanup from the previous run fires first.
+   *
+   * Deps are deliberately just `[itineraries.activeTrip]`, not padding or
+   * selectPlace (see selectPlaceRef/paddingRef above for why those two are
+   * unstable). `padding()` and `selectPlace` are read through the refs
+   * instead, so a sheet drag or a pin tap — both of which change padding's
+   * identity — rebuild nothing here.
+   *
+   * The camera fit is further gated on `fittedTripIdRef`, keyed on the trip's
+   * id rather than on `activeTrip` object identity: applyDetail() in
+   * useItineraries hands back a brand-new TripDetail object after every
+   * add/move/remove, so fitting on identity would re-frame the whole trip
+   * every time a single place was added or dragged to another day. Markers
+   * still rebuild on every items change (a new place needs a new pin) — only
+   * the fitBounds is once-per-trip.
    */
   useEffect(() => {
     const map = mapRef.current
     tripMarkersRef.current.forEach((m) => m.remove())
     tripMarkersRef.current = []
-    if (!map || !itineraries.activeTrip) return
+    if (!map || !itineraries.activeTrip) {
+      fittedTripIdRef.current = null
+      return
+    }
 
     const tripPlaces = itineraries.activeTrip.items
       .map(tripItemToPlace)
@@ -940,7 +991,7 @@ function MapView({
       const el = makeMarkerEl(p.icon)
       el.addEventListener('click', (e) => {
         e.stopPropagation()
-        selectPlace(p)
+        selectPlaceRef.current(p)
       })
       return new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat([p.longitude, p.latitude])
@@ -948,15 +999,18 @@ function MapView({
     })
     tripMarkersRef.current = markers
 
-    const b = new maplibregl.LngLatBounds()
-    tripPlaces.forEach((p) => b.extend([p.longitude, p.latitude]))
-    map.fitBounds(b, { padding: padding(), maxZoom: 14 })
+    if (fittedTripIdRef.current !== itineraries.activeTrip.id) {
+      fittedTripIdRef.current = itineraries.activeTrip.id
+      const b = new maplibregl.LngLatBounds()
+      tripPlaces.forEach((p) => b.extend([p.longitude, p.latitude]))
+      map.fitBounds(b, { padding: paddingRef.current(), maxZoom: 14 })
+    }
 
     return () => {
       markers.forEach((m) => m.remove())
       tripMarkersRef.current = []
     }
-  }, [itineraries.activeTrip, padding, selectPlace])
+  }, [itineraries.activeTrip])
 
   // Draw the directions route when one is provided; clear it when null.
   useEffect(() => {

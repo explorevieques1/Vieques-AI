@@ -105,9 +105,21 @@ export function useItineraries(): Itineraries {
     // reverted to the old one, which is exactly the "lie on screen" this
     // hook's optimistic updates are meant to avoid.
     const beforeActive = activeTrip
+    // Built from only the keys actually present in `input`, not a blind
+    // `{ ...t, ...input }` spread: `input` is a Partial, so a future caller
+    // passing e.g. just `{ title }` must not blank out startDate/endDate in
+    // the optimistic patch, and a caller explicitly passing
+    // `startDate: undefined` must not overwrite the `string | null` field
+    // with `undefined` (which renders as "No dates" until the server
+    // replies). The `as Trip`/`as TripDetail` casts this replaces were
+    // hiding exactly that gap from the type checker.
+    const patch: Partial<TripInput> = {}
+    if ('title' in input) patch.title = input.title
+    if ('startDate' in input) patch.startDate = input.startDate
+    if ('endDate' in input) patch.endDate = input.endDate
     // Optimistic: the header should show the new name as the sheet closes.
-    setTrips((prev) => prev.map((t) => (t.id === id ? { ...t, ...input } as Trip : t)))
-    setActiveTrip((a) => (a && a.id === id ? { ...a, ...input } as TripDetail : a))
+    setTrips((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    setActiveTrip((a) => (a && a.id === id ? { ...a, ...patch } : a))
     try {
       const t = await updateTrip(id, input)
       setTrips((prev) => prev.map((p) => (p.id === id ? t : p)))
