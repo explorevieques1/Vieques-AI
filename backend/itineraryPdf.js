@@ -93,6 +93,23 @@ export function tripFilename(title) {
   return `${slug || 'trip'}.pdf`
 }
 
+/**
+ * Drop characters the built-in Helvetica cannot encode.
+ *
+ * pdfkit's standard fonts are single-byte WinAnsi. Anything outside it — the
+ * astral-plane emoji stored in snapshot.icon.emoji ('🍽️', '🏖️') and the
+ * U+FE0F variation selector that trails them — is written byte-wise and comes
+ * out as mojibake ('Ø<ß}þ') in the rendered PDF, not as the emoji.
+ *
+ * Keeps the Latin-1 range so genuinely encodable punctuation still renders
+ * (the footer's '·' is WinAnsi and must survive). Embedding a TrueType emoji
+ * font would be the way to actually SHOW them; this only guarantees we never
+ * print garbage.
+ */
+function winAnsiOnly(s) {
+  return String(s || '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
+}
+
 /** First phone from a text[] column, or ''. */
 function firstPhone(row) {
   return Array.isArray(row?.phones) && row.phones.length ? String(row.phones[0]) : ''
@@ -180,7 +197,7 @@ export function buildTripPdf(doc, trip, resolved) {
       const snap = it.snapshot || {}
       const live = resolved.get(it.placeId) || {}
       const name = live.name || snap.name || 'Saved place'
-      const emoji = snap.icon?.emoji || ''
+      const emoji = winAnsiOnly(snap.icon?.emoji)
       const address = live.address || ''
       const phone = firstPhone(live)
       const hours = live.hours || ''
