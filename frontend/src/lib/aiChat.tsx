@@ -43,8 +43,14 @@ export type AiChatState = {
   conversationId: string | null
   /** This user's saved conversations, newest first. Empty below Vacation. */
   conversations: ConversationSummary[]
-  /** True while the list or a transcript is loading. */
+  /** True while a saved transcript is loading (openConversation in flight). */
   historyLoading: boolean
+  /**
+   * True while the conversation list itself is loading — separate from
+   * historyLoading so the initial mount fetch and a live openConversation()
+   * can't clear or set each other's spinner. See refreshConversations.
+   */
+  listLoading: boolean
   /** Does this plan include 'ai_history'? Hides the history UI when false. */
   canSaveHistory: boolean
   /** Clear the transcript. Creates nothing until the next send. */
@@ -73,18 +79,35 @@ export function AiChatProvider({
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  // Deliberately a separate flag from historyLoading rather than reusing it:
+  // historyLoading is owned by openConversation and guarded by openToken so a
+  // stale response can't clear a spinner a newer call still owns. Folding the
+  // list fetch into that flag would let refreshConversations (fired on mount,
+  // and again after every send()) clear a spinner openConversation is
+  // mid-flight on, or vice versa — two unrelated requests fighting over one
+  // boolean. AiChatHistoryBody reads this one for the empty-state gate;
+  // historyLoading remains openConversation's alone.
+  const [listLoading, setListLoading] = useState(false)
   const canSaveHistory = useFeature('ai_history')
 
   // The list is small (title + count, capped at 100 server-side) and is what
   // the history view renders, so it is fetched once on mount rather than on
-  // every open. Below Vacation the route 402s, so don't ask.
+  // every open. Below Vacation the route 402s, so don't ask — and don't leave
+  // listLoading stuck true from some earlier call now that the plan can't
+  // save history at all.
   const refreshConversations = useCallback(async () => {
-    if (!canSaveHistory) return
+    if (!canSaveHistory) {
+      setListLoading(false)
+      return
+    }
+    setListLoading(true)
     try {
       setConversations(await fetchConversations())
     } catch {
       // A failed list leaves the previous one on screen — better than an
       // empty history that looks like data loss.
+    } finally {
+      setListLoading(false)
     }
   }, [canSaveHistory])
 
@@ -236,6 +259,7 @@ export function AiChatProvider({
         conversationId,
         conversations,
         historyLoading,
+        listLoading,
         canSaveHistory,
         newChat,
         openConversation,

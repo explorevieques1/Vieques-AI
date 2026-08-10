@@ -25,7 +25,7 @@ type Props = {
  */
 export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
   const {
-    conversations, historyLoading, conversationId,
+    conversations, listLoading, conversationId,
     newChat, openConversation, renameConversation, deleteConversation,
   } = useAiChat()
 
@@ -33,6 +33,9 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  // Keyed by conversation id so a failure on one row doesn't stick around
+  // once you move on to a different one.
+  const [renameErrorFor, setRenameErrorFor] = useState<string | null>(null)
 
   // Grouped by recency the way every chat UI does it, so a long list stays
   // scannable. Compared on local calendar days, not elapsed hours: a message
@@ -60,6 +63,7 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
     setEditingId(c.id)
     setDraft(c.title)
     setMenuFor(null)
+    setRenameErrorFor(null)
   }
 
   async function commitRename(id: string) {
@@ -68,8 +72,15 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
     if (!title) return
     try {
       await renameConversation(id, title)
+      setRenameErrorFor(null)
     } catch {
-      // The list still shows the old title, which is the truth on the server.
+      // The list still shows the old title, which is the truth on the
+      // server — but the user asked for a change and nothing visibly
+      // happened, so say so rather than failing silently. The realistic
+      // causes here are a dropped connection or the row having been deleted
+      // in another tab (404); either way "not saved" is the honest message,
+      // not a redundant echo of a specific status code.
+      setRenameErrorFor(id)
     }
   }
 
@@ -90,7 +101,7 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
           navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
         }`}
       >
-        {conversations.length === 0 && !historyLoading && (
+        {conversations.length === 0 && !listLoading && (
           <div className="px-2 py-10 text-center">
             <p className="text-sm text-foreground">No saved chats yet</p>
             <p className="mx-auto mt-1.5 max-w-[28ch] text-xs leading-relaxed text-muted-foreground">
@@ -163,6 +174,12 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
                         <MoreHorizontal size={16} />
                       </button>
                     </>
+                  )}
+
+                  {renameErrorFor === c.id && (
+                    <p className="mt-1 rounded-xl border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-foreground">
+                      Couldn't save that name. Try again.
+                    </p>
                   )}
 
                   {menuFor === c.id && (
