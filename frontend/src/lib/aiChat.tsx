@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 import {
   sendAiChat, fetchConversations, fetchConversation,
@@ -97,13 +97,27 @@ export function AiChatProvider({
     setConversationId(null)
     setError(null)
     setInput('')
+    // Deliberately NOT clearing outOfCredits here: it reflects the account's
+    // balance, not this conversation's, and a new chat grants no credits.
+    // Clearing it would show an enabled composer that send() then silently
+    // no-ops on (remaining <= 0), which is worse than the upgrade CTA it
+    // would be hiding.
   }, [])
 
+  // Guards against opening conversation A, then B before A's fetch resolves:
+  // without this, a slow A landing after fast B overwrites B's transcript,
+  // id and pins with stale data. Bumped at the start of every call; a
+  // response only gets to touch state if its token is still the latest one
+  // outstanding when the await returns.
+  const openToken = useRef(0)
+
   const openConversation = useCallback(async (id: string) => {
+    const token = ++openToken.current
     setHistoryLoading(true)
     setError(null)
     try {
       const detail = await fetchConversation(id)
+      if (token !== openToken.current) return // a newer openConversation() won the race
       setMessages(detail.messages.map((m) => ({ role: m.role, content: m.content })))
       setConversationId(detail.id)
       // Replay every pin the conversation produced, de-duplicated by id: two
@@ -120,15 +134,27 @@ export function AiChatProvider({
         setPinsSeq((n) => n + 1)
       }
     } catch (e) {
+      if (token !== openToken.current) return
       setError((e as Error).message)
     } finally {
-      setHistoryLoading(false)
+      // Only the latest request may clear the spinner — a stale response
+      // finishing after a newer one is still in flight must not hide it.
+      if (token === openToken.current) setHistoryLoading(false)
     }
   }, [onPins])
 
   const renameConversation = useCallback(async (id: string, title: string) => {
     const updated = await apiRename(id, title)
-    setConversations((cs) => cs.map((c) => (c.id === id ? updated : c)))
+    // The server bumps updated_at on rename and LIST orders by updated_at
+    // DESC, so a plain in-place patch leaves the row in its old slot until
+    // something else happens to refetch. Re-sort locally with the row the
+    // server just handed back rather than paying for a round trip to learn
+    // an ordering we already have all the data for.
+    setConversations((cs) =>
+      cs
+        .map((c) => (c.id === id ? updated : c))
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    )
   }, [])
 
   const deleteConversation = useCallback(async (id: string) => {
