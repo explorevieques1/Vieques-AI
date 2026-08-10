@@ -578,17 +578,67 @@ export type AiChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export async function sendAiChat(
   messages: AiChatMessage[],
-): Promise<{ reply: string; pins: AiPin[]; creditsRemaining: number }> {
+  conversationId?: string | null,
+): Promise<{ reply: string; pins: AiPin[]; creditsRemaining: number; conversationId: string | null }> {
   const res = await apiFetch(`/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, conversationId: conversationId ?? undefined }),
   })
   // A 402 here means the allowance is spent. Thrown as an ApiError with
   // code 'NO_CREDITS' so AiChatPane can offer an upgrade rather than printing
   // the raw server message.
   if (!res.ok) await raise(res, 'AI chat failed')
   return res.json()
+}
+
+// ---------------------------------------------------------------------------
+//  Saved conversations — the 'ai_history' feature (Vacation and up)
+// ---------------------------------------------------------------------------
+
+export type ConversationSummary = {
+  id: string
+  title: string
+  messageCount: number
+  updatedAt: string
+}
+
+export type SavedMessage = { role: 'user' | 'assistant'; content: string; pins: AiPin[] }
+
+export type ConversationDetail = {
+  id: string
+  title: string
+  updatedAt: string
+  messages: SavedMessage[]
+}
+
+export async function fetchConversations(): Promise<ConversationSummary[]> {
+  const res = await apiFetch('/api/ai/conversations')
+  if (!res.ok) await raise(res, 'Could not load conversations')
+  return res.json()
+}
+
+export async function fetchConversation(id: string): Promise<ConversationDetail> {
+  const res = await apiFetch(`/api/ai/conversations/${id}`)
+  if (!res.ok) await raise(res, 'Could not load conversation')
+  return res.json()
+}
+
+export async function renameConversation(
+  id: string, title: string,
+): Promise<ConversationSummary> {
+  const res = await apiFetch(`/api/ai/conversations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+  if (!res.ok) await raise(res, 'Rename failed')
+  return res.json()
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await apiFetch(`/api/ai/conversations/${id}`, { method: 'DELETE' })
+  if (!res.ok) await raise(res, 'Delete failed')
 }
 
 export type DirectionsResult = {
