@@ -331,6 +331,20 @@ h1,h2,h3 { font-family: var(--font-head); letter-spacing: -0.02em; margin: 0; }
 .plan li::before { content:'✓'; color:var(--accent); font-weight:800; }
 .hidden { display:none; }
 
+/* Most-popular pass leads on mobile.
+   Below this width `.plans` (auto-fit, minmax(260px)) can only fit one column,
+   so the ladder is a vertical stack and the featured card would otherwise sit
+   in the middle — below the fold on a phone, in the section where people are
+   deciding to pay. `order` does this without touching Home.jsx's source order,
+   which the multi-column row still needs (featured reads as the centre rung).
+   The margin restores headroom for `.badge` (top:-11px), which the grid edge
+   would otherwise crop once this card is first. Keep this breakpoint in step
+   with the minmax above — widening the card without moving it leaves a
+   one-column grid rendering in desktop order. */
+@media (max-width: 819px) {
+  .plan.featured { order:-1; margin-top:11px; }
+}
+
 /* ---------- final cta + footer ---------- */
 .final { text-align:center; padding: clamp(56px,7vw,90px) var(--pad-x);
   background: radial-gradient(700px 300px at 50% 0%, rgba(6,182,212,.12), transparent 65%), var(--bg); }

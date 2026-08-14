@@ -3,11 +3,36 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
 import { startCheckout, joinBusinessWaitlist } from '../lib/api.js'
 import {
-  TRAVELER_PLANS,
-  TRAVELER_FEATURE_GROUPS,
+  SELLABLE_TRAVELER_PLANS,
+  SELLABLE_TRAVELER_FEATURE_GROUPS,
   BUSINESS_PREVIEW,
   ADDONS,
 } from '../lib/plans.js'
+
+// This page styles with inline objects, so there is no stylesheet to hang an
+// `@media` rule on — the one media query we need has to be read in JS.
+//
+// 780px is the width at which `styles.plans` (auto-fit, minmax(258px)) can no
+// longer fit two 258px columns plus the 16px gap inside the padded container,
+// i.e. the point the ladder becomes a single stack. Keep the two numbers in
+// step: widening the card without moving this leaves a one-column grid still
+// rendering in desktop source order.
+const STACK_BELOW = 780
+
+function useIsNarrow() {
+  const query = `(max-width: ${STACK_BELOW - 1}px)`
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const onChange = (e) => setNarrow(e.matches)
+    setNarrow(mq.matches) // resync: the viewport can change before this runs
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [query])
+  return narrow
+}
 
 // Renders one cell of the comparison matrix. The value vocabulary is defined in
 // lib/plans.js: true → ✓, false → ✗, null → n/a, string → the string itself.
@@ -123,6 +148,7 @@ export default function Pricing() {
   // ?for=business opens straight on the waitlist tab — the homepage's business
   // CTA links here, and dropping those visitors on the traveler tab loses them.
   const [aud, setAud] = useState(params.get('for') === 'business' ? 'business' : 'traveler')
+  const isNarrow = useIsNarrow()
   const [session, setSession] = useState(null)
   const [busy, setBusy] = useState(null) // which plan is processing
   const [error, setError] = useState('')
@@ -192,8 +218,15 @@ export default function Pricing() {
             {/* ---- Plan cards. Each card carries the FULL feature matrix so the
                     columns line up and you can read across to compare. ---- */}
             <div style={styles.plans}>
-              {TRAVELER_PLANS.map((p) => (
-                <div key={p.key} style={{ ...styles.plan, ...(p.featured ? styles.planFeatured : {}) }}>
+              {SELLABLE_TRAVELER_PLANS.map((p) => (
+                <div key={p.key} style={{
+                  ...styles.plan,
+                  ...(p.featured ? styles.planFeatured : {}),
+                  // Featured pass floats to the top on mobile. The grid is a
+                  // single column below 780px, so `order` reshuffles the stack
+                  // without touching the source order the desktop row needs.
+                  ...(p.featured && isNarrow ? styles.planFirst : {}),
+                }}>
                   {p.badge && <span style={styles.badge}>{p.badge}</span>}
 
                   <div style={styles.planHead}>
@@ -211,7 +244,7 @@ export default function Pricing() {
                   </button>
 
                   <div style={styles.matrix}>
-                    {TRAVELER_FEATURE_GROUPS.map((g) => (
+                    {SELLABLE_TRAVELER_FEATURE_GROUPS.map((g) => (
                       <div key={g.group}>
                         <div style={styles.groupLabel}>{g.group}</div>
                         {g.rows.map((row) => {
@@ -300,6 +333,12 @@ const styles = {
   plans: { display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(258px, 1fr))', alignItems: 'start' },
   plan: { position: 'relative', padding: '26px 20px 22px', borderRadius: 18, background: '#111c33', border: '1px solid rgba(148,163,184,.14)', display: 'flex', flexDirection: 'column' },
   planFeatured: { border: '1px solid #06b6d4', boxShadow: '0 0 0 1px rgba(6,182,212,.25), 0 20px 50px rgba(6,182,212,.10)' },
+  // Mobile only: pull the most-popular pass to the top of the single-column
+  // stack. `order` beats reordering the source array because the desktop row
+  // still wants Vacation in the middle, where it reads as the ladder's centre.
+  // The negative margin restores clearance for the badge, which is absolutely
+  // positioned at top:-11 and would otherwise be cropped by the grid's edge.
+  planFirst: { order: -1, marginTop: 11 },
   badge: { position: 'absolute', top: -11, left: '50%', transform: 'translateX(-50%)', background: '#06b6d4', color: '#0b1120', fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', padding: '5px 12px', borderRadius: 999, whiteSpace: 'nowrap' },
   planHead: { minHeight: 148 },
   planName: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 20, margin: 0 },

@@ -129,6 +129,14 @@ export const BUSINESS_PREVIEW = {
 /**
  * The traveler ladder. `key: 'free'` is the only entry with no backend plan —
  * its CTA routes to signup instead of Stripe.
+ *
+ * NOTE: `free` carries `hidden: true` and is filtered out of every storefront
+ * by SELLABLE_TRAVELER_PLANS below. It stays in this array (and in FEATURES,
+ * PLAN_LABELS, and backend/payments.js) because the tier is still LIVE: every
+ * new signup lands on it, AccessGate admits at it, and account pages must
+ * still render its name. What changed is that we no longer *sell* it — the
+ * ladder people choose from is three paid passes. Deleting the entry would
+ * break rendering for the users already holding it.
  */
 export const TRAVELER_PLANS = [
   {
@@ -139,6 +147,7 @@ export const TRAVELER_PLANS = [
     unit: 'forever',
     cta: 'Start free',
     checkout: false,
+    hidden: true,
   },
   {
     key: 'day_trip',
@@ -170,6 +179,34 @@ export const TRAVELER_PLANS = [
     checkout: true,
   },
 ]
+
+/**
+ * What the storefront renders: the three paid passes, in ladder order.
+ *
+ * Every buying surface (/pricing, the homepage teaser) must map over THIS, not
+ * TRAVELER_PLANS, so a hidden tier can never reappear in a card grid. The free
+ * tier remains fully functional underneath — it is simply not merchandised.
+ */
+export const SELLABLE_TRAVELER_PLANS = TRAVELER_PLANS.filter((p) => !p.hidden)
+
+/**
+ * Feature groups with the hidden plans' columns stripped out.
+ *
+ * The comparison matrix is keyed by plan key, so dropping a card without also
+ * dropping its column would leave the free values rendering under whichever
+ * card came next. Deriving both from the same `hidden` flag keeps them in step.
+ */
+export const SELLABLE_TRAVELER_FEATURE_GROUPS = TRAVELER_FEATURE_GROUPS.map((g) => ({
+  ...g,
+  rows: g.rows.map((row) => ({
+    ...row,
+    values: Object.fromEntries(
+      Object.entries(row.values).filter(([key]) =>
+        SELLABLE_TRAVELER_PLANS.some((p) => p.key === key),
+      ),
+    ),
+  })),
+}))
 
 /** Add-ons, sold after purchase rather than on the main ladder. */
 export const ADDONS = [
