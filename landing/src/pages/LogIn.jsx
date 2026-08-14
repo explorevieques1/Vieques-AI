@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { signIn } from '../lib/supabase.js'
 import { fetchEntitlement } from '../lib/api.js'
 import { mapUrlWithSession } from '../lib/mapApp.js'
 
 export default function LogIn() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  // /welcome sends them here when a confirmation link is expired or already
+  // used. Without a note they'd just see a bare login form and wonder why.
+  const staleLink = params.get('confirmed') === 'stale'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle') // idle | submitting | error
@@ -63,7 +67,11 @@ export default function LogIn() {
         </Link>
 
         <h1 style={styles.h1}>Welcome back</h1>
-        <p style={styles.sub}>Log in to pick up where you left off.</p>
+        <p style={styles.sub}>
+          {staleLink
+            ? 'That confirmation link has expired or was already used. Log in below to continue.'
+            : 'Log in to pick up where you left off.'}
+        </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <label style={styles.label}>

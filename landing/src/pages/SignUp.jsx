@@ -31,8 +31,16 @@ export default function SignUp() {
     // Supabase Auth creates the auth.users row; the DB trigger then
     // creates the matching profiles row automatically. We pass full_name
     // in metadata so the trigger can populate it.
+    // emailRedirectTo must be explicit. Without it Supabase falls back to the
+    // dashboard's Site URL, which silently points confirmation links at
+    // whatever that happens to be set to. We also carry the chosen plan
+    // through the email so they land back in the funnel they started in.
+    const confirmUrl = new URL('/welcome', window.location.origin)
+    if (plan) confirmUrl.searchParams.set('plan', plan)
+
     const { data, error: signUpError } = await signUp(email, password, {
       data: { full_name: name },
+      emailRedirectTo: confirmUrl.toString(),
     })
 
     if (signUpError) {
@@ -58,9 +66,13 @@ export default function SignUp() {
     return (
       <main style={styles.wrap}>
         <div style={styles.card}>
-          <h1 style={styles.h1}>Account created ✓</h1>
+          <h1 style={styles.h1}>Check your email</h1>
           <p style={styles.sub}>
-            Check your email to confirm your account, then log in to continue.
+            We sent a confirmation link to <strong style={{ color: '#e2e8f0' }}>{email}</strong>.
+            Click it and you'll be signed in automatically — no need to come back here.
+          </p>
+          <p style={styles.sub}>
+            Nothing yet? Check your spam folder. The link expires in 24 hours.
           </p>
           <Link to="/login" style={styles.btn}>Go to log in</Link>
         </div>
