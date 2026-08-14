@@ -6,6 +6,8 @@ import Pricing from './pages/Pricing.jsx'
 import Account from './pages/Account.jsx'
 import Success from './pages/Success.jsx'
 import Welcome from './pages/Welcome.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
 import { Terms, Privacy, Refunds } from './pages/Legal.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
@@ -21,6 +23,11 @@ export default function App() {
       {/* Where every emailed auth link lands. Supabase appends the tokens to
           this URL; Welcome exchanges them and forwards on. */}
       <Route path="/welcome" element={<Welcome />} />
+
+      {/* Password recovery: request the email, then set the new password on
+          the page the emailed link lands on. */}
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Legal. Stripe requires the refund policy and contact details to be
           reachable before live mode; /privacy is needed because we collect

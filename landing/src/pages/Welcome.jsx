@@ -34,10 +34,12 @@ export default function Welcome() {
 
       // Recovery links are for setting a new password, not for entering the
       // app — the session they carry only exists to authorize that change.
+      // Recovery normally points at /reset-password directly; this covers a
+      // link built before that route existed, or one sent from elsewhere.
       const isRecovery =
         hash.get('type') === 'recovery' || params.get('type') === 'recovery'
       if (isRecovery) {
-        navigate('/account?reset=1', { replace: true })
+        navigate(`/reset-password${window.location.hash}`, { replace: true })
         return
       }
 

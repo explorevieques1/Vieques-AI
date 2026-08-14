@@ -10,6 +10,9 @@ export default function LogIn() {
   // /welcome sends them here when a confirmation link is expired or already
   // used. Without a note they'd just see a bare login form and wonder why.
   const staleLink = params.get('confirmed') === 'stale'
+  // ResetPassword signs the user out and sends them here, so the new password
+  // gets used once — confirmation that the change actually took.
+  const justReset = params.get('reset') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle') // idle | submitting | error
@@ -68,9 +71,11 @@ export default function LogIn() {
 
         <h1 style={styles.h1}>Welcome back</h1>
         <p style={styles.sub}>
-          {staleLink
-            ? 'That confirmation link has expired or was already used. Log in below to continue.'
-            : 'Log in to pick up where you left off.'}
+          {justReset
+            ? 'Password updated. Log in with your new password.'
+            : staleLink
+              ? 'That confirmation link has expired or was already used. Log in below to continue.'
+              : 'Log in to pick up where you left off.'}
         </p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -88,7 +93,10 @@ export default function LogIn() {
           </label>
 
           <label style={styles.label}>
-            Password
+            <span style={styles.labelRow}>
+              Password
+              <Link to="/forgot-password" style={styles.forgot}>Forgot?</Link>
+            </span>
             <input
               style={styles.input}
               type="password"
@@ -140,6 +148,10 @@ const styles = {
   sub: { color: '#94a3b8', fontSize: 14, margin: '0 0 24px', lineHeight: 1.5 },
   form: { display: 'grid', gap: 16 },
   label: { display: 'grid', gap: 6, color: '#cbd5e1', fontSize: 13, fontWeight: 600 },
+  // Puts "Forgot?" on the password label's own line, right-aligned — the
+  // conventional spot, and it keeps the form to two fields.
+  labelRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
+  forgot: { color: '#67e8f9', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
   input: {
     padding: '11px 14px', borderRadius: 10, border: '1px solid rgba(148,163,184,.2)',
     background: '#0b1120', color: '#e2e8f0', fontSize: 14, outline: 'none', fontFamily: 'inherit',
