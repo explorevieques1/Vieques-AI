@@ -310,18 +310,35 @@ app.get('/api/beaches', requireAuth, requireTier(pool, 'beach_names'), async (re
     // This is a column-level rule, which RLS cannot express — hence it lives
     // here rather than in 0022_tier_rls.sql. Safe because the backend pool
     // connects as the table owner and bypasses RLS anyway.
+    // `images` is coalesced from the photos table (0047) and falls back to the
+    // legacy beaches.images column, so a beach shows a photo whichever place it
+    // lives in. photos wins when both exist: it is the one that can carry a
+    // per-image credit and alt text. The legacy array stays until the last
+    // frontend read of it is gone — see 0047's header.
+    const photoJoin = `
+      LEFT JOIN LATERAL (
+        SELECT array_agg(p.url ORDER BY p.sort_order, p.id) AS urls,
+               (array_agg(p.credit ORDER BY p.sort_order, p.id))[1] AS credit
+          FROM photos p
+         WHERE p.place_kind = 'beaches'
+           AND p.place_ref = b.id::text
+           AND p.is_active
+      ) ph ON true`
+
     const cols = tierHas(req.tier, 'beach_profiles')
-      ? `id, name, local_name, latitude, longitude,
-         region, type, water_conditions, access, facilities,
-         best_for, in_wildlife_refuge, gate_hours, notes,
-         images, image_credit`
-      : `id, name, latitude, longitude, region`
+      ? `b.id, b.name, b.local_name, b.latitude, b.longitude,
+         b.region, b.type, b.water_conditions, b.access, b.facilities,
+         b.best_for, b.in_wildlife_refuge, b.gate_hours, b.notes,
+         COALESCE(ph.urls, b.images) AS images,
+         COALESCE(ph.credit, b.image_credit) AS image_credit`
+      : `b.id, b.name, b.latitude, b.longitude, b.region`
 
     const { rows } = await pool.query(
       `SELECT ${cols}
-       FROM beaches
+       FROM beaches b
+       ${tierHas(req.tier, 'beach_profiles') ? photoJoin : ''}
        WHERE ${where.join(' AND ')}
-       ORDER BY name`,
+       ORDER BY b.name`,
       params,
     )
     res.json(rows)

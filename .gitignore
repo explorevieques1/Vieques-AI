@@ -32,6 +32,11 @@ coverage/
 # Local data / working files
 /data/
 
+# Source photos. These are uploaded to Supabase Storage by
+# backend/import-photo.mjs; the repo only ever holds the URL. Committing the
+# originals would add ~224MB of binaries that git can never really remove.
+/photos/
+
 # Misc
 *.local
 
