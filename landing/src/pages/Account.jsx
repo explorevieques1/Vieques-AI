@@ -53,8 +53,10 @@ function PlanSection({ ent }) {
 
   const credits = Number(ent.credits ?? 0)
 
-  // 2. Signed in, genuinely holds nothing. Credits can still be non-zero — the
-  //    free tier's signup bonus lands in the ledger without any pass.
+  // 2. Signed in, genuinely holds nothing. Credits can still be non-zero: an
+  //    account that bought a credit pack without a pass, or a pre-0048 account
+  //    that kept its signup bonus. New signups land here at 0 and the row below
+  //    is hidden, which is why it is guarded rather than always rendered.
   if (!ent.hasAccess) {
     return (
       <>

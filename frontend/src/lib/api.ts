@@ -94,11 +94,18 @@ export type Entitlement = {
   plans: ActivePlan[]
 }
 
-/** What an unknown/failed entitlement resolves to. Fails CLOSED, not open. */
-export const FREE_ENTITLEMENT: Entitlement = {
+/**
+ * What an unknown/failed entitlement resolves to: nothing at all.
+ *
+ * This previously granted map/search/beach_names, which meant a failed
+ * entitlement call opened the map — the opposite of the "fails CLOSED" it
+ * claimed. With no free tier the honest default is an empty feature list, and
+ * the server would refuse those routes anyway.
+ */
+export const NO_ENTITLEMENT: Entitlement = {
   hasAccess: false,
   tier: 'free',
-  features: ['map', 'search', 'beach_names', 'restaurant_preview', 'ai_trial'],
+  features: [],
   credits: 0,
   deviceLimit: 1,
   plans: [],
@@ -115,7 +122,7 @@ export async function fetchEntitlement(): Promise<Entitlement> {
   const res = await apiFetch('/api/entitlement')
   if (!res.ok) await raise(res, 'Entitlement check failed')
   const data = await res.json()
-  return { ...FREE_ENTITLEMENT, ...data }
+  return { ...NO_ENTITLEMENT, ...data }
 }
 
 export type Beach = {

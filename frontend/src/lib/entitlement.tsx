@@ -22,7 +22,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useState,
   type ReactNode,
 } from 'react'
-import { fetchEntitlement, FREE_ENTITLEMENT, type Entitlement } from './api'
+import { fetchEntitlement, NO_ENTITLEMENT, type Entitlement } from './api'
 
 type EntitlementContextValue = Entitlement & {
   /** Re-read entitlement from the server (after spending a credit, say). */
@@ -41,7 +41,7 @@ export function EntitlementProvider({
   /** Seed from AccessGate's fetch so we don't request entitlement twice on boot. */
   initial?: Entitlement
 }) {
-  const [ent, setEnt] = useState<Entitlement>(initial ?? FREE_ENTITLEMENT)
+  const [ent, setEnt] = useState<Entitlement>(initial ?? NO_ENTITLEMENT)
   const [loading, setLoading] = useState(!initial)
 
   const refresh = useCallback(async () => {

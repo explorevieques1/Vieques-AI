@@ -154,10 +154,23 @@ export const PLANS = {
 //  app mirrors these for UI purposes, but the browser copy is advisory only:
 //  routes must check FEATURES, never trust what the client claims to hold.
 //
-//  'free' is the tier for a signed-in user with no active purchase.
+//  'free' is the tier for a signed-in user with no active purchase. It grants
+//  NOTHING. Creating an account is identity, not access: the map requires at
+//  minimum a Day Trip pass. An empty free list is what makes that true on the
+//  server — every requireTier() gate resolves through this map, so a tier with
+//  no slugs fails every one of them.
+//
+//  The 'free' KEY must stay. bestTier() returns it for a user with no active
+//  subscription and tierHas() falls back to it for an unknown tier, so deleting
+//  the key would turn both into a crash instead of a denial.
+//
+//  'restaurant_preview' and 'stay_preview' remain on the paid tiers' arrays via
+//  the ['restaurant_preview', 'restaurants'] pattern at their routes. They are
+//  no longer reachable without a pass, but removing the slugs would mean
+//  rewriting those call sites for no behavioural gain.
 // ----------------------------------------------------------------------------
 export const FEATURES = {
-  free:        ['map', 'search', 'beach_names', 'restaurant_preview', 'stay_preview', 'ai_trial'],
+  free:        [],
   day_trip:    ['map', 'search', 'beach_names', 'beach_profiles', 'restaurants', 'stays', 'essentials',
                 'transport', 'activities', 'filters', 'directions', 'road_conditions',
                 'snorkel_zones_preview', 'favorites'],

@@ -70,10 +70,22 @@ export function requireTier(pool, feature) {
 }
 
 // --- Credit gating --------------------------------------------------------------
-// The Ask AI gate. Entitlement is the WRONG check for AI in both directions:
-// Day Trip holds an active subscription but is allocated 0 messages, while the
-// free tier holds no subscription but gets 3. Only the ledger balance answers
-// this correctly.
+// The Ask AI gate. TWO conditions, and both are required:
+//
+//   1. An active pass. Ask AI is part of the paid product, not a standalone
+//      one — without this, buying only the $4.99 credit pack would let someone
+//      use the assistant while the map itself stays locked. Since 0049 there is
+//      no free tier, so "signed in" grants nothing on its own.
+//   2. A positive ledger balance. Entitlement alone is the WRONG check in the
+//      other direction: Day Trip holds an active pass but is allocated 0
+//      messages, so holding a pass does not imply holding a question.
+//
+// Both live in the single INSERT below rather than a preceding SELECT. A
+// separate pass check would be a second round-trip on every call and would sit
+// outside the atomic guard described below, reopening the race it closes.
+//
+// Since 0048 there is no signup grant either, so a new account reaches this
+// middleware with no pass AND a zero balance, and fails on both counts.
 //
 // RESERVES the credit here rather than checking-then-spending in the handler.
 // The old split — read balance, run a multi-second LLM call, THEN insert the
@@ -111,7 +123,12 @@ export function requireCredits(pool) {
       const { rows } = await pool.query(
         `INSERT INTO public.credit_transactions (user_id, amount, reason, ref)
          SELECT $1, -1, 'ai_query', $2
-          WHERE COALESCE(
+          WHERE EXISTS (
+                  SELECT 1 FROM public.subscriptions
+                   WHERE user_id = $1 AND status = 'active'
+                     AND (expires_at IS NULL OR expires_at > now())
+                )
+            AND COALESCE(
                   (SELECT SUM(amount) FROM public.credit_transactions WHERE user_id = $1),
                   0
                 ) > 0
@@ -121,8 +138,27 @@ export function requireCredits(pool) {
       )
 
       if (!rows.length) {
-        // Either out of credits, or this exact ref was already reserved (a
-        // retry). Distinguish the two so a retry is not reported as "empty".
+        // Three ways to land here now: no active pass, no credits, or this
+        // exact ref was already reserved (a retry). They must be told apart —
+        // the pass check especially, because a legacy account can hold credits
+        // with no pass, and treating that as a retry would hand out a free
+        // answer and charge nothing for it.
+        const { rows: sub } = await pool.query(
+          `SELECT 1 FROM public.subscriptions
+            WHERE user_id = $1 AND status = 'active'
+              AND (expires_at IS NULL OR expires_at > now())
+            LIMIT 1`,
+          [req.user.id],
+        )
+        if (!sub.length) {
+          return res.status(402).json({
+            error: 'Ask AI is part of a paid pass. Choose a plan to unlock it.',
+            code: 'UPGRADE_REQUIRED',
+            feature: 'ai_chat',
+            tier: 'free',
+          })
+        }
+
         const { rows: bal } = await pool.query(
           'SELECT balance FROM public.credit_balances WHERE user_id = $1',
           [req.user.id],

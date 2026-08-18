@@ -1,31 +1,34 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { getSession, supabase } from '../lib/supabase'
-import { fetchEntitlement, FREE_ENTITLEMENT, LANDING_URL, type Entitlement } from '../lib/api'
+import { fetchEntitlement, NO_ENTITLEMENT, LANDING_URL, type Entitlement } from '../lib/api'
 import { EntitlementProvider } from '../lib/entitlement'
 
 // ============================================================================
 //  AccessGate — the boundary between "signed out" and "in the app"
 // ============================================================================
 //
-//  This used to be a paywall: no active subscription meant a bounce to the
-//  landing pricing page. PRICING.md replaced that with a free tier, so the gate
-//  now checks IDENTITY only:
+//  This is a paywall again. The free tier is gone: an account is identity, not
+//  access, and the map requires at minimum a Day Trip pass.
 //
-//     no session      → hard redirect to the landing login (still a real gate)
-//     signed in       → admitted, at whatever tier they hold (free included)
+//     no session      → hard redirect to the landing login
+//     no active pass  → hard redirect to the landing pricing page
+//     holds a pass    → admitted, at whatever tier they bought
 //
-//  The paywall did not disappear, it moved. Instead of one wall at the door,
-//  each feature checks its own tier — server-side in requireTier /
-//  requireCredits, and in the UI via useFeature(). That is what makes the free
-//  tier a funnel rather than a locked door: people can see what they'd be
-//  buying. See PRICING.md §4.1.
+//  The per-feature gates downstream (requireTier / requireCredits server-side,
+//  useFeature() in the UI) all stay. They now separate the PAID tiers from each
+//  other rather than paid from free, and this door decides who gets in at all.
+//
+//  Two walls, deliberately. This one is UX — it puts a non-payer in front of
+//  the buy button instead of an empty map. The server-side gates are the actual
+//  security boundary: a hand-crafted request that skips the browser still hits
+//  requireTier and still gets a 402.
 // ============================================================================
 
 type GateState = 'checking' | 'allowed'
 
 export default function AccessGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>('checking')
-  const [entitlement, setEntitlement] = useState<Entitlement>(FREE_ENTITLEMENT)
+  const [entitlement, setEntitlement] = useState<Entitlement>(NO_ENTITLEMENT)
 
   useEffect(() => {
     let cancelled = false
@@ -61,14 +64,23 @@ export default function AccessGate({ children }: { children: ReactNode }) {
       try {
         const ent = await fetchEntitlement()
         if (cancelled) return
+
+        // The paywall. hasAccess is "holds at least one active paid pass" — the
+        // exact question this door asks. Anything else (a brand-new account, an
+        // expired Day Trip) goes to pricing rather than into an empty map.
+        if (!ent.hasAccess) {
+          redirect(`${LANDING_URL}/pricing`)
+          return
+        }
         setEntitlement(ent)
       } catch {
         if (cancelled) return
-        // Fail CLOSED, but not shut: admit them at the free tier rather than
-        // granting paid features on a network blip. Worst case a paying user
-        // briefly sees upsells; they never lose access to the app itself, and
-        // the server would reject an over-reach anyway.
-        setEntitlement(FREE_ENTITLEMENT)
+        // Could not reach the server. Do NOT redirect: a network blip is not
+        // proof of non-payment, and bouncing a paying customer to a pricing
+        // page they already bought from is the worse failure. Admit them with
+        // an empty feature set — every gated route still refuses server-side,
+        // so this grants nothing; it just keeps them in the app to retry.
+        setEntitlement(NO_ENTITLEMENT)
       }
       if (!cancelled) setState('allowed')
     }

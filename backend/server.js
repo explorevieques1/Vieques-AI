@@ -1054,10 +1054,13 @@ FORMATTING RULES (important — your answer shows in a narrow mobile chat pane):
 - Use **bold** only for place names. Avoid headings.
 - The places you mention also appear as pins on the map, so you don't need to repeat addresses.`
 
-// Gated on CREDITS, not entitlement. Entitlement is wrong in both directions
-// here: Day Trip holds an active subscription but is allocated 0 AI messages,
-// while the free tier holds no subscription but gets 3. Only the ledger balance
-// answers "may this person ask a question?" correctly.
+// Gated on CREDITS, not entitlement. Entitlement is wrong here: Day Trip holds
+// an active subscription but is allocated 0 AI messages, so holding a pass does
+// not mean holding a question. Only the ledger balance answers "may this person
+// ask a question?" correctly.
+//
+// Since 0048 no signup grant exists, so an account that has never purchased
+// sits at balance 0 and is refused here.
 //
 // Middleware order matters: rateLimit runs BEFORE requireCredits so a caller
 // hammering this route is shed on an in-memory Map lookup rather than after a

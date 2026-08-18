@@ -87,7 +87,7 @@ export default function Success() {
                 : 'Payment confirmed. Taking you to the map…'}
             </p>
             <div style={styles.actions}>
-              <button onClick={launchMapApp} style={styles.btnPrimary}>Launch App →</button>
+              <button onClick={() => { void launchMapApp() }} style={styles.btnPrimary}>Launch App →</button>
               <Link to="/" style={styles.btnGhost}>Return Home</Link>
             </div>
           </>
@@ -102,7 +102,10 @@ export default function Success() {
               launch the app now, or refresh this page shortly.
             </p>
             <div style={styles.actions}>
-              <button onClick={launchMapApp} style={styles.btnPrimary}>Launch App →</button>
+              {/* Payment is confirmed by Stripe; only the webhook is late. Skip
+                  the entitlement check so a real customer is not sent back to
+                  pricing by a subscriptions row that has not landed yet. */}
+              <button onClick={() => { void launchMapApp({ skipEntitlementCheck: true }) }} style={styles.btnPrimary}>Launch App →</button>
               <button onClick={() => window.location.reload()} style={styles.btnGhost}>Refresh</button>
             </div>
           </>
