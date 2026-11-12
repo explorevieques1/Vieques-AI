@@ -37,6 +37,12 @@ coverage/
 # originals would add ~224MB of binaries that git can never really remove.
 /photos/
 
+# Source listing photos staged for upload. Same rule as /photos/ above: these
+# full-res originals go to Supabase Storage via backend/import-photo.mjs; the
+# repo holds only the URL. (Two legacy beach images committed before the Storage
+# migration stay tracked; everything new here is ignored.)
+frontend/public/images/
+
 # Misc
 *.local
 
