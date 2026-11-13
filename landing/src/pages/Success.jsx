@@ -143,7 +143,7 @@ const styles = {
   h1: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 28, margin: '0 0 10px' },
   sub: { color: 'var(--muted)', fontSize: 15, lineHeight: 1.5, margin: '0 0 28px' },
   actions: { display: 'grid', gap: 12 },
-  btnPrimary: { padding: '14px 20px', borderRadius: 999, background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 15, textDecoration: 'none', border: 'none', cursor: 'pointer' },
+  btnPrimary: { padding: '14px 20px', borderRadius: 999, background: 'var(--flush)', color: '#FFFFFF', fontWeight: 700, fontSize: 16, textDecoration: 'none', border: 'none', cursor: 'pointer' },
   btnGhost: { padding: '13px 20px', borderRadius: 10, background: 'transparent', color: 'var(--text)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', cursor: 'pointer' },
   meta: { marginTop: 20, color: 'var(--faint)', fontSize: 11, fontFamily: 'monospace' },
 }

@@ -215,7 +215,7 @@ const styles = {
   },
   btn: {
     marginTop: 4, padding: '12px 20px', borderRadius: 999, border: 'none',
-    background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 14,
+    background: 'var(--flush)', color: '#FFFFFF', fontWeight: 700, fontSize: 15,
     cursor: 'pointer', textAlign: 'center', textDecoration: 'none', display: 'block',
     fontFamily: 'inherit',
   },

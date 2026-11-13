@@ -15,6 +15,7 @@ import { moonPhase, bioBayVerdict } from '../lib/moon.js'
 import { FAQ } from '../content/faq.js'
 import InkField from '../components/ink/InkField.jsx'
 import PlanSlide from '../components/PlanSlide.jsx'
+import SiteFooter from '../components/SiteFooter.jsx'
 import { getSession } from '../lib/supabase.js'
 import { startCheckout } from '../lib/api.js'
 
@@ -29,18 +30,19 @@ import { startCheckout } from '../lib/api.js'
 // Real places from the beaches + snorkel_spots tables. Doubles as an
 // on-page list of the long-tail names the SEO note says we should own.
 const PLACES = [
-  ['Sun Bay', 'Balneario Sombe'],
-  ['Mosquito Bay', 'bio bay'],
-  ['La Chiva', 'Blue Beach'],
-  ['Playa Caracas', 'Red Beach'],
-  ['Punta Arenas', 'Green Beach'],
-  ['Playa Negra', 'black sand'],
-  ['Media Luna', null],
-  ['Navio', null],
-  ['Playa La Plata', 'Orchid Beach'],
-  ['Mosquito Pier', 'snorkeling'],
-  ['Esperanza', 'Malecón'],
-  ['Playa Grande', null],
+  // [name, aka, guide slug] — the slug links the chip to its /beaches page.
+  ['Sun Bay', 'Balneario Sombe', 'sun-bay'],
+  ['Mosquito Bay', 'bio bay', null],
+  ['La Chiva', 'Blue Beach', 'playa-la-chiva'],
+  ['Playa Caracas', 'Red Beach', 'playa-caracas'],
+  ['Punta Arenas', 'Green Beach', 'punta-arenas'],
+  ['Playa Negra', 'black sand', 'playa-negra'],
+  ['Media Luna', null, 'playa-media-luna'],
+  ['Navio', null, 'playa-navio'],
+  ['Playa La Plata', 'Orchid Beach', 'playa-la-plata'],
+  ['Mosquito Pier', 'snorkeling', null],
+  ['Esperanza', 'Malecón', 'playa-esperanza'],
+  ['Playa Grande', null, 'playa-grande'],
 ]
 
 // Every bento cell / pricing card is a React Bits SpotlightCard re-skinned
@@ -48,7 +50,7 @@ const PLACES = [
 const CARD_STYLE = {
   '--spotlight-card-surface': '#0A202D',
   '--spotlight-card-border': 'rgba(143,169,180,.14)',
-  '--spotlight-card-shadow': 'none',
+  '--spotlight-card-shadow': 'var(--card-glow)',
 }
 // Magnetic pull only makes sense with a hovering pointer; on touch it just
 // leaves the button offset from where the finger expects it.
@@ -115,15 +117,18 @@ export default function Home() {
   }
 
   const placeItems = useMemo(
-    () => PLACES.map(([name, aka]) => ({
-      title: name,
-      node: (
-        <span className="place-chip">
-          <PinIcon width={16} height={16} />
-          {name}{aka && <em>{aka}</em>}
-        </span>
-      ),
-    })),
+    () => PLACES.map(([name, aka, slug]) => {
+      const chip = <><PinIcon width={16} height={16} />{name}{aka && <em>{aka}</em>}</>
+      return {
+        title: name,
+        // A same-tab router Link, not LogoLoop's own href (that opens a new
+        // tab). tabIndex -1: the marquee repeats every item, and keyboard
+        // users reach the same pages through the footer and nav instead.
+        node: slug
+          ? <Link to={`/beaches/${slug}`} className="place-chip" tabIndex={-1}>{chip}</Link>
+          : <span className="place-chip">{chip}</span>,
+      }
+    }),
     [],
   )
 
@@ -415,48 +420,7 @@ export default function Home() {
         </InkField>
       </main>
 
-      {/* Legal links are Link, not <a href>, so they route client-side. They
-          sit in the footer because that is where Stripe looks for them. */}
-      <footer className="footer">
-        <div className="footer-grid">
-          <div>
-            <h4>Explore Vieques</h4>
-            <p style={{ margin: 0, maxWidth: '28em' }}>
-              The interactive map and AI travel guide for Vieques, Puerto Rico. Made on the island.
-            </p>
-          </div>
-          <nav aria-label="Island guide">
-            <h4>The island</h4>
-            <ul>
-              <li><a href="#map">Vieques beaches map</a></li>
-              <li><a href="#map">Snorkeling spots</a></li>
-              <li><a href="#faq">Mosquito Bay timing</a></li>
-              <li><a href="#faq">Getting to Vieques</a></li>
-            </ul>
-          </nav>
-          <nav aria-label="Product">
-            <h4>Explore Vieques</h4>
-            <ul>
-              <li><a href="#pricing">Pricing</a></li>
-              <li><Link to="/pricing?for=business">For businesses</Link></li>
-              <li><Link to="/login">Sign in</Link></li>
-              <li><a href="mailto:hello@explorevieques.org">Contact</a></li>
-            </ul>
-          </nav>
-          <nav aria-label="Legal">
-            <h4>Legal</h4>
-            <ul>
-              <li><Link to="/terms">Terms</Link></li>
-              <li><Link to="/privacy">Privacy</Link></li>
-              <li><Link to="/refunds">Refunds</Link></li>
-            </ul>
-          </nav>
-        </div>
-        <div className="footer-base">
-          <span>© 2026 Explore Vieques</span>
-          <span>Vieques, Puerto Rico</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   )
 }

@@ -17,6 +17,7 @@ const Terms = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.T
 const Privacy = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Privacy })))
 const Refunds = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Refunds })))
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import { guideRoutes } from './guideRoutes.jsx'
 
 // index.html ships one canonical (the homepage) for every route, because
 // Vercel rewrites all paths to that one file. Without this, /pricing, /terms
@@ -39,6 +40,10 @@ export default function App() {
       <Route path="/signup" element={<SignUp />} />
       <Route path="/login" element={<LogIn />} />
       <Route path="/pricing" element={<Pricing />} />
+
+      {/* Island guide (SEO): /guide, /beaches, /beaches/:slug. Pre-rendered
+          to static HTML at build time by scripts/prerender.mjs. */}
+      {guideRoutes}
       <Route path="/success" element={<Success />} />
 
       {/* Where every emailed auth link lands. Supabase appends the tokens to

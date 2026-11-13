@@ -1,5 +1,6 @@
 import { getSession } from './supabase.js'
 import { fetchEntitlement } from './api.js'
+import { showLaunchOverlay } from './launchOverlay.js'
 
 // Where the map app lives (a DIFFERENT origin from this landing site).
 const APP_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173'
@@ -38,7 +39,20 @@ export function mapUrlWithSession(session) {
 // yet. Such a user genuinely paid and would otherwise be bounced to pricing by
 // a check that is merely out of date. Nothing is granted by skipping — the map
 // app's own gate still runs; this only declines to block on stale data.
-export async function launchMapApp({ skipEntitlementCheck = false } = {}) {
+export async function launchMapApp(opts = {}) {
+  // Cover the wait below with the pin-drop screen. Every path that follows
+  // ends in a full-page navigation, which discards it; only a thrown error
+  // leaves the page alive, so that is the one case that has to clean up.
+  const hide = showLaunchOverlay()
+  try {
+    await goToMapApp(opts)
+  } catch (err) {
+    hide()
+    throw err
+  }
+}
+
+async function goToMapApp({ skipEntitlementCheck = false } = {}) {
   const { data } = await getSession()
   const session = data?.session
   if (!session?.access_token) {

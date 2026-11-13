@@ -36,6 +36,8 @@
   --font-head: var(--font); --font-body: var(--font);
   --pad-x: clamp(16px, 5vw, 64px);
   --max: 1180px;
+  /* Slight warm halo behind the bento cells, step cards and pricing cards. */
+  --card-glow: 0 0 0 1px rgba(255,109,4,.05), 0 0 42px -10px rgba(255,109,4,.26);
   --ease: cubic-bezier(.22,1,.36,1);
 }
 
@@ -59,17 +61,18 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 /* ---------- buttons: iOS capsules ---------- */
 .btn {
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  font: 600 15px/1 var(--font); letter-spacing:-0.01em;
+  font: 600 16px/1 var(--font); letter-spacing:-0.01em;
   padding: 13px 22px; min-height: 44px; border-radius: 999px;
   border: 0; cursor: pointer; white-space: nowrap;
   transition: background-color .18s var(--ease), transform .12s var(--ease), color .18s;
 }
 .btn:active { transform: scale(.97); }
-.btn-primary { background: var(--flush); color: #1A0A00; }
+/* White on orange: bold + a faint warm shadow so the label holds up on #FF6D04. */
+.btn-primary { background: var(--flush); color: #fff; font-weight: 700; text-shadow: 0 1px 1px rgba(120,40,0,.35); }
 .btn-primary:hover { background: var(--flush-hi); }
 .btn-ghost { background: var(--pearl-3); color: var(--text); }
 .btn-ghost:hover { background: #17384A; }
-.btn-lg { padding: 16px 28px; font-size: 16px; min-height: 52px; }
+.btn-lg { padding: 16px 30px; font-size: 18px; min-height: 54px; }
 
 .link { color: var(--sea); font-weight: 600; }
 .link:hover { text-decoration: underline; text-underline-offset: 4px; }
@@ -90,11 +93,17 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 .brand-mark { display:flex; align-items:center; gap:10px; min-width:0; }
 .brand-tile { width:30px; height:30px; border-radius:8px; flex-shrink:0; }
 .brand-name { font-weight:700; font-size:16px; letter-spacing:-0.02em; white-space:nowrap; }
-.nav-center { display:flex; gap: clamp(18px,3vw,32px); }
-.nav-center a { color: var(--muted); font-size:14.5px; font-weight:500; transition: color .15s; }
-.nav-center a:hover { color: var(--text); }
+.nav-center { display:flex; gap: 8px; }
+.nav-center a {
+  display:inline-flex; align-items:center; min-height: 36px; padding: 8px 16px; border-radius: 999px;
+  background: var(--flush); color: #fff; font-size: 15.5px; font-weight: 700; letter-spacing:-0.01em;
+  text-shadow: 0 1px 1px rgba(120,40,0,.35); white-space: nowrap;
+  transition: background-color .15s var(--ease), transform .12s var(--ease);
+}
+.nav-center a:hover { background: var(--flush-hi); }
+.nav-center a:active { transform: scale(.97); }
 .nav-actions { display:flex; align-items:center; gap:8px; }
-.launch-btn { padding: 10px 18px; min-height: 40px; font-size: 14px; }
+.launch-btn { padding: 10px 18px; min-height: 40px; font-size: 15.5px; }
 
 .profile { position:relative; }
 .profile-trigger {
@@ -126,9 +135,15 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 .profile-item:hover { background: var(--pearl-3); }
 .profile-div { border-top:1px solid var(--hair); margin:6px 0; }
 
+/* The orange section pills need the room: drop the wordmark (logo stays)
+   until the pills themselves hide at 760px. */
+@media (max-width: 1000px) {
+  .nav-center a { padding: 8px 12px; font-size: 14.5px; }
+  .brand-name { display:none; }
+}
 @media (max-width: 760px) {
   .nav-center { display:none; }
-  .brand-name { font-size:15px; }
+  .brand-name { display:inline; font-size:15px; }
 }
 @media (max-width: 460px) { .brand-name { display:none; } .nav-simple .brand-name { display:inline; } }
 
@@ -252,7 +267,7 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 /* ---------- steps ---------- */
 .steps { display:grid; gap: 14px; margin-top: 44px; grid-template-columns: 1fr; counter-reset: step; }
 @media (min-width: 820px) { .steps { grid-template-columns: repeat(3,1fr); } }
-.step { padding: 28px 26px; border-radius: var(--r-lg); background: var(--pearl-2); }
+.step { padding: 28px 26px; border-radius: var(--r-lg); background: var(--pearl-2); box-shadow: var(--card-glow); }
 .step-n { font-size: 15px; font-weight:700; color: var(--sea); margin-bottom: 40px; display:block; }
 .step h3 { font-size: 22px; margin-bottom:8px; }
 .step p { margin:0; color: var(--muted); font-size:15.5px; }
@@ -299,7 +314,7 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 .hidden { display:none !important; }
 
 /* ---------- FAQ: iOS inset grouped list ---------- */
-.faq { max-width: 780px; margin: 44px auto 0; background: var(--pearl-2); border-radius: var(--r-md); overflow:hidden; }
+.faq { max-width: 780px; margin: 44px auto 0; background: var(--pearl-2); border-radius: var(--r-md); overflow:hidden; box-shadow: var(--card-glow); }
 .faq details { border-bottom: 1px solid var(--hair); }
 .faq details:last-child { border-bottom:0; }
 .faq summary {
@@ -324,14 +339,17 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 }
 .plan-check:hover { border-color: var(--flush); }
 .plan-check:active { transform: scale(.92); }
-.plan-check[aria-checked="true"] { background: var(--flush); border-color: var(--flush); color: #1A0A00; }
+.plan-check[aria-checked="true"] { background: var(--flush); border-color: var(--flush); color: #fff; }
 .plan-check:focus-visible { outline: 2px solid var(--sea); outline-offset: 3px; }
 .plan-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-right: 40px; min-height: 32px; }
 .plan .plan-head .badge { position:static; margin:0; }
 
 .plan-slide { width:100%; position:relative; z-index:2; }
 .plan-slide .slide-commit { display:block; }
-.plan-slide .slide-commit__text--plain { color: rgba(234,245,247,.82); font-weight:600; }
+.plan-slide .slide-commit__text--plain { color: rgba(234,245,247,.88); font-weight:700; }
+.plan-slide .slide-commit__label { font-size: 16px; padding-left: 48px; } /* centre in the space right of the handle */
+/* White arrow on the orange handle (done/error phases keep their own colours). */
+.plan-slide .slide-commit__capsule { color: #fff; }
 .plan-slide .slide-commit__track {
   box-shadow: 0 0 0 1px rgba(255,109,4,.22), 0 0 18px -4px rgba(255,109,4,.28);
   transition: box-shadow .3s var(--ease);
@@ -687,3 +705,173 @@ textarea.input { padding: 12px 16px; min-height: 80px; resize: vertical; }
   .t-explore { animation:none; color:#8FA9B4; }
   .t-ai { animation:none; color:#64DBE8; }
 }
+
+/* ---------- Island guide (SEO pages: /guide, /beaches, /beaches/:slug) ----------
+   Reading pages, not a show: no WebGL, no scroll reveals. Built from the same
+   tokens + inset grouped lists as the FAQ/add-ons. Only orange = the CTA. */
+.guide { max-width: 760px; margin: 0 auto; padding: calc(96px + env(safe-area-inset-top)) var(--pad-x) 0; }
+.crumbs { font-size: 14px; color: var(--faint); margin-bottom: 20px; }
+.crumbs a { color: var(--sea); }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs [aria-current] { color: var(--muted); }
+.guide-head { margin-bottom: 28px; }
+.guide-head .title { font-size: clamp(34px, 5vw, 52px); line-height: 1.05; }
+.guide-aka { margin: 10px 0 0; color: var(--muted); font-size: 17px; }
+.guide-sec { margin-top: 40px; }
+.guide-h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; }
+.guide-prose { margin: 0; color: var(--text); font-size: 17.5px; line-height: 1.65; }
+.guide-link { color: var(--sea); font-weight: 600; }
+
+.guide-list, .guide-plain { list-style: none; margin: 0; padding: 0; }
+.guide-list li + li, .guide-plain li + li { border-top: 1px solid var(--hair); }
+.guide-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 20px; min-height: 60px; color: var(--text); }
+.guide-row > span { min-width: 0; }
+.guide-row b { display: block; font-size: 16.5px; font-weight: 600; }
+.guide-row b + span { display: block; color: var(--muted); font-size: 14px; margin-top: 2px; }
+.guide-row svg { color: var(--faint); flex-shrink: 0; }
+a.guide-row:hover { background: var(--pearl-3); }
+a.guide-row:hover svg { color: var(--sea); }
+.group-list > .guide-row + .guide-row { border-top: 1px solid var(--hair); }
+
+/* Filter pills on /beaches. Not .segmented: that control animates a thumb
+   between exactly two options. Selected = turquoise (selected-state role). */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.chips button {
+  font: 600 14.5px var(--font); color: var(--muted); background: var(--pearl-2);
+  border: 1px solid var(--hair); border-radius: 999px; padding: 8px 15px; min-height: 38px; cursor: pointer;
+  transition: color .15s, background-color .15s, border-color .15s;
+}
+.chips button:hover { color: var(--text); }
+.chips button[aria-pressed="true"] { color: var(--pearl); background: var(--sea); border-color: var(--sea); }
+
+/* Fact sheet: iOS inset list with label left, value right (wraps on phones). */
+.guide-facts { margin: 0; }
+.guide-fact { display: grid; grid-template-columns: 7.5em 1fr; gap: 12px; padding: 14px 20px; }
+.guide-fact + .guide-fact { border-top: 1px solid var(--hair); }
+.guide-fact dt { color: var(--muted); font-size: 15px; }
+.guide-fact dd { margin: 0; font-size: 15.5px; }
+@media (max-width: 460px) { .guide-fact { grid-template-columns: 1fr; gap: 2px; } }
+
+.guide-cta { margin: 72px 0 96px; padding: 36px 28px; border-radius: var(--r-lg); background: var(--pearl-2); box-shadow: var(--card-glow); text-align: center; }
+.guide-cta .title { font-size: clamp(26px, 3.4vw, 34px); max-width: 20ch; margin: 0 auto; }
+.guide-cta .lede { margin: 14px auto 0; font-size: 16.5px; }
+.guide-cta .btn { margin-top: 26px; }
+
+/* ============================================================
+   Map loading screen — "pin drop"
+   The brand pin lands on the pearl ground and sends out flattened
+   contour rings, like a swell on the water. One moment, no chrome.
+   Duplicated in frontend/src/index.css (separate apps, no shared
+   package) — keep the two copies identical.
+   ============================================================ */
+.vq-load {
+  display: grid; place-content: center; justify-items: center; gap: 6px;
+  min-height: 100svh; width: 100%;
+  background: radial-gradient(620px 420px at 50% 42%, rgba(100,219,232,.10), transparent 70%), #04141E;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+}
+.vq-load--fixed { position: fixed; inset: 0; z-index: 9999; animation: vq-fade .18s ease-out both; }
+.vq-load__stage { position: relative; width: 260px; height: 200px; }
+.vq-load__ring {
+  position: absolute; left: 50%; top: 150px; width: 250px; height: 96px;
+  margin: -48px 0 0 -125px; border-radius: 50%;
+  border: 1.5px solid #64DBE8; opacity: 0; transform: scale(.05);
+  animation: vq-ring 3.2s cubic-bezier(.2,.6,.3,1) infinite;
+}
+.vq-load__ring:nth-child(1) { animation-delay: .65s; }
+.vq-load__ring:nth-child(2) { animation-delay: 1.45s; }
+.vq-load__ring:nth-child(3) { animation-delay: 2.25s; }
+.vq-load__dot {
+  position: absolute; left: 50%; top: 150px; width: 16px; height: 6px; margin: -3px 0 0 -8px;
+  border-radius: 50%; background: #64DBE8; opacity: 0; animation: vq-dot .3s ease-out .45s forwards;
+}
+.vq-load__pin {
+  position: absolute; left: 50%; bottom: 50px; width: 76px; margin-left: -38px; height: auto;
+  transform-origin: 50% 100%; opacity: 0; animation: vq-drop .95s cubic-bezier(.5,0,.75,.45) forwards;
+}
+.vq-load__text {
+  margin: 0; color: #8FA9B4; font-size: 15px; font-weight: 600; letter-spacing: -.01em;
+  opacity: 0; animation: vq-fade .5s ease-out .5s forwards;
+}
+@keyframes vq-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vq-dot  { to { opacity: .9; } }
+@keyframes vq-ring {
+  0%   { opacity: 0;  transform: scale(.05); }
+  8%   { opacity: .8; }
+  100% { opacity: 0;  transform: scale(1); }
+}
+@keyframes vq-drop {
+  0%   { opacity: 0; transform: translateY(-130px); }
+  12%  { opacity: 1; }
+  46%  { opacity: 1; transform: translateY(0) scale(1.08, .9); }
+  62%  { transform: translateY(-16px) scale(.97, 1.03); }
+  78%  { transform: translateY(0) scale(1.03, .97); }
+  90%  { transform: translateY(-4px); }
+  100% { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vq-load--fixed, .vq-load__text, .vq-load__pin, .vq-load__dot { animation: none; opacity: 1; transform: none; }
+  .vq-load__ring { animation: none; }
+  .vq-load__ring:nth-child(1) { opacity: .3;  transform: scale(.45); }
+  .vq-load__ring:nth-child(2) { opacity: .18; transform: scale(.75); }
+  .vq-load__ring:nth-child(3) { opacity: 0; }
+}
+
+/* ============================================================
+   Account page — pages/Account.jsx (inside AuthLayout)
+   Plan first (it's what people come to check), then the one orange
+   action, then the details as an iOS inset list.
+   ============================================================ */
+.acct-plan {
+  display: grid; gap: 3px; padding: 18px 20px; margin: 0 0 10px; border-radius: 18px;
+  background: var(--sea-dim); box-shadow: inset 0 0 0 1px rgba(100,219,232,.28);
+}
+.acct-plan--none { background: var(--pearl-3); box-shadow: none; }
+.acct-plan__label { color: var(--muted); font-size: 13px; font-weight: 600; }
+.acct-plan__name { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
+.acct-plan__sub { color: var(--muted); font-size: 14.5px; margin-top: 2px; }
+.acct-plan__sub strong { color: var(--sea); font-weight: 700; }
+.acct-plan--none .acct-plan__sub { margin-top: 0; }
+.acct-note a { color: var(--sea); font-weight: 600; }
+
+.acct-actions { display: grid; gap: 4px; margin: 18px 0 26px; }
+.acct-actions .btn { width: 100%; }
+.acct-link { justify-self: center; padding: 10px 14px; color: var(--sea); font-size: 14.5px; font-weight: 600; }
+.acct-link:hover { color: var(--text); }
+
+.acct-list { margin: 0; border-radius: 16px; background: var(--pearl-3); overflow: hidden; }
+.acct-row { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; padding: 14px 18px; }
+.acct-row + .acct-row { border-top: 1px solid var(--hair); }
+.acct-row dt { color: var(--muted); font-size: 14.5px; flex-shrink: 0; }
+.acct-row dd { margin: 0; font-size: 15px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+
+.acct-logout { width: 100%; margin-top: 14px; }
+
+/* Delete: a quiet link until asked for. Red, not --flush — orange means
+   "start / buy" here, and an orange delete button would read as a CTA. */
+.acct-danger { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hair); }
+.acct-danger__link {
+  display: block; margin: 0 auto; background: none; border: 0; padding: 6px 10px; cursor: pointer;
+  color: var(--faint); font: 600 13.5px var(--font); text-decoration: underline; text-underline-offset: 3px;
+}
+.acct-danger__link:hover { color: var(--muted); }
+.acct-danger__panel h2 { color: #FF6B6B; font-size: 17px; font-weight: 700; margin: 0 0 10px; }
+.acct-danger__panel p { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 10px; }
+.acct-danger__panel a { color: var(--sea); font-weight: 600; }
+.acct-danger__panel .field { margin: 16px 0; font-weight: 400; }
+.acct-danger__panel .field b { color: var(--text); }
+.acct-danger__btn {
+  width: 100%; min-height: 50px; padding: 0 20px; border: 0; border-radius: 999px; cursor: pointer;
+  background: #E5484D; color: #fff; font: 700 15px var(--font); transition: background-color .15s;
+}
+.acct-danger__btn:hover:not(:disabled) { background: #EE5A5F; }
+.acct-danger__btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Loading: three placeholder rows shaped like what's coming (plan, button, list). */
+.acct-skel { display: grid; gap: 12px; margin-top: 22px; }
+.acct-skel span { display: block; height: 58px; border-radius: 16px; background: var(--pearl-3); animation: acct-pulse 1.4s ease-in-out infinite; }
+.acct-skel span:first-child { height: 92px; }
+.acct-skel span:nth-child(2) { animation-delay: .15s; }
+.acct-skel span:nth-child(3) { height: 150px; animation-delay: .3s; }
+@keyframes acct-pulse { 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .acct-skel span { animation: none; } }

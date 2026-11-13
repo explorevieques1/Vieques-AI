@@ -69,6 +69,8 @@ review or generic skill picks:
 
 | Task | Use | Notes |
 |---|---|---|
+| Deciding what to work on next for revenue/growth ("what should we do next", marketing, SEO, pricing, ads) | `boss` agent | Business lead for Red Oak LLC; owns the 10-paid-users/day goal. Reads the vault + live Supabase numbers (read-only SQL) + Vercel pageviews, ranks moves by $/hour, returns one "Do this next". Advisory only — never edits or ships. |
+| Executing marketing: Google Ads experiment, ad copy, keyword/negative lists, daily campaign checks, rental-host / Facebook messages, `?src=` links ("what's my marketing task today") | `marketing` agent | Carries the Holiday 2026 Google Ads plan (blockers, keywords, Nov 20–30 + Dec 19–Jan 6 phases, kill rule). Read-only SQL; doesn't edit code. Escalates strategy changes to `boss`. |
 | Reviewing a diff/PR before commit | `vieques-diff-reviewer` agent | Project-aware: checks auth gates, Stripe webhook signature verification, Supabase RLS, map-app/landing cross-imports. Read-only, reports only. |
 | Commit + push + log | `/ship` slash command | Runs the reviewer first, then commits to the `explore-vieques` remote, then chains `vault-log`. This is the normal end-of-session action — don't hand-roll `git push`. |
 | Logging a session to the vault | `vault-log` skill | Run after `/ship`, or whenever asked to "update the vault." Never edits this code repo. |
@@ -108,7 +110,13 @@ below before changing anything visual.
 
 - `components/AuthLayout.jsx` — shared frame for LogIn + SignUp (terrain, pitch,
   StarBorder card, capsule nav with a page-specific `navAction`). ForgotPassword,
-  ResetPassword, Welcome and Account are recoloured but **not yet on AuthLayout**.
+  ResetPassword and Welcome are recoloured but **not yet on AuthLayout**. Account
+  moved onto it (2026-11-13) with `.acct-*` classes in `styles.css`.
+- **Map loading screen ("pin drop")** — the `.vq-load` block at the end of
+  `landing/public/styles.css` and `frontend/src/index.css` (identical copies; keep
+  them in step). Shown by `frontend` `AccessGate` while it checks the pass, and on
+  the landing side by `lib/launchOverlay.js`, which `launchMapApp()` raises the
+  moment any "Open the map" button is clicked.
 - `components/Phone3D.jsx` — the hero iPhone (CSS 3D, no three.js). Screen = real
   screenshot (`app-screenshot-{720,1080}.jpg` srcset) + an HTML Ask AI demo loop.
   **Nothing on the screen may zoom/translate the screenshot** — it moves the baked-in
@@ -134,7 +142,9 @@ below before changing anything visual.
 - **Palette roles:** `--pearl #04141E` base (~70%), `--sea #64DBE8` map lines / links /
   selected state (~20%), `--flush #FF6D04` **only** on start/buy actions (~10%). A solid
   orange *fill* on anything you can't press is a bug. The one exception is the **Ink
-  Field** backdrop: faint (≈17–20% alpha) orange engravings behind the text.
+  Field** backdrop: faint (≈17–20% alpha) orange engravings behind the text. The nav's
+  section links are also orange pills (owner's call, 2026-11-12). **Text on orange is
+  white, bold** (with a faint warm text-shadow) — never dark.
 - **Ink Field:** `landing/src/components/ink/InkField.jsx` — a fixed WebGL2 canvas
   (z -1) behind bento → final CTA. Sections tagged `data-ink-scene` (roots, lighthouse,
   mill) anchor each engraving; they condense out of curl-noise ink and morph on scroll.

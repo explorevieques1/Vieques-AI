@@ -90,12 +90,20 @@ export default function AccessGate({ children }: { children: ReactNode }) {
   }, [])
 
   if (state === 'checking') {
+    // Same pin-drop screen the landing site shows while it checks the pass
+    // (landing/src/lib/launchOverlay.js), so the two waits read as one. Styles:
+    // the .vq-load block in index.css.
     return (
-      <div className="h-screen w-screen grid place-items-center bg-slate-900 text-slate-300">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-slate-700 border-t-cyan-400 animate-spin" />
-          <p>Loading your island guide…</p>
+      <div className="vq-load" role="status" aria-live="polite">
+        <div className="vq-load__stage" aria-hidden="true">
+          <i className="vq-load__ring" /><i className="vq-load__ring" /><i className="vq-load__ring" />
+          <i className="vq-load__dot" />
+          <svg className="vq-load__pin" viewBox="132 108 248 296" fill="none">
+            <path fill="#FF6D04" d="M256 120c-62 0-112 50-112 112 0 78 96 152 108 161a6 6 0 0 0 8 0c12-9 108-83 108-161 0-62-50-112-112-112z" />
+            <circle cx="256" cy="228" r="46" fill="#64DBE8" />
+          </svg>
         </div>
+        <p className="vq-load__text">Loading your island guide</p>
       </div>
     )
   }

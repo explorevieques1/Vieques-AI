@@ -47,7 +47,10 @@ export default function NavBar({ action } = {}) {
 
         <nav className="nav-center" aria-label="Sections">
           <a href="/#map">The map</a>
-          <a href="/#how">How it works</a>
+          {/* "Island guide" replaced "How it works" (2026-11-13): the guide
+              pages are what Google ranks, and the nav link tells crawlers
+              they matter. How it works is still the next scroll down. */}
+          <Link to="/guide">Island guide</Link>
           <a href="/#pricing">Pricing</a>
           <a href="/#faq">FAQ</a>
         </nav>

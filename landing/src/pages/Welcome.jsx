@@ -137,7 +137,7 @@ const styles = {
   sub: { color: 'var(--muted)', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 },
   btn: {
     marginTop: 8, padding: '12px 20px', borderRadius: 999, border: 'none',
-    background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 14,
+    background: 'var(--flush)', color: '#FFFFFF', fontWeight: 700, fontSize: 15,
     cursor: 'pointer', textAlign: 'center', textDecoration: 'none', display: 'block',
   },
 }
