@@ -191,10 +191,6 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 .place-chip svg { color: var(--sea); flex-shrink:0; }
 .place-chip em { font-style:normal; color: var(--faint); font-weight:500; }
 
-/* ---------- manifesto ---------- */
-.manifesto { max-width: 980px; margin: 0 auto; }
-.manifesto .scroll-reveal { margin:0; }
-.manifesto .scroll-reveal-text { font-size: clamp(26px,3.6vw,46px); line-height:1.25; font-weight:700; letter-spacing:-0.03em; }
 
 /* ---------- bento ---------- */
 .bento {
@@ -315,6 +311,51 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 .faq details[open] summary svg { transform: rotate(90deg); color: var(--sea); }
 .faq details p { margin:0; padding: 0 22px 20px; color: var(--muted); font-size: 16px; line-height:1.6; }
 .faq summary:hover { background: rgba(255,255,255,.02); }
+
+/* ---------- pass picker + slide to pay (PlanSlide → reactbits/SlideCommit) ----------
+   The checkbox and the slider are both "buy" controls, so they are orange. */
+.plan-shell { cursor:pointer; }
+.plan-check {
+  position:absolute; top: 24px; right: 22px; z-index:3;
+  width: 28px; height: 28px; padding:0; border-radius: 9px; cursor:pointer;
+  display:grid; place-items:center;
+  background: transparent; border: 2px solid rgba(255,109,4,.55); color: transparent;
+  transition: background-color .18s var(--ease), border-color .18s, color .18s, transform .12s var(--ease);
+}
+.plan-check:hover { border-color: var(--flush); }
+.plan-check:active { transform: scale(.92); }
+.plan-check[aria-checked="true"] { background: var(--flush); border-color: var(--flush); color: #1A0A00; }
+.plan-check:focus-visible { outline: 2px solid var(--sea); outline-offset: 3px; }
+.plan-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding-right: 40px; min-height: 32px; }
+.plan .plan-head .badge { position:static; margin:0; }
+
+.plan-slide { width:100%; position:relative; z-index:2; }
+.plan-slide .slide-commit { display:block; }
+.plan-slide .slide-commit__text--plain { color: rgba(234,245,247,.82); font-weight:600; }
+.plan-slide .slide-commit__track {
+  box-shadow: 0 0 0 1px rgba(255,109,4,.22), 0 0 18px -4px rgba(255,109,4,.28);
+  transition: box-shadow .3s var(--ease);
+}
+.plan-slide.picked .slide-commit__track { animation: planGlow 2.8s ease-in-out infinite; }
+@keyframes planGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,109,4,.45), 0 0 22px 0 rgba(255,109,4,.30); }
+  50%      { box-shadow: 0 0 0 1px rgba(255,109,4,.65), 0 0 34px 4px rgba(255,109,4,.46); }
+}
+.plan-error { margin: 10px 0 0; font-size: 13.5px; color: #FF8A80; text-align:center; }
+@media (prefers-reduced-motion: reduce) {
+  .plan-slide.picked .slide-commit__track { animation:none; box-shadow: 0 0 0 1px rgba(255,109,4,.55), 0 0 26px 2px rgba(255,109,4,.38); }
+  .plan-check { transition:none; }
+}
+
+/* ---------- ink field (components/ink/InkField.jsx) ----------
+   Fixed WebGL layer behind the content (z -1; only <body> paints a
+   background, so it shows through). Orange INK here is illustration at low
+   alpha; solid --flush fill is still reserved for start/buy actions. */
+.ink-field-canvas {
+  position:fixed; left:0; top:0; width:100%; height:100lvh; z-index:-1;
+  pointer-events:none; opacity:0; transition: opacity .6s ease;
+}
+.ink-field-canvas.ready { opacity:1; }
 
 /* ---------- final + footer ---------- */
 .final { text-align:center; padding: clamp(80px,10vw,140px) var(--pad-x); position:relative; overflow:hidden; }

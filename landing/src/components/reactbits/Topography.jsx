@@ -181,6 +181,8 @@ uniform float uLines;
 uniform float uLineWidth;
 uniform float uMajor;
 uniform vec3 uColor;
+uniform vec3 uAccent;
+uniform float uAccentAmt;
 uniform float uBrightness;
 uniform vec2 uFade;
 uniform vec3 uFocus;
@@ -273,6 +275,17 @@ void main() {
   vec2 hd = spot - uHeat.xy;
   float heat = exp(-dot(hd, hd) / (uHeat.z * uHeat.z)) * uHeat.w + trail * 0.6;
   float energy = heat + ring;
+  // Accent (local addition): in a few slow-drifting terrain patches the MAJOR
+  // contours turn fully uAccent, and the cursor's heat warms toward it. Full
+  // hue, small area — a partial cyan/orange mix reads grey. uAccentAmt sets how
+  // much ground the patches cover; 0 = original single-colour look.
+  float zoneN = noise(spot * 0.21 + vec2(3.7, 9.1));
+  float zoneLo = 0.3 - 0.4 * uAccentAmt;
+  float hot = smoothstep(0.35, 1.0, heat);
+  float warm = max(smoothstep(zoneLo, zoneLo + 0.08, zoneN) * major, hot);
+  // Hover lines are drawn much brighter; dim the accent there so the
+  // exponential tone-map keeps it orange instead of blowing out to yellow.
+  vec3 tint = mix(uColor, uAccent * mix(1.0, 0.42, hot), warm * step(0.001, uAccentAmt));
 
   float depth = max(vDepth, 0.01);
   float persp = clamp(sqrt(uRefDepth / depth), 0.6, 1.6);
@@ -311,11 +324,11 @@ void main() {
 
   if (uLightMode > 0.5) {
     float ink = (1.0 - exp(-max(max(light.r, light.g), light.b) * 1.8)) * 0.92 * uOpacity;
-    outColor = vec4(uColor * ink, ink);
+    outColor = vec4(tint * ink, ink);
     return;
   }
 
-  vec3 color = 1.0 - exp(-uColor * light * 1.8);
+  vec3 color = 1.0 - exp(-tint * light * 1.8);
   float top = max(max(color.r, color.g), color.b);
   float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
   color = max(color + dither / 255.0 * step(0.002, top), 0.0);
@@ -343,6 +356,7 @@ out float vSize;
 out float vGlow;
 out float vFrame;
 out float vDepth;
+out float vWarm;
 
 void main() {
   ivec2 local = uOrigin + ivec2(gl_InstanceID % uColumns, gl_InstanceID / uColumns);
@@ -374,11 +388,14 @@ void main() {
   vFrame = frame;
   vGlow = 0.5 + 0.4 * b + blink * 0.9 + heat * 1.8 + ring * 3.0;
   vDepth = clip.w;
+  vWarm = step(0.955, b) + heat;   // ~4% of markers are accent "pins"
 }`;
 
 const MARKER_FRAGMENT = `#version 300 es
 precision highp float;
 uniform vec3 uColor;
+uniform vec3 uAccent;
+uniform float uAccentAmt;
 uniform vec2 uFade;
 uniform float uReveal;
 uniform float uBrightness;
@@ -391,6 +408,7 @@ in float vSize;
 in float vGlow;
 in float vFrame;
 in float vDepth;
+in float vWarm;
 out vec4 outColor;
 
 float smoother(float x) {
@@ -399,6 +417,7 @@ float smoother(float x) {
 }
 
 void main() {
+  vec3 tint = mix(uColor, uAccent, clamp(vWarm * uAccentAmt * 2.5, 0.0, 1.0));
   vec2 a = abs(vCorner);
   float cover;
   if (uStyle < 0.5) {
@@ -421,10 +440,10 @@ void main() {
   float light = cover * vGlow * fade * fade * uReveal * uBrightness;
   if (uLightMode > 0.5) {
     float ink = (1.0 - exp(-light * 1.8)) * 0.92 * uOpacity;
-    outColor = vec4(uColor * ink, ink);
+    outColor = vec4(tint * ink, ink);
     return;
   }
-  vec3 color = 1.0 - exp(-uColor * light * 1.8);
+  vec3 color = 1.0 - exp(-tint * light * 1.8);
   outColor = vec4(color, max(max(color.r, color.g), color.b)) * uOpacity;
 }`;
 
@@ -668,6 +687,8 @@ const viewProjection = ({ eye, f, r, u }, aspect, out) => {
 
 const Topography = ({
   color = '#4f7cff',
+  accent = null,
+  accentAmount = 0.4,
   lineCount = 22,
   lineWidth = 1.2,
   majorLines = true,
@@ -706,6 +727,8 @@ const Topography = ({
   const [generation, setGeneration] = useState(0);
   const settings = {
     color,
+    accent,
+    accentAmount: clamp(accentAmount, 0, 1),
     lineCount: clamp(lineCount, 2, 80),
     lineWidth: Math.max(0.2, lineWidth),
     majorLines,
@@ -1048,6 +1071,8 @@ const Topography = ({
       }
 
       const color = toRgb(s.color);
+      const accentRgb = s.accent ? toRgb(s.accent) : color;
+      const accentAmt = s.accent ? s.accentAmount : 0;
       const height = state.elevation * HEIGHT * state.rise;
       const layout = grid(box, view.cell);
       const near = nearRange(cam, s);
@@ -1114,6 +1139,8 @@ const Topography = ({
         gl.uniform1f(u.uLineWidth, s.lineWidth * pixel);
         gl.uniform1f(u.uMajor, s.majorLines ? 1 : 0);
         gl.uniform3fv(u.uColor, color);
+        gl.uniform3fv(u.uAccent, accentRgb);
+        gl.uniform1f(u.uAccentAmt, accentAmt);
         gl.uniform1f(u.uBrightness, s.brightness);
         gl.uniform2f(u.uFade, fadeStart, fadeEnd);
         gl.uniform3f(u.uFocus, state.focus, focusScale * pixel, view.height * 0.03 * pixel);
@@ -1166,6 +1193,8 @@ const Topography = ({
           gl.uniform4fv(m.uGlitch, glitchData);
           gl.uniform1f(m.uPixel, pixel);
           gl.uniform3fv(m.uColor, color);
+          gl.uniform3fv(m.uAccent, accentRgb);
+          gl.uniform1f(m.uAccentAmt, accentAmt);
           gl.uniform2f(m.uFade, fadeStart, fadeEnd);
           gl.uniform1f(m.uReveal, reveal);
           gl.uniform1f(m.uBrightness, s.brightness);

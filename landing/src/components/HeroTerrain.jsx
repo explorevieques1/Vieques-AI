@@ -48,6 +48,8 @@ export default function HeroTerrain() {
       <Suspense fallback={null}>
         <Topography
           color="#64DBE8"
+          accent="#FF6D04"
+          accentAmount={0.5}
           lineCount={26}
           lineWidth={1}
           elevation={1.1}

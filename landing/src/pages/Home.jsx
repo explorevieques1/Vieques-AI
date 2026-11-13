@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import NavBar from '../components/NavBar.jsx'
 import Phone3D from '../components/Phone3D.jsx'
 import HeroTerrain from '../components/HeroTerrain.jsx'
 import { PinIcon, CheckIcon, ChevronIcon } from '../components/icons.jsx'
 import SplitText from '../components/reactbits/SplitText.jsx'
-import ScrollReveal from '../components/reactbits/ScrollReveal.jsx'
 import AnimatedContent from '../components/reactbits/AnimatedContent.jsx'
 import SpotlightCard from '../components/reactbits/SpotlightCard.jsx'
 import { LogoLoop } from '../components/reactbits/LogoLoop.jsx'
@@ -14,6 +13,10 @@ import Magnet from '../components/reactbits/Magnet.jsx'
 import { SELLABLE_TRAVELER_PLANS, PLAN_HIGHLIGHTS } from '../lib/plans.js'
 import { moonPhase, bioBayVerdict } from '../lib/moon.js'
 import { FAQ } from '../content/faq.js'
+import InkField from '../components/ink/InkField.jsx'
+import PlanSlide from '../components/PlanSlide.jsx'
+import { getSession } from '../lib/supabase.js'
+import { startCheckout } from '../lib/api.js'
 
 // ---------------------------------------------------------------------------
 //  Copy notes (SEO): every heading names a thing people search for — Vieques
@@ -62,6 +65,47 @@ function Cell({ className = '', children }) {
 export default function Home() {
   const navigate = useNavigate()
   const [aud, setAud] = useState('traveler')
+  const [session, setSession] = useState(null)
+  const [picked, setPicked] = useState(
+    () => (SELLABLE_TRAVELER_PLANS.find((p) => p.featured) || SELLABLE_TRAVELER_PLANS[0]).key,
+  )
+  const [payError, setPayError] = useState(null) // { key, msg }
+  const pickedPlan = SELLABLE_TRAVELER_PLANS.find((p) => p.key === picked) || SELLABLE_TRAVELER_PLANS[0]
+
+  useEffect(() => {
+    getSession().then(({ data }) => setSession(data?.session || null)).catch(() => {})
+  }, [])
+
+  // Slide to pay (per card). Signed in → straight to Stripe Checkout.
+  // Signed out → the existing signup flow with that pass pre-selected (a
+  // purchase must belong to an account for the webhook to grant it), which
+  // resumes at checkout. The promise never resolves on success — the page is
+  // navigating away, so SlideCommit keeps its spinner instead of a fake "Paid".
+  function payFor(plan) {
+    setPicked(plan.key)
+    setPayError(null)
+    if (!plan.checkout || !session) {
+      choosePlan(plan.key)
+      return new Promise(() => {})
+    }
+    return new Promise((_, reject) => {
+      startCheckout(plan.key, session).catch((e) => {
+        setPayError({ key: plan.key, msg: e.message || 'Could not start checkout. Please try again.' })
+        reject(e)
+      })
+    })
+  }
+
+  // Arrow keys move the selection inside the pass radiogroup.
+  function onPlanKey(e) {
+    const keys = SELLABLE_TRAVELER_PLANS.map((p) => p.key)
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+    if (!step) return
+    e.preventDefault()
+    const next = keys[(keys.indexOf(picked) + step + keys.length) % keys.length]
+    setPicked(next)
+    e.currentTarget.querySelector(`[data-plan="${next}"] .plan-check`)?.focus()
+  }
 
   // Remember the chosen plan and send the user to signup; checkout resumes
   // with this plan after the account exists.
@@ -135,19 +179,13 @@ export default function Home() {
           />
         </section>
 
-        {/* ================= MANIFESTO ================= */}
-        <section className="section">
-          <div className="manifesto">
-            <ScrollReveal as="p" baseOpacity={0.12} enableBlur blurStrength={6} baseRotation={0} stagger={0.04}>
-              Vieques has patchy signal, few street signs and roads that turn to dirt without warning.
-              It also has seventeen beaches worth the drive, a bay that glows at night and wild horses
-              along the way. We put all of it on one map.
-            </ScrollReveal>
-          </div>
-        </section>
-
+        {/* ================= INK FIELD (bento → final CTA) =================
+            A fixed WebGL layer behind this content: Vieques engravings condense
+            out of flowing ink and morph into each other as the reader scrolls.
+            Sections tagged data-ink-scene anchor each image. components/ink/. */}
+        <InkField>
         {/* ================= BENTO: WHAT'S ON THE MAP ================= */}
-        <section id="map" className="section" style={{ paddingTop: 0 }}>
+        <section id="map" data-ink-scene="roots" className="section" style={{ paddingTop: 'clamp(48px,6vw,72px)' }}>
           <div className="wrap">
             <p className="kicker">What’s on the map</p>
             <h2 className="title">The Vieques map, built by people who live here.</h2>
@@ -258,7 +296,7 @@ export default function Home() {
         </section>
 
         {/* ================= PRICING ================= */}
-        <section id="pricing" className="section" style={{ paddingTop: 0 }}>
+        <section id="pricing" data-ink-scene="lighthouse" className="section" style={{ paddingTop: 0 }}>
           <div className="wrap center">
             <p className="kicker">Pricing</p>
             <h2 className="title">One payment. The whole island.</h2>
@@ -271,12 +309,31 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={aud === 'traveler' ? 'plans' : 'plans hidden'}>
+          <div
+            className={aud === 'traveler' ? 'plans' : 'plans hidden'}
+            role="radiogroup"
+            aria-label="Choose your pass"
+            onKeyDown={onPlanKey}
+          >
             {SELLABLE_TRAVELER_PLANS.map((p) => {
+              const on = p.key === picked
               const card = (
                 <SpotlightCard className="plan" spotlightColor="#64DBE8" intensity={0.1} borderGlow={0.6} style={CARD_STYLE}>
-                  {p.badge && <span className="badge">{p.badge}</span>}
-                  <h3>{p.name}</h3>
+                  <button
+                    type="button"
+                    className="plan-check"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={`Select ${p.name}, ${p.price} ${p.unit}`}
+                    tabIndex={on ? 0 : -1}
+                    onClick={() => setPicked(p.key)}
+                  >
+                    <CheckIcon width={16} height={16} aria-hidden="true" />
+                  </button>
+                  <div className="plan-head">
+                    <h3>{p.name}</h3>
+                    {p.badge && <span className="badge">{p.badge}</span>}
+                  </div>
                   <p className="sub">{p.tagline}</p>
                   <div className="price">{p.price}<small>{p.unit}</small></div>
                   <ul>
@@ -284,16 +341,21 @@ export default function Home() {
                       <li key={f}><CheckIcon width={16} height={16} />{f}</li>
                     ))}
                   </ul>
-                  <button
-                    className={p.featured ? 'btn btn-primary btn-lg' : 'btn btn-ghost btn-lg'}
-                    onClick={() => choosePlan(p.key)}
-                  >
-                    {p.cta}
-                  </button>
+                  <PlanSlide
+                    picked={on}
+                    label={session ? `Slide to pay ${p.price}` : `Slide to get ${p.name}`}
+                    onConfirm={() => payFor(p)}
+                  />
+                  {payError?.key === p.key && <p className="plan-error" role="alert">{payError.msg}</p>}
                 </SpotlightCard>
               )
               return (
-                <div key={p.key} className={p.featured ? 'plan-shell featured' : 'plan-shell'}>
+                <div
+                  key={p.key}
+                  data-plan={p.key}
+                  className={`plan-shell${p.featured ? ' featured' : ''}${on ? ' picked' : ''}`}
+                  onClick={() => setPicked(p.key)}
+                >
                   {p.featured ? (
                     <StarBorder as="div" className="plan-star" color="#64DBE8" radius={30} duration={6} thickness={1} hover="none" clickPulse={false} backgroundColor="transparent">
                       {card}
@@ -328,7 +390,7 @@ export default function Home() {
         </section>
 
         {/* ================= FAQ ================= */}
-        <section id="faq" className="section" style={{ paddingTop: 0 }}>
+        <section id="faq" data-ink-scene="mill" className="section" style={{ paddingTop: 0 }}>
           <div className="wrap center">
             <p className="kicker">Vieques travel questions</p>
             <h2 className="title">Before you go</h2>
@@ -350,6 +412,7 @@ export default function Home() {
             <Link to="/signup" className="btn btn-primary btn-lg">Start exploring</Link>
           </Magnet>
         </section>
+        </InkField>
       </main>
 
       {/* Legal links are Link, not <a href>, so they route client-side. They

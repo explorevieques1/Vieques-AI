@@ -119,7 +119,9 @@ below before changing anything visual.
 - `components/reactbits/` — vendored React Bits (JS-CSS variants): Topography,
   SplitText, ScrollReveal, AnimatedContent, SpotlightCard, LogoLoop, StarBorder, Magnet.
   Add more with `curl https://reactbits.dev/r/<Name>-JS-CSS.json` and copy `files[]`;
-  prefer components needing only `gsap` or nothing (no `motion`, no three.js).
+  prefer components needing only `gsap` or nothing (no `motion`, no three.js). Exception:
+  `SlideCommit` (per-card slide to pay, via `components/PlanSlide.jsx`) needs `motion` —
+  asked for by name; its @hugeicons icons are inlined so those two packages aren't needed.
 - `src/content/faq.js` — the homepage FAQ **and** the FAQPage JSON-LD (injected into
   `index.html` by the `seo-jsonld` plugin in `vite.config.js`). Edit answers only here.
 - `lib/plans.js` — `PLAN_HIGHLIGHTS` (card bullets) lives beside the feature matrix.
@@ -130,8 +132,16 @@ below before changing anything visual.
 ### Landing design system (keep to it)
 
 - **Palette roles:** `--pearl #04141E` base (~70%), `--sea #64DBE8` map lines / links /
-  selected state (~20%), `--flush #FF6D04` **only** on start/buy actions (~10%). Orange
-  on anything you can't press is a bug.
+  selected state (~20%), `--flush #FF6D04` **only** on start/buy actions (~10%). A solid
+  orange *fill* on anything you can't press is a bug. The one exception is the **Ink
+  Field** backdrop: faint (≈17–20% alpha) orange engravings behind the text.
+- **Ink Field:** `landing/src/components/ink/InkField.jsx` — a fixed WebGL2 canvas
+  (z -1) behind bento → final CTA. Sections tagged `data-ink-scene` (roots, lighthouse,
+  mill) anchor each engraving; they condense out of curl-noise ink and morph on scroll.
+  Assets are ink-density maps in `landing/public/ink/<scene>-{lg,sm}.webp` (white = ink),
+  made from the orange engravings by inverting the blue channel and feathering edges.
+  Reduced motion = plain cross-fade; no WebGL2 = nothing (decorative). Don't give
+  <html> a background — it would paint over the canvas.
 - **Type:** system UI face (SF Pro on Apple) with Inter fallback; heavy, tight-tracked
   large titles, iOS-style.
 - **iOS idioms:** capsule buttons, floating capsule nav, segmented controls, inset
