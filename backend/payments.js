@@ -45,7 +45,9 @@ import { fail } from './httpError.js'
 // env.js now checks STRIPE_SECRET_KEY (and friends) before this module is ever
 // evaluated, and exits with the variable named. Passing the value straight
 // through keeps Stripe's own error as the backstop if that check is bypassed.
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+// Exported for account.js, which deletes the Stripe customer on account
+// deletion. One client per process — don't construct a second one elsewhere.
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 // Where Stripe sends the browser back after checkout. Both /success and
 // /pricing are LANDING routes (see landing/src/App.jsx) — the map app has no
@@ -423,6 +425,13 @@ export async function handleWebhook(pool, req, res) {
   }
 }
 
+/** Whether the Supabase user still exists (they may have deleted their account
+ *  between checkout and the webhook). `db` is the pool or a checked-out client. */
+async function userExists(db, userId) {
+  const { rowCount } = await db.query('SELECT 1 FROM auth.users WHERE id = $1', [userId])
+  return rowCount > 0
+}
+
 /**
  * Record an AI credit purchase that did NOT succeed.
  *
@@ -451,6 +460,11 @@ async function recordFailedCreditPurchase(pool, { session, status, reason }) {
   // Only AI credit packs belong in this table. Anything else — a pass, an
   // extension, or a session with metadata we can't trust — is ignored.
   if (!userId || !plan || plan.grants?.type !== 'credits') return
+
+  // The account may have been deleted since checkout (DELETE /api/account).
+  // A failed/expired purchase grants nothing, so there is nothing to record —
+  // and inserting would violate the FK and 500 on every Stripe retry.
+  if (!(await userExists(pool, userId))) return
 
   await pool.query(
     `INSERT INTO public.ai_credit_purchases
@@ -517,6 +531,30 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
     await client.query('BEGIN')
 
     const grantType = plan.grants?.type
+
+    // ---- Buyer deleted their account before the payment completed --------
+    // (async payment methods, or pay-in-one-tab / delete-in-another). There is
+    // no one to grant anything to, and every user_id INSERT below would hit the
+    // FK and roll back, so Stripe would retry this event for days. Record the
+    // sale anonymously (user_id NULL, allowed since migration 0050) and ack.
+    if (!(await userExists(client, userId))) {
+      try {
+        await client.query(
+          `INSERT INTO public.fulfillments
+             (stripe_session_id, user_id, plan, outcome, amount_total)
+           VALUES ($1, NULL, $2, 'user_deleted', $3)
+           ON CONFLICT (stripe_session_id) DO NOTHING`,
+          [session.id, planKey, session.amount_total ?? null],
+        )
+        await client.query('COMMIT')
+      } catch (e) {
+        // Pre-0050, user_id is still NOT NULL. Don't 500 over a sale Stripe
+        // already records; log it for manual reconciliation instead.
+        await client.query('ROLLBACK')
+        console.error(`fulfill: session ${session.id} paid by deleted user; not recorded locally:`, e)
+      }
+      return
+    }
 
     // ---- The idempotency guard -------------------------------------------
     // Claim this Stripe session before doing anything that grants value. A

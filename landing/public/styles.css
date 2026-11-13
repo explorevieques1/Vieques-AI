@@ -418,6 +418,13 @@ h1,h2,h3 { margin: 0; letter-spacing: -0.025em; line-height: 1.08; font-weight: 
 textarea.input { padding: 12px 16px; min-height: 80px; resize: vertical; }
 .auth-form .btn { width:100%; margin-top: 6px; }
 .btn[disabled] { opacity:.6; cursor:progress; }
+/* Sign-up consent. Native checkbox (keyboard, screen readers and iOS tap
+   targets for free), tinted turquoise because a ticked box is a selected
+   state; orange stays reserved for the submit button below it. */
+.consent { display:grid; grid-template-columns: 20px 1fr; gap: 10px; align-items:start; font-size: 13.5px; line-height: 1.5; color: var(--muted); cursor:pointer; }
+.consent input { width: 20px; height: 20px; margin: 0; accent-color: var(--sea); cursor:pointer; }
+.consent input:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.consent a { color: var(--sea); font-weight:600; }
 .form-error { color:#FCA5A5; font-size: 14px; margin:0; padding: 10px 14px; border-radius: 12px; background: rgba(248,113,113,.1); }
 .form-note { color: var(--text); font-size: 14px; margin:0 0 18px; padding: 10px 14px; border-radius: 12px; background: var(--sea-dim); }
 .auth-foot { color: var(--muted); font-size: 14.5px; text-align:center; margin: 22px 0 0; }

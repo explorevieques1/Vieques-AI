@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { signUp } from '../lib/supabase.js'
 import { SELLABLE_TRAVELER_PLANS } from '../lib/plans.js'
 import AuthLayout, { AuthTrust } from '../components/AuthLayout.jsx'
+import { TERMS_VERSION } from '../lib/legal.js'
 
 export default function SignUp() {
   const navigate = useNavigate()
@@ -15,6 +16,9 @@ export default function SignUp() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Clickwrap consent. Starts unticked on purpose — a pre-ticked box is not
+  // agreement. The version shown is recorded by handle_new_user() (0051).
+  const [agreed, setAgreed] = useState(false)
   const [status, setStatus] = useState('idle') // idle | submitting | done | error
   const [error, setError] = useState('')
 
@@ -28,6 +32,10 @@ export default function SignUp() {
     }
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (!agreed) {
+      setError('Tick the box to confirm you’re 18 or older and agree to the Terms and Privacy Policy.')
       return
     }
 
@@ -44,7 +52,7 @@ export default function SignUp() {
     if (plan) confirmUrl.searchParams.set('plan', plan)
 
     const { data, error: signUpError } = await signUp(email, password, {
-      data: { full_name: name },
+      data: { full_name: name, terms_version: TERMS_VERSION },
       emailRedirectTo: confirmUrl.toString(),
     })
 
@@ -139,6 +147,21 @@ export default function SignUp() {
             minLength={8}
             required
           />
+        </label>
+
+        {/* Links open in a new tab so reading the terms doesn't throw away
+            what has been typed into the form. */}
+        <label className="consent">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => { setAgreed(e.target.checked); if (e.target.checked) setError('') }}
+          />
+          <span>
+            I’m 18 or older and agree to the{' '}
+            <Link to="/terms" target="_blank" rel="noopener">Terms of Service</Link> and{' '}
+            <Link to="/privacy" target="_blank" rel="noopener">Privacy Policy</Link>.
+          </span>
         </label>
 
         {error && <p className="form-error" role="alert">{error}</p>}

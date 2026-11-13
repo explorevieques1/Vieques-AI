@@ -57,3 +57,14 @@ export async function fetchEntitlement(session) {
     return fallback
   }
 }
+// Permanently delete the signed-in account. The backend re-checks the
+// `confirm` string, so the typed-DELETE step in the UI is enforced server-side.
+// Resolves on 204; throws with the API's message otherwise.
+export async function deleteAccount(session) {
+  const res = await fetch(`${API_BASE}/api/account`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(session) },
+    body: JSON.stringify({ confirm: 'DELETE' }),
+  })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not delete account')
+}

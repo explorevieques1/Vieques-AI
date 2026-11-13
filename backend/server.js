@@ -44,6 +44,7 @@ import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } fro
 import { fail } from './httpError.js'
 import { mountItineraries } from './itineraries.js'
 import { mountAiConversations, persistTurn } from './aiConversations.js'
+import { mountAccount } from './account.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -1536,6 +1537,7 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
 // ============================================================================
 mountItineraries(app, pool)
 mountAiConversations(app, pool)
+mountAccount(app, pool)
 
 // ----------------------------------------------------------------------------
 //  Start the server

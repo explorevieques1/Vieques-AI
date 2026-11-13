@@ -31,10 +31,9 @@
 // ============================================================================
 
 import { Link } from 'react-router-dom'
-
-/** Bump when the substance changes — the pages display it. */
-const LAST_UPDATED = '4 August 2026'
-const CONTACT = 'hello@explorevieques.org'
+// LAST_UPDATED, the operator details and TERMS_VERSION live in lib/legal.js,
+// shared with the sign-up consent checkbox. Bump both dates together.
+import { LAST_UPDATED, CONTACT, COMPANY, ADDRESS } from '../lib/legal.js'
 
 // ---------------------------------------------------------------------------
 //  REFUNDS
@@ -112,74 +111,205 @@ const REFUNDS = {
 // ---------------------------------------------------------------------------
 //  PRIVACY
 // ---------------------------------------------------------------------------
+//  Derived from Red Oak LLC's Termly-generated notice (Nov 2026), then audited
+//  against the code. Removed because the app does not do them: social login,
+//  SMS, push notifications, offer walls, "business partner" promotions,
+//  testimonials, marketing-campaign analysis, phone numbers, card numbers,
+//  Google API Limited Use, and the mobile-app framing. Corrected: Termly's
+//  US-state table answered NO to every category, including identifiers and
+//  purchase history, which we plainly collect.
+//
 //  The subprocessor list is the part that must stay true. Every name below is
 //  called by code in this repo. If you add a provider — analytics, email,
 //  error tracking — it goes in this list in the same commit.
+//
+//  Location: MapView.tsx uses navigator.geolocation.watchPosition for the blue
+//  dot and "miles away" labels only. The coordinates never leave the browser.
+//  If that ever changes (e.g. sending position to /api/directions), category
+//  G below flips to YES in the same commit.
 // ---------------------------------------------------------------------------
 const PRIVACY = {
   title: 'Privacy policy',
   intro:
-    'We collect the minimum needed to sell you a pass and show you a map. We do not sell your data, ' +
-    'and we do not run advertising or third-party tracking.',
+    'We collect the minimum needed to sell you a pass and show you a map. We do not sell or share ' +
+    'your data for advertising, we do not run analytics or tracking, and you can delete your account ' +
+    'yourself at any time.',
   sections: [
     {
-      h: 'What we collect',
+      h: 'Who we are',
       p: [
-        'When you create an account: your email address, and your name if you choose to give it. ' +
-          'You can optionally add your trip dates so the app can tailor suggestions.',
-        'When you buy a pass: which plan you bought, when, and whether it is still active. Card ' +
-          'details are entered on Stripe’s own checkout page and are never sent to or stored on our servers.',
-        'When you use Ask AI: the messages you send, so the assistant can answer them, along with a ' +
-          'count of how many messages you have used.',
-        'We do not track your location. The map centres on Vieques whether you are on the island or not.',
+        `Explore Vieques is a service of ${COMPANY} (“we”, “us”). This notice explains what personal ` +
+          'information we collect when you use explorevieques.org and app.explorevieques.org (the ' +
+          '“Services”), why, who we share it with, and the choices you have.',
+        `Questions? Email ${CONTACT}, or write to ${COMPANY}, ${ADDRESS}.`,
+      ],
+    },
+    {
+      h: 'What we collect',
+      p: ['Information you give us:'],
+      list: [
+        'Account details: your email address, a password, and your name if you choose to give it. ' +
+          'Passwords are stored hashed by our authentication provider; we never see them.',
+        'Trip dates, if you choose to add them, so the app can tailor suggestions.',
+        'Purchases: which pass or message pack you bought, the amount, and when. Card details are ' +
+          'entered on Stripe’s checkout page and never reach our servers.',
+        'Ask AI: the questions you ask and the answers given, saved as conversations in your account ' +
+          'so you can return to them, plus a count of messages used.',
+        'Places you save and trips you plan in the app.',
+        'Anything you send us when you email us.',
+      ],
+      after: [
+        'Information collected automatically: like almost every website, the companies that host our ' +
+          'Services keep standard server logs — IP address, browser type, the page or API requested, and ' +
+          'the time — which we use only to keep the Services secure and working.',
+        'We do not collect phone numbers, social media profiles, or any sensitive information such as ' +
+          'health, ethnicity, religion, or sexual orientation.',
+      ],
+    },
+    {
+      h: 'Your location',
+      p: [
+        'If you allow it, the map app uses your device’s location to show where you are and how far ' +
+          'away each place is. This happens entirely in your browser: your location is never sent to ' +
+          'our servers, stored, or shared. You can refuse or turn it off in your browser or device ' +
+          'settings and everything else keeps working.',
+      ],
+    },
+    {
+      h: 'How we use it',
+      list: [
+        'To create and run your account and let you sign in.',
+        'To process payments and give you the pass you bought.',
+        'To answer your Ask AI questions.',
+        'To send emails your account needs: sign-up confirmation, password resets, and receipts. We do ' +
+          'not currently send marketing email; if we ever do, you will be able to unsubscribe from it.',
+        'To keep the Services secure, prevent fraud and abuse, and fix problems.',
+        'To comply with the law, and to establish or defend legal claims.',
       ],
     },
     {
       h: 'Who we share it with',
-      p: [
-        'Only the services needed to run the product:',
-      ],
+      p: ['Only the service providers needed to run the product, each under its own terms:'],
       list: [
-        'Supabase — stores your account, and hosts the database. Located in the United States.',
-        'Stripe — processes payments. They receive your email and the amount charged; we never see your full card number.',
-        'Google (Gemini) — receives the text of your Ask AI messages in order to answer them. It does not receive your name or email.',
+        'Supabase — hosts our database and accounts, and sends account emails. United States.',
+        'Stripe — processes payments. Receives your email and the amount charged.',
+        'Google (Gemini API) — receives the text of your Ask AI messages in order to answer them. It ' +
+          'does not receive your name or email.',
         'MapTiler and OpenStreetMap — serve the map tiles your browser draws.',
-        'OSRM and Open-Meteo — return driving directions and the island weather forecast.',
+        'OSRM and Open-Meteo — return driving directions and the island weather forecast. They receive ' +
+          'place coordinates, not your location or identity.',
         'Railway and Vercel — host the API and the websites.',
       ],
       after: [
-        'That is the complete list. We do not use advertising networks, analytics trackers, or ' +
-          'data brokers, and we do not sell or rent your information to anyone.',
+        'That is the complete list. We do not use advertising networks, analytics trackers, or data ' +
+          'brokers, and we do not sell or rent your information to anyone.',
+        'If Red Oak LLC or the Explore Vieques business is ever sold or merged, your information may ' +
+          'transfer to the new owner, who would remain bound by this notice for the data already collected. ' +
+          'We may also disclose information when the law requires it.',
       ],
     },
     {
-      h: 'Cookies',
+      h: 'The AI assistant',
       p: [
-        'We use one kind of browser storage: the token that keeps you signed in. There are no ' +
-          'advertising or analytics cookies, which is why you are not being asked to dismiss a cookie banner.',
+        'Ask AI is powered by Google’s Gemini API. Your questions are sent to Google to generate an ' +
+          'answer. Messages already sent to Google cannot be recalled from them, even if you later delete ' +
+          'the conversation or your account, so please do not type personal details you would not want ' +
+          'processed by a third party.',
+      ],
+    },
+    {
+      h: 'Cookies and browser storage',
+      p: [
+        'We store one thing in your browser: the token that keeps you signed in. There are no ' +
+          'advertising or analytics cookies, which is why you are not shown a cookie banner. Because we ' +
+          'do not track you across sites, there is nothing for a browser “Do Not Track” signal to switch off.',
       ],
     },
     {
       h: 'How long we keep it',
       p: [
-        'Your account and purchase records stay until you ask us to delete them. We keep records of ' +
-          'completed payments for as long as tax and accounting rules require, even after account deletion.',
+        'Your account and everything in it stays until you delete it. You can do that yourself at any ' +
+          'time from your account page; it takes effect immediately and erases your profile, saved ' +
+          'places, trips and Ask AI history.',
+        'Two things outlive a deleted account. We keep an anonymous record of each completed payment ' +
+          '(amount, plan and date, with no name or email attached) for as long as tax and accounting ' +
+          'rules require, and Stripe keeps its own record of the charge. Server logs held by our hosting ' +
+          'providers expire on their own schedules.',
       ],
     },
     {
-      h: 'Your rights',
+      h: 'How we protect it',
       p: [
-        `Email ${CONTACT} and we will get you a copy of your data, correct it, or delete your account ` +
-          'entirely. We aim to respond within 30 days.',
-        'If you are in the EU or UK, you also have the right to complain to your local data protection ' +
-          'authority. We would rather you came to us first.',
+        'Everything travels over encrypted connections, card data never touches our servers, and ' +
+          'access to the database is restricted to our own backend. No system is perfectly secure, so ' +
+          'we cannot guarantee that information will never be accessed without authorisation, but we ' +
+          'will tell affected users promptly if it ever is.',
       ],
     },
     {
       h: 'Children',
       p: [
-        'Explore Vieques is not intended for children under 13, and we do not knowingly collect their ' +
-          'information. If you believe a child has created an account, tell us and we will remove it.',
+        'The Services are for adults. You must be 18 or older to create an account, and we do not ' +
+          'knowingly collect information from anyone under 18. If you believe a minor has created an ' +
+          `account, email ${CONTACT} and we will delete it.`,
+      ],
+    },
+    {
+      h: 'Your rights and choices',
+      list: [
+        'Delete your account and data yourself, at any time, from your account page at ' +
+          'explorevieques.org/account.',
+        'See the name and email on your account on that same page. To correct them, email us.',
+        `Ask for a copy of your data, or for anything else in this notice, by emailing ${CONTACT}. ` +
+          'We respond within 30 days.',
+        'Withdraw consent you have given us, for example by turning off location in your browser.',
+      ],
+      after: [
+        'To protect your account, we may need to confirm that a request comes from you — normally by ' +
+          'replying from the email address on the account.',
+        'If you are in the EU or UK, you may also complain to your local data protection authority. ' +
+          'We would rather you came to us first.',
+      ],
+    },
+    {
+      h: 'Additional rights for US residents',
+      p: [
+        'Residents of California, Colorado, Connecticut, Delaware, Florida, Indiana, Iowa, Kentucky, ' +
+          'Maryland, Minnesota, Montana, Nebraska, New Hampshire, New Jersey, Oregon, Rhode Island, ' +
+          'Tennessee, Texas, Utah and Virginia have specific rights under state privacy laws. In the past ' +
+          '12 months we have collected these categories of personal information:',
+      ],
+      list: [
+        'Identifiers — YES: name, email address, account ID, and IP address in server logs.',
+        'Customer records (California Civil Code 1798.80) — YES: name and email address.',
+        'Commercial information — YES: passes and message packs purchased, amount and date.',
+        'Internet or network activity — YES: Ask AI questions and places saved within our app. ' +
+          'Not your browsing on other sites.',
+        'Geolocation — NO: your location stays on your device.',
+        'Protected characteristics, biometric data, audio or video, professional or education ' +
+          'information, inferences or profiles, and sensitive personal information — NO.',
+      ],
+      after: [
+        'We collect these from you directly, use them for the purposes above, and disclose them only ' +
+          'to the service providers listed. We have not sold or “shared” personal information for ' +
+          'targeted advertising in the past 12 months and will not, and we do not use it for profiling ' +
+          'that produces legal or similarly significant effects.',
+        'Depending on your state, you have the right to know whether we process your data and to access ' +
+          'it, to correct it, to delete it, to receive a portable copy, to obtain the list of third ' +
+          'parties we disclose it to (above), and not to be treated differently for using these rights.',
+        `To use them, visit explorevieques.org/account or email ${CONTACT}. You may use an authorised ` +
+          'agent, who must provide your signed permission; we may still ask you to confirm your identity. ' +
+          `If we decline a request you may appeal by emailing ${CONTACT} with “Appeal” in the subject, ` +
+          'and if we deny the appeal you may contact your state attorney general.',
+        'California “Shine the Light”: we do not disclose personal information to third parties for ' +
+          'their direct marketing.',
+      ],
+    },
+    {
+      h: 'Changes to this notice',
+      p: [
+        'We will update this notice when what we do changes. The date at the top shows the latest ' +
+          'version, and we will email registered users about material changes before they take effect.',
       ],
     },
   ],
@@ -191,26 +321,37 @@ const PRIVACY = {
 //  The "what this is not" section matters more than the boilerplate. This app
 //  tells people which beaches need a 4x4 and where the snorkelling is — advice
 //  that carries real physical risk if treated as a guarantee.
+//
+//  Bump TERMS_VERSION when the substance of TERMS or PRIVACY changes. Sign-up
+//  records the version the user agreed to (public.terms_acceptances, 0051).
 // ---------------------------------------------------------------------------
 const TERMS = {
   title: 'Terms of service',
   intro:
-    'Explore Vieques is a travel guide for the island of Vieques, Puerto Rico. These terms cover ' +
-    'what you can expect from us, and what we expect from you.',
+    'Explore Vieques is a travel guide for the island of Vieques, Puerto Rico. By creating an account ' +
+    'or buying a pass you agree to these terms, so here is what you can expect from us and what we ' +
+    'expect from you.',
   sections: [
     {
       h: 'Who runs this',
       p: [
-        'Explore Vieques is operated as a sole proprietorship based in Puerto Rico, United States. ' +
-          `You can reach us at ${CONTACT}.`,
-        'These terms are governed by the laws of the Commonwealth of Puerto Rico.',
+        `Explore Vieques is operated by ${COMPANY}, ${ADDRESS}. You can reach us at ${CONTACT}.`,
+        'These terms, our privacy policy and our refund policy together form the agreement between you ' +
+          `and ${COMPANY}.`,
+      ],
+    },
+    {
+      h: 'Who can use it',
+      p: [
+        'You must be at least 18 years old and able to form a binding contract to create an account or ' +
+          'buy a pass.',
       ],
     },
     {
       h: 'Your account',
       p: [
-        'You need an account to buy a pass. Keep your password to yourself — you are responsible for ' +
-          'what happens under your account.',
+        'You need an account to buy a pass. Give us a real email address and keep your password to ' +
+          'yourself — you are responsible for what happens under your account.',
         'Passes are personal. Each plan allows a set number of devices, listed on the pricing page. ' +
           'Sharing a pass more widely than that, or reselling access, is not permitted.',
       ],
@@ -221,7 +362,7 @@ const TERMS = {
         'Traveler passes are one-time purchases, not subscriptions. Nothing recurring is charged, and ' +
           'there is nothing to cancel — a pass simply expires at the end of its window.',
         'Prices are in US dollars and shown before you pay. The price you see at checkout is the price ' +
-          'charged. Refunds are covered by our refund policy.',
+          'charged. Payments are processed by Stripe. Refunds are covered by our refund policy.',
       ],
     },
     {
@@ -235,6 +376,8 @@ const TERMS = {
           'wildlife refuge. Conditions on the ground beat anything on your phone. You travel at your own risk.',
         'The Ask AI assistant answers from our listings and can still be wrong. Treat it as a helpful ' +
           'starting point rather than the final word, and check anything that matters.',
+        'Listings of restaurants, tour operators and other businesses are information, not ' +
+          'endorsements. We are not a party to anything you arrange with them.',
       ],
     },
     {
@@ -251,25 +394,70 @@ const TERMS = {
       h: 'Acceptable use',
       p: [
         'Please do not scrape or bulk-download our listings, resell the content, attempt to bypass the ' +
-          'paywall, or use the AI assistant to generate abusive material. We may suspend accounts that do.',
-        'The island content, written descriptions, and design are ours. Personal use of the app is what ' +
-          'you are buying; republishing the data is not.',
+          'paywall or interfere with the Services, or use the AI assistant to generate abusive or ' +
+          'unlawful material. We may suspend or close accounts that do.',
+      ],
+    },
+    {
+      h: 'Our content',
+      p: [
+        `The island content, written descriptions, photos we provide, and design belong to ${COMPANY} ` +
+          'or its licensors. A pass gives you a personal, non-transferable right to use the app for its ' +
+          'term. Republishing the data is not included. Map data © OpenStreetMap contributors.',
+      ],
+    },
+    {
+      h: 'Ending your account',
+      p: [
+        'You can delete your account at any time from your account page. Deleting it ends any active ' +
+          'pass immediately — if you are due a refund, request it before you delete.',
+        'We may suspend or close an account that breaks these terms. If we close an account without ' +
+          'cause, we will refund the unused part of any active pass.',
+      ],
+    },
+    {
+      h: 'Disclaimer',
+      p: [
+        'TO THE EXTENT THE LAW ALLOWS, THE SERVICES ARE PROVIDED “AS IS” AND “AS AVAILABLE”, WITHOUT ' +
+          'WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF ACCURACY, ' +
+          'MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.',
       ],
     },
     {
       h: 'Liability',
       p: [
-        'To the extent the law allows, our total liability to you is limited to what you paid us in the ' +
-          'past 12 months. We are not liable for indirect losses such as missed ferries, cancelled ' +
-          'bookings, or ruined plans.',
+        `TO THE EXTENT THE LAW ALLOWS, ${COMPANY.toUpperCase()}’S TOTAL LIABILITY TO YOU FOR ANY CLAIM ` +
+          'IS LIMITED TO WHAT YOU PAID US IN THE 12 MONTHS BEFORE THE CLAIM. WE ARE NOT LIABLE FOR ' +
+          'INDIRECT OR CONSEQUENTIAL LOSSES, such as missed ferries, cancelled bookings, or ruined plans, ' +
+          'or for injury or loss arising from activities you choose to undertake on the island.',
         'Nothing here limits liability that cannot legally be limited.',
+      ],
+    },
+    {
+      h: 'Indemnity',
+      p: [
+        `If you break these terms or the law while using the Services, and that causes a claim against ${COMPANY}, ` +
+          'you agree to cover the reasonable costs of that claim.',
+      ],
+    },
+    {
+      h: 'Disputes and governing law',
+      p: [
+        `If something goes wrong, email ${CONTACT} first and give us 30 days to put it right — most ` +
+          'problems are settled that way.',
+        'These terms are governed by the laws of the State of Ohio, United States, without regard to its ' +
+          'conflict-of-law rules. Any dispute that is not settled informally will be heard in the state or ' +
+          'federal courts located in Summit County, Ohio, and both sides consent to their jurisdiction. ' +
+          'Either side may instead bring an eligible claim in small-claims court.',
       ],
     },
     {
       h: 'Changes',
       p: [
         'We may update these terms as the product changes. The date at the top tells you when they last ' +
-          'changed, and material changes will be announced by email to registered users.',
+          'changed, material changes will be announced by email to registered users before they take ' +
+          'effect, and we may ask you to accept the new version. Continuing to use the Services after ' +
+          'that means you accept it.',
       ],
     },
   ],
@@ -308,6 +496,7 @@ function LegalPage({ doc }) {
           <Link to="/refunds" style={styles.link}>Refunds</Link>
           <a href={`mailto:${CONTACT}`} style={styles.link}>Contact</a>
         </div>
+        <p style={styles.operator}>Explore Vieques is operated by {COMPANY}, {ADDRESS}.</p>
       </div>
     </main>
   )
@@ -336,4 +525,5 @@ const styles = {
   li: { color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6 },
   crossLinks: { display: 'flex', flexWrap: 'wrap', gap: 20, marginTop: 44, paddingTop: 22, borderTop: '1px solid rgba(148,163,184,.14)' },
   link: { color: 'var(--sea)', fontSize: 13.5, fontWeight: 600, textDecoration: 'none' },
+  operator: { color: 'var(--faint)', fontSize: 12.5, lineHeight: 1.6, margin: '16px 0 0' },
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase, signOut, getSession } from '../lib/supabase.js'
-import { fetchEntitlement } from '../lib/api.js'
+import { fetchEntitlement, deleteAccount } from '../lib/api.js'
 import { PLAN_LABELS } from '../lib/plans.js'
 import { launchMapApp } from '../lib/mapApp.js'
 
@@ -154,6 +154,31 @@ export default function Account() {
     navigate('/')
   }
 
+  // --- Account deletion ----------------------------------------------------
+  // Two steps on purpose: a quiet text button opens the panel, and the panel's
+  // button stays disabled until DELETE is typed. The backend checks the same
+  // string, so this isn't only a UI guard.
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+
+  async function handleDelete() {
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      const { data } = await getSession()
+      await deleteAccount(data?.session)
+      // The user no longer exists server-side; this just clears the local
+      // token. Ignore its error — there is nothing left to sign out of.
+      await signOut().catch(() => {})
+      navigate('/', { replace: true })
+    } catch (e) {
+      setDeleteError(e.message)
+      setDeleting(false)
+    }
+  }
+
   return (
     <main style={styles.wrap}>
       <div style={styles.glow} aria-hidden="true" />
@@ -183,6 +208,59 @@ export default function Account() {
               <Link to="/pricing" style={styles.btn}>View plans</Link>
             )}
             <button onClick={handleSignOut} style={styles.ghost}>Log out</button>
+
+            <section style={styles.danger} aria-labelledby="delete-heading">
+              {!deleteOpen ? (
+                <button onClick={() => setDeleteOpen(true)} style={styles.dangerLink}>
+                  Delete account
+                </button>
+              ) : (
+                <>
+                  <h2 id="delete-heading" style={styles.dangerH}>Delete your account</h2>
+                  <p style={styles.dangerP}>
+                    This permanently erases your profile, saved places, trips and Ask AI history.
+                    It can’t be undone.
+                  </p>
+                  {ent?.hasAccess && (
+                    <p style={styles.dangerP}>
+                      Your active pass ends immediately and isn’t refunded. If you want a refund,{' '}
+                      <Link to="/refunds" style={styles.link}>request it first</Link>.
+                    </p>
+                  )}
+                  <p style={styles.dangerP}>
+                    We keep an anonymous record of past payments (amount and date, with no name or
+                    email) for tax purposes.
+                  </p>
+                  <label style={styles.dangerLabel}>
+                    Type <b>DELETE</b> to confirm
+                    <input
+                      className="input"
+                      value={confirmText}
+                      onChange={(e) => setConfirmText(e.target.value)}
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
+                  <button
+                    onClick={handleDelete}
+                    disabled={confirmText !== 'DELETE' || deleting}
+                    style={{ ...styles.dangerBtn, opacity: confirmText !== 'DELETE' || deleting ? 0.45 : 1 }}
+                  >
+                    {deleting ? 'Deleting…' : 'Permanently delete account'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteOpen(false); setConfirmText(''); setDeleteError('') }}
+                    style={styles.ghost}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </section>
           </>
         )}
       </div>
@@ -213,4 +291,12 @@ const styles = {
   ghostLink: { display: 'block', textAlign: 'center', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: 'var(--muted)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', marginBottom: 10 },
   ghost: { width: '100%', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: 'var(--muted)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' },
   link: { color: 'var(--sea)', fontWeight: 600 },
+  // Danger zone. Red, not --flush: orange means "buy/start" in this design
+  // system, and an orange delete button would read as a call to action.
+  danger: { marginTop: 28, paddingTop: 20, borderTop: '1px solid rgba(148,163,184,.14)' },
+  dangerLink: { display: 'block', margin: '0 auto', background: 'none', border: 'none', color: 'var(--faint)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 },
+  dangerH: { fontFamily: 'var(--font)', color: '#FF6B6B', fontSize: 16, margin: '0 0 10px' },
+  dangerP: { color: 'var(--muted)', fontSize: 13, lineHeight: 1.55, margin: '0 0 10px' },
+  dangerLabel: { display: 'block', color: 'var(--text)', fontSize: 13, margin: '14px 0 14px' },
+  dangerBtn: { width: '100%', padding: '12px 20px', borderRadius: 999, background: '#E5484D', color: '#fff', border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10 },
 }
