@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { signIn } from '../lib/supabase.js'
 import { fetchEntitlement } from '../lib/api.js'
 import { mapUrlWithSession } from '../lib/mapApp.js'
+import AuthLayout from '../components/AuthLayout.jsx'
 
 export default function LogIn() {
   const navigate = useNavigate()
@@ -60,108 +61,64 @@ export default function LogIn() {
   }
 
   return (
-    <main style={styles.wrap}>
-      {/* subtle background glow, echoing the Home hero */}
-      <div style={styles.glow} aria-hidden="true" />
+    <AuthLayout pitch={PITCH} navAction={NAV_ACTION}>
+      <h1>Welcome back</h1>
+      <p className="auth-sub">Log in to pick up where you left off.</p>
 
-      <div style={styles.card}>
-        <Link to="/" style={styles.brand}>
-          Explore<span style={{ color: '#06b6d4' }}> Vieques</span>
-        </Link>
+      {justReset && <p className="form-note">Password updated. Log in with your new password.</p>}
+      {staleLink && <p className="form-note">That confirmation link has expired or was already used. Log in below to continue.</p>}
 
-        <h1 style={styles.h1}>Welcome back</h1>
-        <p style={styles.sub}>
-          {justReset
-            ? 'Password updated. Log in with your new password.'
-            : staleLink
-              ? 'That confirmation link has expired or was already used. Log in below to continue.'
-              : 'Log in to pick up where you left off.'}
-        </p>
+      <form onSubmit={handleSubmit} className="auth-form">
+        <label className="field">
+          Email
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            required
+          />
+        </label>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <label style={styles.label}>
-            Email
-            <input
-              style={styles.input}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-            />
-          </label>
+        <label className="field">
+          <span className="field-row">
+            Password
+            <Link to="/forgot-password">Forgot password?</Link>
+          </span>
+          <input
+            className="input"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+            autoComplete="current-password"
+            required
+          />
+        </label>
 
-          <label style={styles.label}>
-            <span style={styles.labelRow}>
-              Password
-              <Link to="/forgot-password" style={styles.forgot}>Forgot?</Link>
-            </span>
-            <input
-              style={styles.input}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Your password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
+        {error && <p className="form-error" role="alert">{error}</p>}
 
-          {error && <p style={styles.error}>{error}</p>}
+        <button type="submit" className="btn btn-primary btn-lg" disabled={status === 'submitting'}>
+          {status === 'submitting' ? 'Logging in…' : 'Log in'}
+        </button>
+      </form>
 
-          <button type="submit" style={styles.btn} disabled={status === 'submitting'}>
-            {status === 'submitting' ? 'Logging in…' : 'Log in'}
-          </button>
-        </form>
-
-        <p style={styles.foot}>
-          Don't have an account? <Link to="/signup" style={styles.link}>Sign up</Link>
-        </p>
-      </div>
-    </main>
+      <p className="auth-foot">
+        New to Explore Vieques? <Link to="/signup">Create an account</Link>
+      </p>
+    </AuthLayout>
   )
 }
 
-const styles = {
-  wrap: {
-    position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center',
-    background: '#0f172a', padding: 24, fontFamily: 'Manrope, system-ui, sans-serif',
-    overflow: 'hidden',
-  },
-  glow: {
-    position: 'absolute', inset: 0, pointerEvents: 'none',
-    background:
-      'radial-gradient(700px 400px at 70% -10%, rgba(6,182,212,.13), transparent 60%),' +
-      'radial-gradient(600px 400px at 10% 110%, rgba(14,116,144,.12), transparent 60%)',
-  },
-  card: {
-    position: 'relative', width: '100%', maxWidth: 400, background: '#111c33',
-    border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 32,
-    boxShadow: '0 30px 80px rgba(0,0,0,.4)',
-  },
-  brand: {
-    fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18,
-    color: '#e2e8f0', textDecoration: 'none', display: 'inline-block', marginBottom: 24,
-  },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 26, margin: '0 0 8px' },
-  sub: { color: '#94a3b8', fontSize: 14, margin: '0 0 24px', lineHeight: 1.5 },
-  form: { display: 'grid', gap: 16 },
-  label: { display: 'grid', gap: 6, color: '#cbd5e1', fontSize: 13, fontWeight: 600 },
-  // Puts "Forgot?" on the password label's own line, right-aligned — the
-  // conventional spot, and it keeps the form to two fields.
-  labelRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
-  forgot: { color: '#67e8f9', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
-  input: {
-    padding: '11px 14px', borderRadius: 10, border: '1px solid rgba(148,163,184,.2)',
-    background: '#0b1120', color: '#e2e8f0', fontSize: 14, outline: 'none', fontFamily: 'inherit',
-  },
-  btn: {
-    marginTop: 4, padding: '12px 20px', borderRadius: 10, border: 'none',
-    background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 14,
-    cursor: 'pointer', textAlign: 'center',
-  },
-  error: { color: '#fca5a5', fontSize: 13, margin: 0 },
-  foot: { color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 20 },
-  link: { color: '#67e8f9', fontWeight: 600 },
+const NAV_ACTION = { to: '/signup', label: 'Create account' }
+
+const PITCH = {
+  title: 'The island is right where you left it.',
+  points: [
+    'Your saved beaches and restaurants',
+    'Your Ask AI conversations',
+    'Tonight’s Mosquito Bay moon phase',
+  ],
 }

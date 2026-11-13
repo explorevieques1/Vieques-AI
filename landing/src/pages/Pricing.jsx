@@ -1,46 +1,35 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, Link, useSearchParams } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
 import { startCheckout, joinBusinessWaitlist } from '../lib/api.js'
 import {
   SELLABLE_TRAVELER_PLANS,
   SELLABLE_TRAVELER_FEATURE_GROUPS,
+  PLAN_HIGHLIGHTS,
   BUSINESS_PREVIEW,
   ADDONS,
 } from '../lib/plans.js'
+import NavBar from '../components/NavBar.jsx'
+import { CheckIcon } from '../components/icons.jsx'
+import SpotlightCard from '../components/reactbits/SpotlightCard.jsx'
+import StarBorder from '../components/reactbits/StarBorder.jsx'
+import SplitText from '../components/reactbits/SplitText.jsx'
+import AnimatedContent from '../components/reactbits/AnimatedContent.jsx'
 
-// This page styles with inline objects, so there is no stylesheet to hang an
-// `@media` rule on — the one media query we need has to be read in JS.
-//
-// 780px is the width at which `styles.plans` (auto-fit, minmax(258px)) can no
-// longer fit two 258px columns plus the 16px gap inside the padded container,
-// i.e. the point the ladder becomes a single stack. Keep the two numbers in
-// step: widening the card without moving this leaves a one-column grid still
-// rendering in desktop source order.
-const STACK_BELOW = 780
-
-function useIsNarrow() {
-  const query = `(max-width: ${STACK_BELOW - 1}px)`
-  const [narrow, setNarrow] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia(query)
-    const onChange = (e) => setNarrow(e.matches)
-    setNarrow(mq.matches) // resync: the viewport can change before this runs
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [query])
-  return narrow
+// Same re-skin of React Bits SpotlightCard as the homepage cards.
+const CARD_STYLE = {
+  '--spotlight-card-surface': '#0A202D',
+  '--spotlight-card-border': 'rgba(143,169,180,.14)',
+  '--spotlight-card-shadow': 'none',
 }
 
-// Renders one cell of the comparison matrix. The value vocabulary is defined in
-// lib/plans.js: true → ✓, false → ✗, null → n/a, string → the string itself.
+// One cell of the comparison table. Value vocabulary is defined in
+// lib/plans.js: true → included, false → not included, null → n/a, string → shown as-is.
 function FeatureValue({ value }) {
-  if (value === true) return <span style={styles.yes} aria-label="Included">✓</span>
-  if (value === false) return <span style={styles.no} aria-label="Not included">✗</span>
-  if (value === null) return <span style={styles.na} aria-label="Not applicable">—</span>
-  return <span style={styles.val}>{value}</span>
+  if (value === true) return <span className="yes" aria-label="Included"><CheckIcon /></span>
+  if (value === false) return <span className="no" aria-label="Not included">—</span>
+  if (value === null) return <span className="no" aria-label="Not applicable">n/a</span>
+  return <span className="txt">{value}</span>
 }
 
 /**
@@ -75,88 +64,88 @@ function BusinessWaitlist() {
   // form still on screen after a successful submit reads as "it didn't work".
   if (state === 'done') {
     return (
-      <div style={styles.bizWrap}>
-        <div style={styles.bizCard}>
-          <div style={styles.bizCheck} aria-hidden="true">✓</div>
-          <h3 style={styles.bizDoneTitle}>You're on the list</h3>
-          <p style={styles.bizBlurb}>
-            We'll email <strong style={{ color: '#e2e8f0' }}>{email}</strong> when business
+      <div className="biz">
+        <SpotlightCard className="biz-card biz-done" spotlightColor="#64DBE8" intensity={0.1} style={CARD_STYLE}>
+          <CheckIcon width={36} height={36} />
+          <h2>You’re on the list</h2>
+          <p>
+            We’ll email <strong style={{ color: 'var(--text)' }}>{email}</strong> when business
             listings open up. No charge, and nothing else in the meantime.
           </p>
-        </div>
+        </SpotlightCard>
       </div>
     )
   }
 
   return (
-    <div style={styles.bizWrap}>
-      <div style={styles.bizCard}>
-        <span style={styles.bizTag}>In development</span>
-        <h3 style={styles.bizTitle}>{BUSINESS_PREVIEW.headline}</h3>
-        <p style={styles.bizBlurb}>{BUSINESS_PREVIEW.blurb}</p>
+    <div className="biz">
+      <SpotlightCard className="biz-card" spotlightColor="#64DBE8" intensity={0.1} style={CARD_STYLE}>
+        <span className="badge" style={{ background: 'var(--pearl-3)', color: 'var(--text)' }}>In development</span>
+        <h2>{BUSINESS_PREVIEW.headline}</h2>
+        <p>{BUSINESS_PREVIEW.blurb}</p>
 
-        <ul style={styles.bizList}>
+        <ul>
           {BUSINESS_PREVIEW.planned.map((item) => (
-            <li key={item} style={styles.bizItem}>
-              <span style={styles.bizDot} aria-hidden="true" />
-              {item}
-            </li>
+            <li key={item}><CheckIcon width={16} height={16} />{item}</li>
           ))}
         </ul>
 
-        <form onSubmit={submit} style={styles.bizForm}>
-          <label htmlFor="biz-email" style={styles.bizLabel}>Email</label>
-          <input
-            id="biz-email" type="email" required value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@yourbusiness.com"
-            style={styles.bizInput}
-          />
+        <form onSubmit={submit} className="auth-form">
+          <label className="field">
+            Email
+            <input type="email" required value={email} className="input"
+              onChange={(e) => setEmail(e.target.value)} placeholder="you@yourbusiness.com" />
+          </label>
+          <label className="field">
+            <span>Business name <span className="opt">optional</span></span>
+            <input type="text" value={businessName} className="input"
+              onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Kiosko La Pared" />
+          </label>
+          <label className="field">
+            <span>What would you want from it? <span className="opt">optional</span></span>
+            <textarea rows={3} value={note} className="input"
+              onChange={(e) => setNote(e.target.value)} placeholder="Tells us what to build first." />
+          </label>
 
-          <label htmlFor="biz-name" style={styles.bizLabel}>Business name <span style={styles.bizOpt}>optional</span></label>
-          <input
-            id="biz-name" type="text" value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
-            placeholder="e.g. Kiosko La Pared"
-            style={styles.bizInput}
-          />
+          {error && <p className="form-error" role="alert">{error}</p>}
 
-          <label htmlFor="biz-note" style={styles.bizLabel}>What would you want from it? <span style={styles.bizOpt}>optional</span></label>
-          <textarea
-            id="biz-note" rows={3} value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Tells us what to build first."
-            style={{ ...styles.bizInput, resize: 'vertical', minHeight: 72 }}
-          />
-
-          {error && <p style={styles.error}>{error}</p>}
-
-          <button type="submit" style={styles.bizBtn} disabled={state === 'sending'}>
+          <button type="submit" className="btn btn-primary btn-lg" disabled={state === 'sending'}>
             {state === 'sending' ? 'Adding you…' : 'Join the waitlist'}
           </button>
         </form>
 
-        <p style={styles.bizPromise}>{BUSINESS_PREVIEW.promise}</p>
-      </div>
+        <p className="biz-promise">{BUSINESS_PREVIEW.promise}</p>
+      </SpotlightCard>
     </div>
   )
 }
 
 export default function Pricing() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [params] = useSearchParams()
   // ?for=business opens straight on the waitlist tab — the homepage's business
   // CTA links here, and dropping those visitors on the traveler tab loses them.
   const [aud, setAud] = useState(params.get('for') === 'business' ? 'business' : 'traveler')
-  const isNarrow = useIsNarrow()
   const [session, setSession] = useState(null)
   const [busy, setBusy] = useState(null) // which plan is processing
   const [error, setError] = useState('')
   const canceled = params.get('checkout') === 'cancel'
+  // ?plan= is set by SignUp/Welcome after account creation: the pass they
+  // already chose. We mark it so the one remaining click is obvious.
+  const picked = params.get('plan')
 
   useEffect(() => {
     getSession().then(({ data }) => setSession(data?.session || null))
   }, [])
+
+  // /pricing#compare (the homepage's "Compare every feature") — this route is
+  // lazy-loaded, so the browser's own hash jump fires before the table exists.
+  useEffect(() => {
+    if (location.hash !== '#compare') return
+    const t = setTimeout(() => document.getElementById('compare')?.scrollIntoView({ block: 'start' }), 60)
+    return () => clearTimeout(t)
+  }, [location.hash])
 
   // Free tiers skip Stripe entirely — they just need an account.
   async function choose(plan) {
@@ -180,103 +169,162 @@ export default function Pricing() {
   }
 
   const isTraveler = aud === 'traveler'
+  const cols = SELLABLE_TRAVELER_PLANS
+
+  function planButton(p, extraClass = '') {
+    const primary = picked ? p.key === picked : p.featured
+    return (
+      <button
+        className={`btn ${primary ? 'btn-primary' : 'btn-ghost'} ${extraClass}`}
+        onClick={() => choose(p)}
+        disabled={busy === p.key}
+      >
+        {busy === p.key ? 'Redirecting…' : p.cta}
+      </button>
+    )
+  }
 
   return (
-    <main style={styles.wrap}>
-      <div style={styles.glow} aria-hidden="true" />
-      <div style={styles.inner}>
-        <Link to="/" style={styles.brand}>Explore<span style={{ color: '#06b6d4' }}> Vieques</span></Link>
+    <div className="pricing-page">
+      <NavBar />
 
-        <div style={styles.head}>
-          <span style={styles.eyebrow}>Pricing</span>
-          <h1 style={styles.h1}>
-            {isTraveler ? 'Simple pricing for your trip' : 'Business listings are coming'}
-          </h1>
-          <p style={styles.sub}>
+      <main>
+        <header className="pricing-head">
+          <p className="kicker">Pricing</p>
+          <SplitText
+            key={aud}
+            tag="h1"
+            className="title"
+            text={isTraveler ? 'One payment. The whole island.' : 'Business listings are coming.'}
+            splitType="words"
+            effect="rise"
+            delay={50}
+            duration={0.8}
+            textAlign="center"
+          />
+          <p className="lede">
             {isTraveler
-              ? 'Less than one Bio Bay tour. Less than half a day of jeep rental.'
+              ? 'Less than one Bio Bay tour. Less than half a day of jeep rental. Passes never renew.'
               : 'Not open yet — tell us where to reach you and you’ll be first in.'}
           </p>
-        </div>
 
-        {canceled && <p style={styles.cancel}>Checkout canceled — no charge was made. You can try again below.</p>}
-        {error && <p style={styles.error}>{error}</p>}
+          <div className="segmented" role="tablist" aria-label="Plans for" data-pos={isTraveler ? 0 : 1}>
+            <span className="thumb" aria-hidden="true" />
+            <button role="tab" aria-selected={isTraveler} onClick={() => setAud('traveler')}>Travelers</button>
+            <button role="tab" aria-selected={!isTraveler} onClick={() => setAud('business')}>Businesses</button>
+          </div>
+        </header>
 
-        <div style={styles.toggle} role="tablist">
-          <button role="tab" aria-selected={isTraveler}
-            style={isTraveler ? styles.tOn : styles.tOff}
-            onClick={() => setAud('traveler')}>For Travelers</button>
-          <button role="tab" aria-selected={!isTraveler}
-            style={!isTraveler ? styles.tOn : styles.tOff}
-            onClick={() => setAud('business')}>For Businesses</button>
-          {/* No "soon" badge on the tab itself — the tab is a filter, and the
-              state belongs on the panel it opens, which says it plainly. */}
-        </div>
+        {canceled && <p className="notice">Checkout canceled — no charge was made. You can try again below.</p>}
+        {error && <p className="notice err" role="alert">{error}</p>}
 
         {isTraveler ? (
           <>
-            {/* ---- Plan cards. Each card carries the FULL feature matrix so the
-                    columns line up and you can read across to compare. ---- */}
-            <div style={styles.plans}>
-              {SELLABLE_TRAVELER_PLANS.map((p) => (
-                <div key={p.key} style={{
-                  ...styles.plan,
-                  ...(p.featured ? styles.planFeatured : {}),
-                  // Featured pass floats to the top on mobile. The grid is a
-                  // single column below 780px, so `order` reshuffles the stack
-                  // without touching the source order the desktop row needs.
-                  ...(p.featured && isNarrow ? styles.planFirst : {}),
-                }}>
-                  {p.badge && <span style={styles.badge}>{p.badge}</span>}
-
-                  <div style={styles.planHead}>
-                    <h3 style={styles.planName}>{p.name}</h3>
-                    <p style={styles.tagline}>{p.tagline}</p>
-                    <div style={styles.price}>{p.price}<small style={styles.unit}>{p.unit}</small></div>
-                  </div>
-
-                  <button
-                    style={p.featured ? styles.btnPrimary : styles.btnGhost}
-                    onClick={() => choose(p)}
-                    disabled={busy === p.key}
-                  >
-                    {busy === p.key ? 'Redirecting…' : p.cta}
-                  </button>
-
-                  <div style={styles.matrix}>
-                    {SELLABLE_TRAVELER_FEATURE_GROUPS.map((g) => (
-                      <div key={g.group}>
-                        <div style={styles.groupLabel}>{g.group}</div>
-                        {g.rows.map((row) => {
-                          const value = row.values[p.key]
-                          const off = value === false || value === null
-                          return (
-                            <div key={row.label} style={styles.row}>
-                              <span style={{ ...styles.rowLabel, ...(off ? styles.rowLabelOff : {}) }}
-                                title={row.hint || undefined}>
-                                {row.label}
-                              </span>
-                              <FeatureValue value={value} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            {/* ---- Plan cards: the headline of each pass ---- */}
+            <div className="plans-row">
+              <div className="plans">
+                {cols.map((p) => {
+                  const isPicked = picked === p.key
+                  const glow = isPicked || (!picked && p.featured)
+                  const card = (
+                    <SpotlightCard className="plan" spotlightColor="#64DBE8" intensity={0.1} borderGlow={0.6} style={CARD_STYLE}>
+                      {isPicked
+                        ? <span className="badge">Your pick</span>
+                        : p.badge && <span className="badge">{p.badge}</span>}
+                      <h3>{p.name}</h3>
+                      <p className="sub">{p.tagline}</p>
+                      <div className="price">{p.price}<small>{p.unit}</small></div>
+                      <ul>
+                        {(PLAN_HIGHLIGHTS[p.key] || []).map((f) => (
+                          <li key={f}><CheckIcon width={16} height={16} />{f}</li>
+                        ))}
+                      </ul>
+                      {planButton(p, 'btn-lg')}
+                    </SpotlightCard>
+                  )
+                  return (
+                    <div key={p.key} className={glow ? 'plan-shell featured' : 'plan-shell'}>
+                      {glow ? (
+                        <StarBorder as="div" className="plan-star" color="#64DBE8" radius={30} duration={6} thickness={1} hover="none" clickPulse={false} backgroundColor="transparent">
+                          {card}
+                        </StarBorder>
+                      ) : card}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="center" style={{ marginTop: 24 }}>
+                <a href="#compare" className="link">Compare every feature</a>
+              </p>
             </div>
 
-            <div style={styles.addons}>
-              <h4 style={styles.addonsTitle}>Add-ons</h4>
-              <div style={styles.addonGrid}>
-                {ADDONS.map((a) => (
-                  <div key={a.key} style={styles.addon}>
-                    <div>
-                      <div style={styles.addonName}>{a.name}</div>
-                      <div style={styles.addonBlurb}>{a.blurb}</div>
+            {/* ---- Full comparison: one table, plans side by side ---- */}
+            <section id="compare" className="compare" aria-labelledby="compare-title">
+              <div className="compare-head">
+                <p className="kicker">Compare passes</p>
+                <h2 id="compare-title" className="title" style={{ fontSize: 'clamp(28px,3.4vw,40px)' }}>Everything in each pass</h2>
+              </div>
+
+              <AnimatedContent className="ctable" distance={24} duration={0.6} role="table" aria-label="Feature comparison">
+                <div className="ctable-top" role="row">
+                  <span className="lab-spacer" role="columnheader" aria-label="Feature" />
+                  {cols.map((p) => (
+                    <div key={p.key} className={p.featured ? 'col feat' : 'col'} role="columnheader">
+                      <b>{p.name}</b>
+                      <span>{p.price}</span>
                     </div>
-                    <button style={styles.addonBtn}
+                  ))}
+                </div>
+
+                {SELLABLE_TRAVELER_FEATURE_GROUPS.map((g) => (
+                  <div key={g.group} role="rowgroup">
+                    {/* Group heading is a full grid row (with empty cells) so the
+                        featured column's tint runs unbroken top to bottom. */}
+                    <div className="ctable-row ctable-group-row" role="row">
+                      <div className="ctable-group" role="rowheader">{g.group}</div>
+                      {cols.map((p) => <div key={p.key} className={p.featured ? 'v feat-col' : 'v'} aria-hidden="true" />)}
+                    </div>
+                    {g.rows.map((row) => {
+                      const allOff = cols.every((p) => row.values[p.key] === false || row.values[p.key] === null)
+                      return (
+                        <div key={row.label} className="ctable-row" role="row">
+                          <div className={allOff ? 'lab off' : 'lab'} role="rowheader">
+                            {row.label}
+                            {row.hint && <small>{row.hint}</small>}
+                          </div>
+                          {cols.map((p) => (
+                            <div key={p.key} className={p.featured ? 'v feat-col' : 'v'} role="cell">
+                              <FeatureValue value={row.values[p.key]} />
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+
+                <div className="ctable-row ctable-cta" role="row">
+                  <span className="lab-spacer" />
+                  {cols.map((p) => (
+                    <div key={p.key} className={p.featured ? 'v feat-col' : 'v'} role="cell">
+                      {planButton(p)}
+                    </div>
+                  ))}
+                </div>
+              </AnimatedContent>
+            </section>
+
+            {/* ---- Add-ons: iOS grouped list ---- */}
+            <section className="addons" aria-labelledby="addons-title">
+              <h3 id="addons-title">Add-ons</h3>
+              <div className="group-list">
+                {ADDONS.map((a) => (
+                  <div key={a.key} className="group-row">
+                    <div>
+                      <b>{a.name}</b>
+                      <span>{a.blurb}</span>
+                    </div>
+                    <button className="btn btn-ghost"
                       onClick={() => choose({ key: a.key, checkout: true })}
                       disabled={busy === a.key}>
                       {busy === a.key ? '…' : a.price}
@@ -284,119 +332,31 @@ export default function Pricing() {
                   </div>
                 ))}
               </div>
-            </div>
-            <p style={styles.finePrint}>
-              Exploration includes 150 Ask AI messages per pass — enough that most travelers
-              never think about it. Passes are one-time purchases, not subscriptions.
-            </p>
+            </section>
 
-            {!session && (
-              <p style={styles.foot}>
-                You'll create an account before paying. <Link to="/login" style={styles.link}>Already have one?</Link>
+            <div className="pricing-fine">
+              <p>
+                Exploration includes 150 Ask AI messages per pass — enough that most travelers
+                never think about it. Passes are one-time purchases, not subscriptions.
               </p>
-            )}
-
-            {/* The refund terms belong next to the buy button, not only in the
-                homepage footer — this is the page where someone is deciding to
-                pay, and "what if my ferry is cancelled" is the question they
-                have right now. */}
-            <p style={styles.legalFoot}>
-              Trip fell through? Unused passes are refundable within 7 days — see our{' '}
-              <Link to="/refunds" style={styles.link}>refund policy</Link>. By buying you agree to our{' '}
-              <Link to="/terms" style={styles.link}>terms</Link> and{' '}
-              <Link to="/privacy" style={styles.link}>privacy policy</Link>.
-            </p>
+              {!session && (
+                <p>You’ll create an account before paying. <Link to="/login">Already have one?</Link></p>
+              )}
+              {/* Refund terms sit next to the buy buttons, not only in the
+                  homepage footer — "what if my ferry is cancelled" is the
+                  question people have on this page. */}
+              <p>
+                Trip fell through? Unused passes are refundable within 7 days — see our{' '}
+                <Link to="/refunds">refund policy</Link>. By buying you agree to our{' '}
+                <Link to="/terms">terms</Link> and <Link to="/privacy">privacy policy</Link>.
+              </p>
+            </div>
           </>
         ) : (
           <BusinessWaitlist />
         )}
-      </div>
-    </main>
+        <div style={{ height: 96 }} />
+      </main>
+    </div>
   )
-}
-
-const styles = {
-  wrap: { position: 'relative', minHeight: '100vh', background: '#0f172a', padding: '48px 24px 72px', fontFamily: 'Manrope, system-ui, sans-serif', overflow: 'hidden' },
-  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(900px 500px at 50% -10%, rgba(6,182,212,.12), transparent 60%)' },
-  inner: { position: 'relative', maxWidth: 1240, margin: '0 auto' },
-  brand: { fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#e2e8f0', textDecoration: 'none' },
-  head: { textAlign: 'center', margin: '32px 0 28px' },
-  eyebrow: { display: 'inline-block', fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#67e8f9', border: '1px solid rgba(6,182,212,.3)', background: 'rgba(6,182,212,.08)', padding: '6px 14px', borderRadius: 999 },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 'clamp(26px,3.4vw,38px)', margin: '16px 0 10px' },
-  sub: { color: '#94a3b8', fontSize: 15, maxWidth: 560, margin: '0 auto' },
-  cancel: { textAlign: 'center', color: '#fcd34d', fontSize: 14, marginBottom: 12 },
-  error: { textAlign: 'center', color: '#fca5a5', fontSize: 14, marginBottom: 12 },
-  toggle: { display: 'flex', gap: 4, padding: 4, borderRadius: 999, background: 'rgba(148,163,184,.1)', border: '1px solid rgba(148,163,184,.14)', width: 'fit-content', margin: '0 auto 32px' },
-  tOn: { border: 0, background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 13, padding: '9px 20px', borderRadius: 999, cursor: 'pointer' },
-  tOff: { border: 0, background: 'none', color: '#94a3b8', fontWeight: 700, fontSize: 13, padding: '9px 20px', borderRadius: 999, cursor: 'pointer' },
-
-  plans: { display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(258px, 1fr))', alignItems: 'start' },
-  plan: { position: 'relative', padding: '26px 20px 22px', borderRadius: 18, background: '#111c33', border: '1px solid rgba(148,163,184,.14)', display: 'flex', flexDirection: 'column' },
-  planFeatured: { border: '1px solid #06b6d4', boxShadow: '0 0 0 1px rgba(6,182,212,.25), 0 20px 50px rgba(6,182,212,.10)' },
-  // Mobile only: pull the most-popular pass to the top of the single-column
-  // stack. `order` beats reordering the source array because the desktop row
-  // still wants Vacation in the middle, where it reads as the ladder's centre.
-  // The negative margin restores clearance for the badge, which is absolutely
-  // positioned at top:-11 and would otherwise be cropped by the grid's edge.
-  planFirst: { order: -1, marginTop: 11 },
-  badge: { position: 'absolute', top: -11, left: '50%', transform: 'translateX(-50%)', background: '#06b6d4', color: '#0b1120', fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', padding: '5px 12px', borderRadius: 999, whiteSpace: 'nowrap' },
-  planHead: { minHeight: 148 },
-  planName: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 20, margin: 0 },
-  tagline: { color: '#94a3b8', fontSize: 12.5, margin: '6px 0 0', minHeight: 32 },
-  price: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 38, fontWeight: 700, lineHeight: 1, margin: '14px 0 0' },
-  unit: { display: 'block', fontFamily: 'Manrope, sans-serif', fontSize: 12, fontWeight: 500, color: '#94a3b8', marginTop: 7 },
-
-  btnPrimary: { padding: '11px 18px', borderRadius: 10, border: 'none', background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', width: '100%' },
-  btnGhost: { padding: '11px 18px', borderRadius: 10, background: 'transparent', color: '#e2e8f0', border: '1px solid rgba(148,163,184,.2)', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', width: '100%' },
-
-  matrix: { marginTop: 20, borderTop: '1px solid rgba(148,163,184,.12)', paddingTop: 4 },
-  groupLabel: { fontSize: 10, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#64748b', margin: '16px 0 6px' },
-  // Fixed row height is what keeps the four cards' rows aligned so you can
-  // actually read across them. Don't make this content-dependent.
-  row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 30, borderBottom: '1px solid rgba(148,163,184,.06)' },
-  rowLabel: { fontSize: 12.5, color: '#cbd5e1', lineHeight: 1.25 },
-  rowLabelOff: { color: '#64748b' },
-  yes: { color: '#06b6d4', fontWeight: 800, fontSize: 14, flexShrink: 0 },
-  no: { color: '#475569', fontWeight: 700, fontSize: 13, flexShrink: 0 },
-  na: { color: '#475569', fontSize: 13, flexShrink: 0 },
-  val: { color: '#e2e8f0', fontSize: 11.5, fontWeight: 700, textAlign: 'right', flexShrink: 0, whiteSpace: 'nowrap' },
-
-  addons: { marginTop: 40 },
-  addonsTitle: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 16, margin: '0 0 12px' },
-  addonGrid: { display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' },
-  addon: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '16px 18px', borderRadius: 14, background: '#111c33', border: '1px solid rgba(148,163,184,.14)' },
-  addonName: { color: '#e2e8f0', fontSize: 14, fontWeight: 700 },
-  addonBlurb: { color: '#94a3b8', fontSize: 12.5, marginTop: 3 },
-  addonBtn: { padding: '9px 16px', borderRadius: 9, background: 'transparent', color: '#67e8f9', border: '1px solid rgba(6,182,212,.35)', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' },
-
-  finePrint: { textAlign: 'center', color: '#64748b', fontSize: 12.5, maxWidth: 620, margin: '28px auto 0', lineHeight: 1.55 },
-  legalFoot: { textAlign: 'center', color: '#64748b', fontSize: 12, maxWidth: 620, margin: '18px auto 0', lineHeight: 1.6 },
-  foot: { textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 20 },
-  link: { color: '#67e8f9', fontWeight: 600 },
-
-  // ---- Business waitlist ----------------------------------------------------
-  // Narrower than the traveler grid on purpose: one column of prose and a form
-  // reads as an invitation, where a full-width panel would imply a product
-  // catalog that isn't there.
-  bizWrap: { display: 'flex', justifyContent: 'center' },
-  bizCard: { width: '100%', maxWidth: 560, padding: '30px 28px', borderRadius: 18, background: '#111c33', border: '1px solid rgba(148,163,184,.14)' },
-  bizTag: { display: 'inline-block', fontSize: 10.5, fontWeight: 800, letterSpacing: '.09em', textTransform: 'uppercase', color: '#fcd34d', border: '1px solid rgba(252,211,77,.3)', background: 'rgba(252,211,77,.08)', padding: '5px 11px', borderRadius: 999 },
-  bizTitle: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 22, margin: '16px 0 10px', lineHeight: 1.25 },
-  bizBlurb: { color: '#94a3b8', fontSize: 14, lineHeight: 1.6, margin: 0 },
-
-  bizList: { listStyle: 'none', padding: 0, margin: '20px 0 24px', display: 'flex', flexDirection: 'column', gap: 9 },
-  bizItem: { display: 'flex', alignItems: 'flex-start', gap: 10, color: '#cbd5e1', fontSize: 13.5, lineHeight: 1.45 },
-  // A neutral dot, not a ✓. A checkmark would read as "included", and none of
-  // these are included yet — that distinction is the whole point of this tab.
-  bizDot: { width: 5, height: 5, borderRadius: '50%', background: '#475569', marginTop: 7, flexShrink: 0 },
-
-  bizForm: { display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 22, borderTop: '1px solid rgba(148,163,184,.12)' },
-  bizLabel: { color: '#94a3b8', fontSize: 12.5, fontWeight: 600, marginTop: 8 },
-  bizOpt: { color: '#64748b', fontWeight: 500, fontSize: 11.5 },
-  bizInput: { width: '100%', padding: '11px 13px', borderRadius: 10, background: '#0f172a', border: '1px solid rgba(148,163,184,.2)', color: '#e2e8f0', fontSize: 14, fontFamily: 'inherit', outline: 'none' },
-  bizBtn: { marginTop: 18, padding: '12px 20px', borderRadius: 10, border: 'none', background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 14, cursor: 'pointer', width: '100%' },
-  bizPromise: { color: '#64748b', fontSize: 12, lineHeight: 1.55, margin: '20px 0 0', paddingTop: 16, borderTop: '1px solid rgba(148,163,184,.08)' },
-
-  bizCheck: { width: 40, height: 40, borderRadius: '50%', background: 'rgba(6,182,212,.12)', border: '1px solid rgba(6,182,212,.35)', color: '#67e8f9', display: 'grid', placeItems: 'center', fontSize: 19, fontWeight: 800, marginBottom: 16 },
-  bizDoneTitle: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 21, margin: '0 0 10px' },
 }

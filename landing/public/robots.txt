@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /success
+Disallow: /welcome
+Disallow: /reset-password
+
+Sitemap: https://explorevieques.org/sitemap.xml

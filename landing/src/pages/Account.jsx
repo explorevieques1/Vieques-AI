@@ -159,7 +159,7 @@ export default function Account() {
       <div style={styles.glow} aria-hidden="true" />
       <div style={styles.card}>
         <Link to="/" style={styles.brand}>
-          Explore<span style={{ color: '#06b6d4' }}> Vieques</span>
+          Explore<span style={{ color: 'var(--sea)' }}> Vieques</span>
         </Link>
 
         <h1 style={styles.h1}>Your account</h1>
@@ -191,26 +191,26 @@ export default function Account() {
 }
 
 const styles = {
-  wrap: { position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#0f172a', padding: 24, fontFamily: 'Manrope, system-ui, sans-serif', overflow: 'hidden' },
-  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(700px 400px at 70% -10%, rgba(6,182,212,.13), transparent 60%)' },
-  card: { position: 'relative', width: '100%', maxWidth: 420, background: '#111c33', border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 32, boxShadow: '0 30px 80px rgba(0,0,0,.4)' },
-  brand: { fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#e2e8f0', textDecoration: 'none', display: 'inline-block', marginBottom: 20 },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 26, margin: '0 0 20px' },
-  sub: { color: '#94a3b8', fontSize: 14 },
+  wrap: { position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--pearl)', padding: 24, fontFamily: 'var(--font)', overflow: 'hidden' },
+  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(700px 400px at 70% -10%, rgba(100,219,232,.13), transparent 60%)' },
+  card: { position: 'relative', width: '100%', maxWidth: 420, background: 'var(--pearl-2)', border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 32, boxShadow: '0 30px 80px rgba(0,0,0,.4)' },
+  brand: { fontFamily: 'var(--font)', fontWeight: 700, fontSize: 18, color: 'var(--text)', textDecoration: 'none', display: 'inline-block', marginBottom: 20 },
+  h1: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 26, margin: '0 0 20px' },
+  sub: { color: 'var(--muted)', fontSize: 14 },
   // align-items:flex-start keeps the label on the first line when the value
   // wraps to two (plan name + expiry sub-line).
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, padding: '12px 0', borderBottom: '1px solid rgba(148,163,184,.1)' },
-  k: { color: '#94a3b8', fontSize: 13, paddingTop: 1, flexShrink: 0 },
-  v: { color: '#e2e8f0', fontSize: 14, fontWeight: 600, textAlign: 'right' },
+  k: { color: 'var(--muted)', fontSize: 13, paddingTop: 1, flexShrink: 0 },
+  v: { color: 'var(--text)', fontSize: 14, fontWeight: 600, textAlign: 'right' },
   // The expiry sits under the plan name rather than beside it: "4 days left" is
   // the number people actually look for, and it needs room to be legible.
-  vSub: { display: 'block', color: '#94a3b8', fontSize: 12, fontWeight: 500, marginTop: 3 },
-  note: { margin: '20px 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(6,182,212,.08)', border: '1px solid rgba(6,182,212,.25)', color: '#67e8f9', fontSize: 13 },
+  vSub: { display: 'block', color: 'var(--muted)', fontSize: 12, fontWeight: 500, marginTop: 3 },
+  note: { margin: '20px 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(100,219,232,.08)', border: '1px solid rgba(100,219,232,.25)', color: 'var(--sea)', fontSize: 13 },
   // Amber, not cyan: this is a degraded state, and it should not look like an
   // affirmative answer about what the user owns.
-  noteMuted: { background: 'rgba(148,163,184,.07)', border: '1px solid rgba(148,163,184,.18)', color: '#cbd5e1' },
-  btn: { display: 'block', width: '100%', textAlign: 'center', padding: '12px 20px', borderRadius: 10, background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 14, textDecoration: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10 },
-  ghostLink: { display: 'block', textAlign: 'center', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: '#94a3b8', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', marginBottom: 10 },
-  ghost: { width: '100%', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: '#94a3b8', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' },
-  link: { color: '#67e8f9', fontWeight: 600 },
+  noteMuted: { background: 'rgba(148,163,184,.07)', border: '1px solid rgba(148,163,184,.18)', color: 'var(--text)' },
+  btn: { display: 'block', width: '100%', textAlign: 'center', padding: '12px 20px', borderRadius: 999, background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 14, textDecoration: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10 },
+  ghostLink: { display: 'block', textAlign: 'center', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: 'var(--muted)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', marginBottom: 10 },
+  ghost: { width: '100%', padding: '11px 20px', borderRadius: 10, background: 'transparent', color: 'var(--muted)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' },
+  link: { color: 'var(--sea)', fontWeight: 600 },
 }

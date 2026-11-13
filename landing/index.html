@@ -2,18 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="/logo.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b1120">
-<title>Vieques AI — Your AI island guide</title>
-<meta name="description" content="An interactive map of Vieques, Puerto Rico with an AI guide — beaches, restaurants, activities, snorkeling zones, and directions.">
+<title>Vieques Travel Guide &amp; Map — Beaches, Bio Bay &amp; Snorkeling | Explore Vieques</title>
+<meta name="description" content="The interactive Vieques, Puerto Rico travel map: all 17 beaches, snorkeling spots, Mosquito Bay bio bay timing, restaurants and how to get around — with an AI guide that answers in pins. Plan your trip.">
+<link rel="canonical" href="https://explorevieques.org/">
+<meta name="theme-color" content="#04141E">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="apple-touch-icon" href="/logo.svg">
+
+<!-- Open Graph / Twitter -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Explore Vieques">
+<meta property="og:url" content="https://explorevieques.org/">
+<meta property="og:title" content="Vieques Travel Guide &amp; Map — Beaches, Bio Bay &amp; Snorkeling">
+<meta property="og:description" content="Every beach in Vieques on one interactive map, with snorkel zones, Mosquito Bay timing, restaurants and an AI island guide.">
+<meta property="og:image" content="https://explorevieques.org/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Explore Vieques — the interactive map of Vieques, Puerto Rico">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Vieques Travel Guide &amp; Map — Beaches, Bio Bay &amp; Snorkeling">
+<meta name="twitter:description" content="Every beach in Vieques on one interactive map, with snorkel zones, Mosquito Bay timing, restaurants and an AI island guide.">
+<meta name="twitter:image" content="https://explorevieques.org/og-image.jpg">
+
+<!-- Inter is only the fallback face: Apple devices render SF Pro via
+     -apple-system and never use it. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+<link rel="preload" as="image" href="/app-screenshot-720.jpg" imagesrcset="/app-screenshot-720.jpg 720w, /app-screenshot-1080.jpg 1080w, /app-screenshot.jpg 1170w" imagesizes="(min-width: 940px) 340px, 300px">
+<!-- JSON-LD (Organization, WebSite, TouristDestination, FAQPage) is injected
+     here at build/dev time by the seo-jsonld plugin in vite.config.js. -->
 </head>
 <body>
 <div id="root"></div>
+<noscript>
+  <h1>Vieques Travel Guide &amp; Map</h1>
+  <p>Explore Vieques is an interactive map of Vieques, Puerto Rico: all 17 beaches, snorkeling spots, Mosquito Bay bio bay timing, 35 restaurants, transport and island essentials, with an AI guide. Turn on JavaScript to use the map.</p>
+</noscript>
 <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

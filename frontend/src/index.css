@@ -23,6 +23,12 @@ html, body, #root {
 :root {
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
+  /* Floating bottom nav (BottomNav.tsx): 4rem capsule, lifted off the bottom
+     edge by the safe-area inset or 0.75rem, whichever is larger. Anything that
+     scrolls under the nav pads by this so its last row clears the capsule.
+     Keep in step with BOTTOM_NAV_H / BOTTOM_NAV_GAP in hooks/useMapInsets.ts. */
+  --nav-offset: max(0.75rem, var(--sab));
+  --nav-clear: calc(4rem + var(--nav-offset));
 }
 
 @theme inline {

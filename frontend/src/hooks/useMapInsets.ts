@@ -65,8 +65,10 @@ export const CHROME_GAP = 6
  * inset is where content becomes *legal*, not where it looks intentional.
  */
 export const CHROME_TOP_PAD = 10
-/** Inner height of the bottom nav, excluding its safe-area padding. */
-export const BOTTOM_NAV_H = 56
+/** Height of the floating bottom-nav capsule. */
+export const BOTTOM_NAV_H = 64
+/** Minimum lift of the capsule off the bottom edge (CSS: --nav-offset). */
+export const BOTTOM_NAV_GAP = 12
 
 /**
  * Total mobile top inset, for whatever chrome is currently on screen.
@@ -119,7 +121,9 @@ export const TOP_BAR_H_MOBILE = 246
  * so a downward drag at the lowest stop is ignored rather than throwing away the
  * category. Before that, "let me see the map" cost you your results.
  */
-export const SHEET_HIDDEN = '168px'
+// 176 = the old 168 + 8: the floating nav (64 + gap) is 8px taller than the
+// old 56px bar, and this keeps the same strip of sheet visible above it.
+export const SHEET_HIDDEN = '176px'
 export const SHEET_PREVIEW = 0.45
 export const SHEET_FULL = 0.93
 export const SHEET_SNAPS: (string | number)[] = [SHEET_HIDDEN, SHEET_PREVIEW, SHEET_FULL]
@@ -152,10 +156,10 @@ export function useMapInsets({
       // Cap the sheet inset — once the sheet passes ~60% of the screen there is
       // no usable map left, and over-padding makes MapLibre clamp oddly.
       const maxBottom = Math.max(0, window.innerHeight * 0.55)
-      // Floored at the bottom nav: the nav sits over the sheet's lowest 90px,
+      // Floored at the bottom nav: the nav sits over the sheet's lowest ~98px,
       // so even at the smallest snap that strip of map is not really visible.
       // Without the floor the camera would happily centre a pin behind it.
-      const navH = BOTTOM_NAV_H + safeBottom
+      const navH = BOTTOM_NAV_H + Math.max(BOTTOM_NAV_GAP, safeBottom)
       return {
         top: topInset ?? TOP_BAR_H_MOBILE,
         right: 16,

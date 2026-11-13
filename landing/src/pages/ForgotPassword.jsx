@@ -47,11 +47,11 @@ export default function ForgotPassword() {
         <div style={styles.glow} aria-hidden="true" />
         <div style={styles.card}>
           <Link to="/" style={styles.brand}>
-            Explore<span style={{ color: '#06b6d4' }}> Vieques</span>
+            Explore<span style={{ color: 'var(--sea)' }}> Vieques</span>
           </Link>
           <h1 style={styles.h1}>Check your email</h1>
           <p style={styles.sub}>
-            If an account exists for <strong style={{ color: '#e2e8f0' }}>{email}</strong>,
+            If an account exists for <strong style={{ color: 'var(--text)' }}>{email}</strong>,
             we've sent a link to reset your password.
           </p>
           <p style={styles.sub}>
@@ -68,7 +68,7 @@ export default function ForgotPassword() {
       <div style={styles.glow} aria-hidden="true" />
       <div style={styles.card}>
         <Link to="/" style={styles.brand}>
-          Explore<span style={{ color: '#06b6d4' }}> Vieques</span>
+          Explore<span style={{ color: 'var(--sea)' }}> Vieques</span>
         </Link>
 
         <h1 style={styles.h1}>Forgot your password?</h1>
@@ -109,39 +109,39 @@ export default function ForgotPassword() {
 const styles = {
   wrap: {
     position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center',
-    background: '#0f172a', padding: 24, fontFamily: 'Manrope, system-ui, sans-serif',
+    background: 'var(--pearl)', padding: 24, fontFamily: 'var(--font)',
     overflow: 'hidden',
   },
   glow: {
     position: 'absolute', inset: 0, pointerEvents: 'none',
     background:
-      'radial-gradient(700px 400px at 70% -10%, rgba(6,182,212,.13), transparent 60%),' +
-      'radial-gradient(600px 400px at 10% 110%, rgba(14,116,144,.12), transparent 60%)',
+      'radial-gradient(700px 400px at 70% -10%, rgba(100,219,232,.13), transparent 60%),' +
+      'radial-gradient(600px 400px at 10% 110%, rgba(43,169,184,.12), transparent 60%)',
   },
   card: {
-    position: 'relative', width: '100%', maxWidth: 400, background: '#111c33',
+    position: 'relative', width: '100%', maxWidth: 400, background: 'var(--pearl-2)',
     border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 32,
     boxShadow: '0 30px 80px rgba(0,0,0,.4)',
   },
   brand: {
-    fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18,
-    color: '#e2e8f0', textDecoration: 'none', display: 'inline-block', marginBottom: 24,
+    fontFamily: 'var(--font)', fontWeight: 700, fontSize: 18,
+    color: 'var(--text)', textDecoration: 'none', display: 'inline-block', marginBottom: 24,
   },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 26, margin: '0 0 8px' },
-  sub: { color: '#94a3b8', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 },
+  h1: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 26, margin: '0 0 8px' },
+  sub: { color: 'var(--muted)', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 },
   form: { display: 'grid', gap: 16, marginTop: 8 },
-  label: { display: 'grid', gap: 6, color: '#cbd5e1', fontSize: 13, fontWeight: 600 },
+  label: { display: 'grid', gap: 6, color: 'var(--text)', fontSize: 13, fontWeight: 600 },
   input: {
     padding: '11px 14px', borderRadius: 10, border: '1px solid rgba(148,163,184,.2)',
-    background: '#0b1120', color: '#e2e8f0', fontSize: 14, outline: 'none', fontFamily: 'inherit',
+    background: 'var(--pearl)', color: 'var(--text)', fontSize: 14, outline: 'none', fontFamily: 'inherit',
   },
   btn: {
-    marginTop: 4, padding: '12px 20px', borderRadius: 10, border: 'none',
-    background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 14,
+    marginTop: 4, padding: '12px 20px', borderRadius: 999, border: 'none',
+    background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 14,
     cursor: 'pointer', textAlign: 'center', textDecoration: 'none', display: 'block',
     fontFamily: 'inherit',
   },
   error: { color: '#fca5a5', fontSize: 13, margin: 0 },
-  foot: { color: '#94a3b8', fontSize: 13, textAlign: 'center', marginTop: 20 },
-  link: { color: '#67e8f9', fontWeight: 600 },
+  foot: { color: 'var(--muted)', fontSize: 13, textAlign: 'center', marginTop: 20 },
+  link: { color: 'var(--sea)', fontWeight: 600 },
 }

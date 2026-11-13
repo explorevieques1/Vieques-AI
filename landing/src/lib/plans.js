@@ -208,6 +208,17 @@ export const SELLABLE_TRAVELER_FEATURE_GROUPS = TRAVELER_FEATURE_GROUPS.map((g) 
   })),
 }))
 
+/**
+ * Four headline highlights per paid pass, for the plan CARDS (homepage teaser
+ * and the top of /pricing). The full truth is the feature matrix above; these
+ * must never claim something the matrix says a plan lacks.
+ */
+export const PLAN_HIGHLIGHTS = {
+  day_trip: ['Full beach and restaurant profiles', 'Directions and road warnings', 'Transport and essentials', 'Smart filters and search'],
+  vacation: ['Everything in Day Trip', '25 Ask AI messages', 'All snorkeling zones and spot detail', 'Bio Bay moon-phase guide'],
+  exploration: ['Everything in Vacation', '150 Ask AI messages', 'Multi-day itinerary builder', 'Export your itinerary'],
+}
+
 /** Add-ons, sold after purchase rather than on the main ladder. */
 export const ADDONS = [
   { key: 'credits', name: 'AI Credit Pack', price: '$4.99', blurb: '+30 Ask AI messages. Never expire.' },

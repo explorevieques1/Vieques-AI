@@ -220,7 +220,7 @@ export default function ProfileBody({ onClose, navPad = false }: Props) {
       {/* ---- Actions. Everything that changes a plan lives on the landing. ---- */}
       <div
         className={`shrink-0 space-y-2 border-t border-white/8 p-4 ${
-          navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : ''
+          navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : ''
         }`}
       >
         <a

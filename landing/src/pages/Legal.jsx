@@ -283,7 +283,7 @@ function LegalPage({ doc }) {
     <main style={styles.wrap}>
       <div style={styles.glow} aria-hidden="true" />
       <div style={styles.inner}>
-        <Link to="/" style={styles.brand}>Explore<span style={{ color: '#06b6d4' }}> Vieques</span></Link>
+        <Link to="/" style={styles.brand}>Explore<span style={{ color: 'var(--sea)' }}> Vieques</span></Link>
 
         <h1 style={styles.h1}>{doc.title}</h1>
         <p style={styles.updated}>Last updated {LAST_UPDATED}</p>
@@ -318,22 +318,22 @@ export function Privacy() { return <LegalPage doc={PRIVACY} /> }
 export function Refunds() { return <LegalPage doc={REFUNDS} /> }
 
 const styles = {
-  wrap: { position: 'relative', minHeight: '100vh', background: '#0f172a', padding: '48px 24px 80px', fontFamily: 'Manrope, system-ui, sans-serif', overflow: 'hidden' },
-  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(800px 420px at 50% -10%, rgba(6,182,212,.10), transparent 60%)' },
+  wrap: { position: 'relative', minHeight: '100vh', background: 'var(--pearl)', padding: '48px 24px 80px', fontFamily: 'var(--font)', overflow: 'hidden' },
+  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(800px 420px at 50% -10%, rgba(100,219,232,.10), transparent 60%)' },
   // ~68ch of running text. Legal prose is read, not scanned, and a full-width
   // column of it on a desktop monitor is genuinely hard to follow.
   inner: { position: 'relative', maxWidth: 720, margin: '0 auto' },
-  brand: { fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 18, color: '#e2e8f0', textDecoration: 'none' },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 'clamp(26px,3.4vw,36px)', margin: '28px 0 8px' },
-  updated: { color: '#64748b', fontSize: 12.5, margin: '0 0 22px' },
+  brand: { fontFamily: 'var(--font)', fontWeight: 700, fontSize: 18, color: 'var(--text)', textDecoration: 'none' },
+  h1: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 'clamp(26px,3.4vw,36px)', margin: '28px 0 8px' },
+  updated: { color: 'var(--faint)', fontSize: 12.5, margin: '0 0 22px' },
   // The intro carries the answer most people came for, so it gets the emphasis
   // treatment rather than being just another paragraph.
-  intro: { color: '#cbd5e1', fontSize: 15.5, lineHeight: 1.65, margin: '0 0 8px', padding: '16px 18px', borderRadius: 12, background: 'rgba(6,182,212,.07)', border: '1px solid rgba(6,182,212,.22)' },
+  intro: { color: 'var(--text)', fontSize: 15.5, lineHeight: 1.65, margin: '0 0 8px', padding: '16px 18px', borderRadius: 12, background: 'rgba(100,219,232,.07)', border: '1px solid rgba(100,219,232,.22)' },
   section: { marginTop: 30 },
-  h2: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 17, margin: '0 0 10px' },
-  p: { color: '#94a3b8', fontSize: 14.5, lineHeight: 1.7, margin: '0 0 12px' },
+  h2: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 17, margin: '0 0 10px' },
+  p: { color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.7, margin: '0 0 12px' },
   ul: { margin: '0 0 12px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 },
-  li: { color: '#94a3b8', fontSize: 14.5, lineHeight: 1.6 },
+  li: { color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6 },
   crossLinks: { display: 'flex', flexWrap: 'wrap', gap: 20, marginTop: 44, paddingTop: 22, borderTop: '1px solid rgba(148,163,184,.14)' },
-  link: { color: '#67e8f9', fontSize: 13.5, fontWeight: 600, textDecoration: 'none' },
+  link: { color: 'var(--sea)', fontSize: 13.5, fontWeight: 600, textDecoration: 'none' },
 }

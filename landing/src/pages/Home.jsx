@@ -1,262 +1,484 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import NavBar from '../components/NavBar.jsx'
-import IOSPhoneFrame from '../components/IOSPhoneFrame.jsx'
+import Phone3D from '../components/Phone3D.jsx'
+import HeroTerrain from '../components/HeroTerrain.jsx'
+import { PinIcon, CheckIcon, ChevronIcon } from '../components/icons.jsx'
+import SplitText from '../components/reactbits/SplitText.jsx'
+import ScrollReveal from '../components/reactbits/ScrollReveal.jsx'
+import AnimatedContent from '../components/reactbits/AnimatedContent.jsx'
+import SpotlightCard from '../components/reactbits/SpotlightCard.jsx'
+import { LogoLoop } from '../components/reactbits/LogoLoop.jsx'
+import StarBorder from '../components/reactbits/StarBorder.jsx'
+import Magnet from '../components/reactbits/Magnet.jsx'
+import { SELLABLE_TRAVELER_PLANS, PLAN_HIGHLIGHTS } from '../lib/plans.js'
+import { moonPhase, bioBayVerdict } from '../lib/moon.js'
+import { FAQ } from '../content/faq.js'
+
+// ---------------------------------------------------------------------------
+//  Copy notes (SEO): every heading names a thing people search for — Vieques
+//  map, beaches, snorkeling, Mosquito Bay, getting around, restaurants — in
+//  plain words. Numbers are the real row counts in Supabase as of 2026-11-12
+//  (17 beaches, 5 snorkel spots, 35 restaurants, 14 transport options). If
+//  the data grows, update them here; don't round up.
+// ---------------------------------------------------------------------------
+
+// Real places from the beaches + snorkel_spots tables. Doubles as an
+// on-page list of the long-tail names the SEO note says we should own.
+const PLACES = [
+  ['Sun Bay', 'Balneario Sombe'],
+  ['Mosquito Bay', 'bio bay'],
+  ['La Chiva', 'Blue Beach'],
+  ['Playa Caracas', 'Red Beach'],
+  ['Punta Arenas', 'Green Beach'],
+  ['Playa Negra', 'black sand'],
+  ['Media Luna', null],
+  ['Navio', null],
+  ['Playa La Plata', 'Orchid Beach'],
+  ['Mosquito Pier', 'snorkeling'],
+  ['Esperanza', 'Malecón'],
+  ['Playa Grande', null],
+]
+
+// Every bento cell / pricing card is a React Bits SpotlightCard re-skinned
+// to the Black Pearl surface: the turquoise light follows the pointer.
+const CARD_STYLE = {
+  '--spotlight-card-surface': '#0A202D',
+  '--spotlight-card-border': 'rgba(143,169,180,.14)',
+  '--spotlight-card-shadow': 'none',
+}
+// Magnetic pull only makes sense with a hovering pointer; on touch it just
+// leaves the button offset from where the finger expects it.
+const FINE_POINTER = typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+
+function Cell({ className = '', children }) {
+  return (
+    <SpotlightCard className={`cell ${className}`} spotlightColor="#64DBE8" intensity={0.12} spotlightSize={320} borderGlow={0.7} style={CARD_STYLE}>
+      {children}
+    </SpotlightCard>
+  )
+}
 
 export default function Home() {
   const navigate = useNavigate()
-  const [aud, setAud] = useState('traveler') // pricing audience toggle
+  const [aud, setAud] = useState('traveler')
 
-  // When a plan is chosen, remember it and send the user to signup.
-  // After signup we resume checkout with this plan.
+  // Remember the chosen plan and send the user to signup; checkout resumes
+  // with this plan after the account exists.
   function choosePlan(plan) {
     try { sessionStorage.setItem('vq_plan', plan) } catch (_) {}
     navigate('/signup?plan=' + encodeURIComponent(plan))
   }
 
-  // Scroll reveal: add .in to .reveal elements as they enter the viewport.
-  useEffect(() => {
-    const els = document.querySelectorAll('.reveal')
-    if (!('IntersectionObserver' in window) || !els.length) {
-      els.forEach((el) => el.classList.add('in'))
-      return
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add('in')
-            io.unobserve(e.target)
-          }
-        })
-      },
-      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
-    )
-    els.forEach((el) => io.observe(el))
-    return () => io.disconnect()
-  }, [])
+  const placeItems = useMemo(
+    () => PLACES.map(([name, aka]) => ({
+      title: name,
+      node: (
+        <span className="place-chip">
+          <PinIcon width={16} height={16} />
+          {name}{aka && <em>{aka}</em>}
+        </span>
+      ),
+    })),
+    [],
+  )
 
   return (
     <>
-      {/* ================= NAV ================= */}
       <NavBar />
 
-      {/* ================= HERO ================= */}
-      <header id="top" className="hero">
-        <svg className="topo" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-          <g transform="rotate(-8 170 160)">
-            <ellipse cx="170" cy="160" rx="70"  ry="42"  fill="none" stroke="rgba(103,232,249,.10)"/>
-            <ellipse cx="176" cy="166" rx="125" ry="80"  fill="none" stroke="rgba(103,232,249,.085)"/>
-            <ellipse cx="168" cy="158" rx="185" ry="124" fill="none" stroke="rgba(103,232,249,.07)"/>
-            <ellipse cx="180" cy="170" rx="250" ry="172" fill="none" stroke="rgba(103,232,249,.055)"/>
-            <ellipse cx="172" cy="162" rx="320" ry="225" fill="none" stroke="rgba(103,232,249,.04)"/>
-          </g>
-          <g transform="rotate(6 1030 560)">
-            <ellipse cx="1030" cy="560" rx="60"  ry="38"  fill="none" stroke="rgba(103,232,249,.10)"/>
-            <ellipse cx="1024" cy="554" rx="112" ry="74"  fill="none" stroke="rgba(103,232,249,.08)"/>
-            <ellipse cx="1034" cy="564" rx="170" ry="116" fill="none" stroke="rgba(103,232,249,.06)"/>
-            <ellipse cx="1026" cy="556" rx="235" ry="164" fill="none" stroke="rgba(103,232,249,.045)"/>
-          </g>
-        </svg>
-
-        <div className="hero-grid">
-          <div>
-            <span className="eyebrow"><i className="dot"></i> Live on Vieques Island, Puerto Rico</span>
-            <h1>Explore Vieques with an <em>AI island guide</em> in your pocket.</h1>
-            <p className="lede">An interactive map of the whole island — beaches, restaurants, activities, stays, and essentials — with an AI that answers your questions and drops the answers right on the map.</p>
-            <div className="hero-cta">
-              <Link to="/signup" className="btn btn-primary btn-lg">Start Exploring</Link>
-              <a href="#features" className="btn btn-ghost btn-lg">See Features</a>
-            </div>
-          </div>
-
-          {/* phone mockup: real iPhone bezel wrapping a real device screenshot.
-              The capture is 1170x2532 (iPhone 15, 9:19.5) — the same aspect the
-              frame locks to — so it fills the glass with nothing cropped. */}
-          <div className="phone-wrap">
-            <IOSPhoneFrame width={340} theme="dark" screenshot>
-              <img
-                className="phone-shot"
-                src="/app-screenshot.jpg"
-                alt="The Vieques AI map on iPhone, showing beach pins across the island and a blue dot marking the viewer's live location"
-                width={1170}
-                height={2532}
+      <main>
+        {/* ================= HERO ================= */}
+        <header id="top" className="hero">
+          <HeroTerrain />
+          <div className="hero-grid">
+            <div>
+              <p className="hero-place">Vieques, Puerto Rico</p>
+              <SplitText
+                tag="h1"
+                text="Every beach in Vieques, on one map that answers back."
+                splitType="words"
+                effect="rise"
+                delay={60}
+                duration={1}
+                textAlign="left"
               />
-            </IOSPhoneFrame>
+              <p className="lede">
+                The interactive Vieques travel guide: all 17 beaches, the best snorkeling spots,
+                Mosquito Bay timing, 35 restaurants and how to get around — with an AI guide that
+                answers by dropping pins on the map.
+              </p>
+              <div className="hero-cta">
+                <Magnet padding={60} magnetStrength={4} disabled={!FINE_POINTER}>
+                  <Link to="/signup" className="btn btn-primary btn-lg">Start exploring</Link>
+                </Magnet>
+                <a href="#map" className="link">See what’s on the map</a>
+              </div>
+            </div>
+
+            <Phone3D />
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* ================= HOW IT WORKS ================= */}
-      <section id="how" className="section">
-        <div className="steps">
-          <div className="step reveal"><div className="step-n">1</div><h3>Open the map</h3><p>Every beach, restaurant, and service on the island, already pinned.</p></div>
-          <div className="step reveal"><div className="step-n">2</div><h3>Ask or explore</h3><p>Filter by what you want, or just ask the AI in plain language.</p></div>
-          <div className="step reveal"><div className="step-n">3</div><h3>Go</h3><p>Real driving routes and travel times, one tap to Google Maps.</p></div>
-        </div>
-      </section>
+        {/* ================= PLACES MARQUEE ================= */}
+        <section className="places" aria-label="Beaches and snorkel spots on the map">
+          <LogoLoop
+            logos={placeItems}
+            speed={42}
+            gap={44}
+            logoHeight={24}
+            pauseOnHover
+            fadeOut
+            fadeOutWidth={0.08}
+            draggable={false}
+            ariaLabel="Vieques beaches and snorkel spots on the map"
+          />
+        </section>
 
-      {/* ================= FEATURES ================= */}
-      <section id="features" className="section section-alt">
-        <div className="feature-lead center reveal">
-          <span className="eyebrow">Features</span>
-          <h2>The whole island, one map</h2>
-          <p className="lede" style={{ margin: '0 auto' }}>Built from the ground up for Vieques — not a generic travel app with three pins on it.</p>
-        </div>
+        {/* ================= MANIFESTO ================= */}
+        <section className="section">
+          <div className="manifesto">
+            <ScrollReveal as="p" baseOpacity={0.12} enableBlur blurStrength={6} baseRotation={0} stagger={0.04}>
+              Vieques has patchy signal, few street signs and roads that turn to dirt without warning.
+              It also has seventeen beaches worth the drive, a bay that glows at night and wild horses
+              along the way. We put all of it on one map.
+            </ScrollReveal>
+          </div>
+        </section>
 
-        <div className="cards">
-          <div className="card card-wide reveal">
-            <div className="ico">🗺️</div>
-            <h3>Interactive Island Map</h3>
-            <p>Browse categorized pins across all of Vieques — beaches, restaurants, activities, stays, services, transportation, and essentials. Custom emoji markers make every category instantly scannable, in street or satellite view.</p>
-            <div className="tags">
-              <span className="tag">🏖️ Beaches</span><span className="tag">🍽️ Restaurants</span><span className="tag">🏄 Activities</span>
-              <span className="tag">🏡 Stays</span><span className="tag">🛻 Transport</span><span className="tag">🧾 Essentials</span>
+        {/* ================= BENTO: WHAT'S ON THE MAP ================= */}
+        <section id="map" className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <p className="kicker">What’s on the map</p>
+            <h2 className="title">The Vieques map, built by people who live here.</h2>
+            <p className="lede">
+              Beaches, snorkel zones, restaurants, transport and island essentials — pinned, sorted and
+              checked on the ground.
+            </p>
+
+            <AnimatedContent className="bento" distance={40} duration={0.7} stagger={0.07} threshold={0.15}>
+              <div className="b-ai">
+                <Cell>
+                  <h3>Ask in plain words. Get answers as pins.</h3>
+                  <p>
+                    Ask where to rent a jeep, which beach is calmest for kids or where to eat in Esperanza.
+                    The AI guide searches the map’s own listings and pins what it finds — no guessing.
+                  </p>
+                  <div className="thread art" aria-label="Example conversation">
+                    <div className="bubble me">Where can I rent a jeep near the ferry?</div>
+                    <div className="bubble ai">
+                      There are rental spots a short walk from the ferry in Isabel Segunda. I’ve pinned them
+                      on your map, with directions from the dock.
+                      <div className="pins">
+                        <span className="pin-chip"><PinIcon width={14} height={14} />Car rentals near the ferry</span>
+                        <span className="pin-chip">Get directions</span>
+                      </div>
+                    </div>
+                    <div className="bubble me">And a calm beach after?</div>
+                    <div className="bubble ai typing" aria-label="AI is typing"><i /><i /><i /></div>
+                  </div>
+                </Cell>
+              </div>
+
+              <div className="b-snork">
+                <Cell>
+                  <h3>Vieques snorkeling zones, drawn on the water</h3>
+                  <p>
+                    Five snorkel spots — Mosquito Pier, Esperanza, La Chiva, Caracas and Punta Arenas — with
+                    zones showing where to enter, where to swim and where to stay out.
+                  </p>
+                  <SnorkelArt />
+                </Cell>
+              </div>
+
+              <div className="b-moon"><MoonCell /></div>
+
+              <div className="b-route">
+                <Cell>
+                  <h3>Real driving routes</h3>
+                  <p>Turn-by-turn directions, plus which beaches need a 4×4.</p>
+                  <RouteArt />
+                </Cell>
+              </div>
+
+              <div className="b-eat">
+                <Cell>
+                  <h3>35 Vieques restaurants</h3>
+                  <p>Hours, price range and contact for each, from Isabel Segunda to Esperanza.</p>
+                  <div className="chips art">
+                    {['Seafood', 'Local', 'Waterfront', 'Breakfast'].map((c) => <span key={c} className="chip">{c}</span>)}
+                  </div>
+                </Cell>
+              </div>
+
+              <div className="b-move">
+                <Cell>
+                  <h3>Getting around Vieques</h3>
+                  <p>Ferry, airlines, water taxis, públicos and rentals: 14 ways on and around the island.</p>
+                  <div className="chips art">
+                    {['Ferry', 'Taxis & Públicos', 'Golf cart & UTV'].map((c) => <span key={c} className="chip">{c}</span>)}
+                  </div>
+                </Cell>
+              </div>
+
+              <div className="b-filt">
+                <Cell>
+                  <h3>Filters that know the island</h3>
+                  <p>Narrow beaches by calm water, snorkeling or family-friendly; find activities from kayaking to stargazing.</p>
+                  <FilterChips />
+                </Cell>
+              </div>
+            </AnimatedContent>
+          </div>
+        </section>
+
+        {/* ================= HOW IT WORKS ================= */}
+        <section id="how" className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <p className="kicker">How it works</p>
+            <h2 className="title">Plan your Vieques trip in three steps.</h2>
+            <AnimatedContent className="steps" distance={30} duration={0.6} stagger={0.1}>
+              <div className="step">
+                <span className="step-n">Step 1</span>
+                <h3>Pick a pass</h3>
+                <p>One payment for 24 hours, 7 days or 30 days. No subscription, nothing to install.</p>
+              </div>
+              <div className="step">
+                <span className="step-n">Step 2</span>
+                <h3>Open the map</h3>
+                <p>Every beach, restaurant and service on the island is already pinned. Filter, or just ask.</p>
+              </div>
+              <div className="step">
+                <span className="step-n">Step 3</span>
+                <h3>Go</h3>
+                <p>Driving routes, travel times and one tap to Google Maps — even from a beach with one bar of signal.</p>
+              </div>
+            </AnimatedContent>
+          </div>
+        </section>
+
+        {/* ================= PRICING ================= */}
+        <section id="pricing" className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap center">
+            <p className="kicker">Pricing</p>
+            <h2 className="title">One payment. The whole island.</h2>
+            <p className="lede">Choose how long you’re on Vieques. Every pass is a one-time payment that never renews.</p>
+
+            <div className="segmented" role="tablist" aria-label="Plans for" data-pos={aud === 'business' ? 1 : 0}>
+              <span className="thumb" aria-hidden="true" />
+              <button role="tab" aria-selected={aud === 'traveler'} onClick={() => setAud('traveler')}>Travelers</button>
+              <button role="tab" aria-selected={aud === 'business'} onClick={() => setAud('business')}>Businesses</button>
             </div>
           </div>
 
-          <div className="card card-wide reveal" style={{ borderColor: 'rgba(6,182,212,.35)' }}>
-            <span className="eyebrow" style={{ marginBottom: '12px' }}>✦ Flagship feature</span>
-            <h3 style={{ fontSize: '24px' }}>Ask AI. Answers become pins.</h3>
-            <p>Ask anything in plain language — “where do I rent a car?”, “find me a quiet beach” — and the assistant answers instantly, dropping the results straight onto the map. No searching, no tabs, no guesswork.</p>
-            <div className="chat" style={{ margin: '18px 0 0', animation: 'none' }}>
-              <q>Where do I rent a car?</q>
-              <p>There are 4 rental spots near the ferry in Isabel II — most rent jeeps and side-by-sides. I've pinned them all. 🛻</p>
-              <div className="tags"><span className="tag">📍 4 pins on map</span><span className="tag">Get directions</span></div>
+          <div className={aud === 'traveler' ? 'plans' : 'plans hidden'}>
+            {SELLABLE_TRAVELER_PLANS.map((p) => {
+              const card = (
+                <SpotlightCard className="plan" spotlightColor="#64DBE8" intensity={0.1} borderGlow={0.6} style={CARD_STYLE}>
+                  {p.badge && <span className="badge">{p.badge}</span>}
+                  <h3>{p.name}</h3>
+                  <p className="sub">{p.tagline}</p>
+                  <div className="price">{p.price}<small>{p.unit}</small></div>
+                  <ul>
+                    {(PLAN_HIGHLIGHTS[p.key] || []).map((f) => (
+                      <li key={f}><CheckIcon width={16} height={16} />{f}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className={p.featured ? 'btn btn-primary btn-lg' : 'btn btn-ghost btn-lg'}
+                    onClick={() => choosePlan(p.key)}
+                  >
+                    {p.cta}
+                  </button>
+                </SpotlightCard>
+              )
+              return (
+                <div key={p.key} className={p.featured ? 'plan-shell featured' : 'plan-shell'}>
+                  {p.featured ? (
+                    <StarBorder as="div" className="plan-star" color="#64DBE8" radius={30} duration={6} thickness={1} hover="none" clickPulse={false} backgroundColor="transparent">
+                      {card}
+                    </StarBorder>
+                  ) : card}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* BUSINESS — not for sale yet; see the long note in lib/plans.js. */}
+          <div className={aud === 'business' ? 'plans' : 'plans hidden'}>
+            <div className="plan-shell" style={{ gridColumn: '1 / -1', maxWidth: 560, margin: '0 auto' }}>
+              <SpotlightCard className="plan" spotlightColor="#64DBE8" intensity={0.1} style={CARD_STYLE}>
+                <h3>Coming soon for Vieques businesses</h3>
+                <p className="sub">Claim your listing, keep it current and see who found you.</p>
+                <ul>
+                  {['Claim and edit your own listing', 'Photos, hours, menu and booking links', 'A verified badge travelers trust', 'See views and taps for directions'].map((f) => (
+                    <li key={f}><CheckIcon width={16} height={16} />{f}</li>
+                  ))}
+                </ul>
+                <Link to="/pricing?for=business" className="btn btn-ghost btn-lg">Join the waitlist</Link>
+              </SpotlightCard>
             </div>
-            <div style={{ marginTop: '18px' }}><Link to="/signup" className="btn btn-primary">Try Ask AI</Link></div>
           </div>
 
-          <div className="card reveal">
-            <div className="ico">🎯</div><h3>Smart Filters</h3>
-            <p>Beaches by calm water, family-friendly, or snorkeling. Restaurants by Italian, seafood, or vegan. Services and essentials by type.</p>
-            <div className="tags"><span className="tag">Calm water</span><span className="tag">Snorkeling</span><span className="tag">Seafood</span><span className="tag">Vegan</span></div>
+          <p className="center" style={{ marginTop: 28 }}>
+            <Link to={aud === 'business' ? '/pricing?for=business' : '/pricing#compare'} className="link">
+              {aud === 'business' ? 'See what we’re building' : 'Compare every feature'}
+            </Link>
+          </p>
+        </section>
+
+        {/* ================= FAQ ================= */}
+        <section id="faq" className="section" style={{ paddingTop: 0 }}>
+          <div className="wrap center">
+            <p className="kicker">Vieques travel questions</p>
+            <h2 className="title">Before you go</h2>
           </div>
-
-          <div className="card reveal">
-            <div className="ico">🤿</div><h3>Snorkeling Zones</h3>
-            <p>Hand-mapped zones drawn on the water: exactly where to go, where to avoid, and where turtles and rays hang out. Nobody else has this.</p>
-            <div className="tags"><span className="tag">🐢 Turtles</span><span className="tag" style={{ borderColor: 'rgba(220,38,38,.5)', color: '#fca5a5' }}>avoid</span></div>
+          <div className="faq">
+            {FAQ.map(({ q, a }) => (
+              <details key={q}>
+                <summary>{q}<ChevronIcon /></summary>
+                <p>{a}</p>
+              </details>
+            ))}
           </div>
+        </section>
 
-          <div className="card reveal">
-            <div className="ico">🧭</div><h3>Directions &amp; Routing</h3>
-            <p>Real driving routes and travel times between any two places on the island, with one-tap “Open in Google Maps.”</p>
-            <div className="tags"><span className="tag">🚗 14 min</span></div>
-          </div>
+        {/* ================= FINAL CTA ================= */}
+        <section className="final">
+          <h2 className="title">Land on Vieques knowing where to go.</h2>
+          <Magnet padding={60} magnetStrength={4} disabled={!FINE_POINTER}>
+            <Link to="/signup" className="btn btn-primary btn-lg">Start exploring</Link>
+          </Magnet>
+        </section>
+      </main>
 
-          <div className="card reveal">
-            <div className="ico">🍽️</div><h3>Restaurant Profiles</h3>
-            <p>Rich detail cards for every restaurant — cuisine, price range, hours, and directions — like Google Maps, but complete for Vieques.</p>
-            <div className="tags"><span className="tag">El Blok Kitchen</span><span className="tag" style={{ color: '#86efac', borderColor: 'rgba(34,197,94,.4)' }}>Open now</span></div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= TRUST ================= */}
-      <section className="section">
-        <div className="trust">
-          <div className="reveal"><h3>Built by locals</h3><p>Every pin verified by people who live here.</p></div>
-          <div className="reveal"><h3>Covers the whole island</h3><p>From Isabel II to Esperanza to the far east beaches.</p></div>
-          <div className="reveal"><h3>Works on any phone</h3><p>Nothing to install — open it in your browser and go.</p></div>
-        </div>
-      </section>
-
-      {/* ================= PRICING ================= */}
-      <section id="pricing" className="section section-alt">
-        <div className="feature-lead center reveal">
-          <span className="eyebrow">Pricing</span>
-          <h2>Simple pricing for your trip — or your business</h2>
-          <p className="lede" style={{ margin: '0 auto' }}>Visiting the island, or running a business on it? Either way, there's a plan.</p>
-        </div>
-
-        <div className="center">
-          <div className="toggle" role="tablist">
-            <button className={aud==='traveler'?'on':''} onClick={() => setAud('traveler')} role="tab">For Travelers</button>
-            <button className={aud==='business'?'on':''} onClick={() => setAud('business')} role="tab">For Businesses</button>
-          </div>
-        </div>
-
-        {/* TRAVELER — headline tiers only. The full feature matrix lives on
-            /pricing; this section is a teaser, so it stays to three cards. */}
-        <div className={aud==='traveler'?'plans':'plans hidden'}>
-          <div className="plan">
-            <h3>Day Trip</h3><p className="sub">Off the ferry and back by dark</p>
-            <div className="price">$7.99<small>one-time · 24 hours</small></div>
-            <ul>
-              <li>Full beach &amp; restaurant profiles</li><li>Directions &amp; road conditions</li>
-              <li>Essentials and transport</li><li>Smart filters &amp; search</li>
-            </ul>
-            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('day_trip')}>Get Day Trip</button>
-          </div>
-          <div className="plan featured">
-            <span className="badge">Most popular</span>
-            <h3>Vacation</h3><p className="sub">Everything you need for your stay</p>
-            <div className="price">$13.99<small>one-time · 7 days</small></div>
-            <ul>
-              <li>Everything in Day Trip</li><li>25 Ask AI messages</li>
-              <li>All snorkeling zones &amp; spot detail</li><li>Bio Bay moon-phase guide</li>
-            </ul>
-            <button className="btn btn-primary btn-lg" onClick={() => choosePlan('vacation')}>Get Vacation</button>
-          </div>
-          <div className="plan">
-            <h3>Exploration</h3><p className="sub">Long stays and repeat visitors</p>
-            <div className="price">$24.99<small>one-time · 30 days</small></div>
-            <ul>
-              <li>Everything in Vacation</li><li>150 Ask AI messages</li>
-              <li>Multi-day itinerary builder</li><li>Export itinerary</li>
-            </ul>
-            <button className="btn btn-ghost btn-lg" onClick={() => choosePlan('exploration')}>Get Exploration</button>
-          </div>
-        </div>
-
-        {/* BUSINESS — not for sale yet.
-            The three priced cards that used to sit here (Basic $19, Featured
-            $59, Island Partner $149) were removed: nothing delivers them, and
-            the tiers they grant are absent from FEATURES in payments.js, so a
-            paying subscriber resolved to the free tier. See lib/plans.js. */}
-        <div className={aud==='business'?'plans':'plans hidden'}>
-          <div className="plan" style={{ gridColumn: '1 / -1', maxWidth: 560, margin: '0 auto' }}>
-            <h3>Coming soon for businesses</h3>
-            <p className="sub">Claim your listing, keep it current, and see who found you.</p>
-            <ul>
-              <li>Claim and edit your own listing</li><li>Photos, hours, menu &amp; booking links</li>
-              <li>A verified badge travelers trust</li><li>See views and taps for directions</li>
-            </ul>
-            <Link to="/pricing?for=business" className="btn btn-primary btn-lg">Join the waitlist</Link>
-          </div>
-        </div>
-
-        <p className="center" style={{ marginTop: 22 }}>
-          <Link to="/pricing" className="link">
-            {aud === 'business' ? 'See what we’re building →' : 'Compare every feature →'}
-          </Link>
-        </p>
-      </section>
-
-      {/* ================= FINAL CTA ================= */}
-      <section className="final">
-        <h2>Your island guide is waiting.</h2>
-        <p className="lede" style={{ margin: '0 auto 26px' }}>Land on Vieques knowing exactly where to swim, eat, and explore.</p>
-        <Link to="/signup" className="btn btn-primary btn-lg">Start Exploring</Link>
-      </section>
-
-      {/* Legal links are Link, not <a href>, so they route client-side instead
-          of reloading the SPA. They sit in the footer because that is where
-          Stripe (and everyone else) looks for them. */}
+      {/* Legal links are Link, not <a href>, so they route client-side. They
+          sit in the footer because that is where Stripe looks for them. */}
       <footer className="footer">
-        <span className="brand" style={{ fontSize: '16px' }}>Vieques<span> AI</span></span>
-        <nav>
-          <a href="#features">Features</a>
-          <a href="#pricing">Pricing</a>
-          <Link to="/pricing?for=business">For Businesses</Link>
-          <Link to="/terms">Terms</Link>
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/refunds">Refunds</Link>
-          <a href="mailto:hello@explorevieques.org">Contact</a>
-        </nav>
-        <span>© 2026 Vieques AI · Made on the island 🇵🇷</span>
+        <div className="footer-grid">
+          <div>
+            <h4>Explore Vieques</h4>
+            <p style={{ margin: 0, maxWidth: '28em' }}>
+              The interactive map and AI travel guide for Vieques, Puerto Rico. Made on the island.
+            </p>
+          </div>
+          <nav aria-label="Island guide">
+            <h4>The island</h4>
+            <ul>
+              <li><a href="#map">Vieques beaches map</a></li>
+              <li><a href="#map">Snorkeling spots</a></li>
+              <li><a href="#faq">Mosquito Bay timing</a></li>
+              <li><a href="#faq">Getting to Vieques</a></li>
+            </ul>
+          </nav>
+          <nav aria-label="Product">
+            <h4>Explore Vieques</h4>
+            <ul>
+              <li><a href="#pricing">Pricing</a></li>
+              <li><Link to="/pricing?for=business">For businesses</Link></li>
+              <li><Link to="/login">Sign in</Link></li>
+              <li><a href="mailto:hello@explorevieques.org">Contact</a></li>
+            </ul>
+          </nav>
+          <nav aria-label="Legal">
+            <h4>Legal</h4>
+            <ul>
+              <li><Link to="/terms">Terms</Link></li>
+              <li><Link to="/privacy">Privacy</Link></li>
+              <li><Link to="/refunds">Refunds</Link></li>
+            </ul>
+          </nav>
+        </div>
+        <div className="footer-base">
+          <span>© 2026 Explore Vieques</span>
+          <span>Vieques, Puerto Rico</span>
+        </div>
       </footer>
     </>
+  )
+}
+
+/* ---------------- bento art ---------------- */
+
+// Tonight's real moon phase — the one thing that decides a bio bay night.
+function MoonCell() {
+  const { name, illumination, fraction } = moonPhase()
+  const pct = Math.round(illumination * 100)
+  const verdict = bioBayVerdict()
+  // Shadow disc offset: waxing lights from the right, waning from the left.
+  const waxing = fraction < 0.5
+  const shift = (waxing ? -1 : 1) * illumination * 2 * 26
+  return (
+    <Cell>
+      <h3>Mosquito Bay, timed right</h3>
+      <div className="moon-row">
+        <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+          <defs><clipPath id="moonclip"><circle cx="26" cy="26" r="24" /></clipPath></defs>
+          <circle cx="26" cy="26" r="24" fill="#EAF5F7" />
+          <circle cx={26 + shift} cy="26" r="24" fill="#112C3B" clipPath="url(#moonclip)" opacity={illumination > 0.98 ? 0 : 1} />
+        </svg>
+        <div>
+          <strong>{pct}%</strong>
+          <span>{name} tonight</span>
+        </div>
+      </div>
+      <p>The bio bay glows brightest on dark, moonless nights.</p>
+      {verdict && <span className={verdict.good ? 'verdict good' : 'verdict'}>{verdict.label}</span>}
+    </Cell>
+  )
+}
+
+function SnorkelArt() {
+  return (
+    <svg className="art" viewBox="0 0 240 170" width="100%" role="img" aria-label="Illustration of snorkel zones off a beach">
+      <defs>
+        <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="#8FA9B4" strokeWidth="1.5" opacity=".45" />
+        </pattern>
+      </defs>
+      {/* shoreline */}
+      <path d="M0 26 C40 18 70 40 110 30 S190 8 240 22 L240 0 L0 0Z" fill="#112C3B" />
+      {/* recommended zone */}
+      <path d="M52 52 C80 40 132 44 150 64 C166 84 140 112 104 110 C70 108 40 84 52 52Z" fill="rgba(100,219,232,.14)" stroke="#64DBE8" strokeWidth="1.5" />
+      {/* stay-out zone (boat channel) */}
+      <path d="M168 70 C196 60 232 76 236 104 C238 128 206 140 182 128 C164 118 156 84 168 70Z" fill="url(#hatch)" stroke="#8FA9B4" strokeDasharray="4 4" />
+      {/* entry point */}
+      <circle cx="80" cy="36" r="5" fill="#64DBE8" />
+      <text x="90" y="80" fill="#64DBE8" fontSize="11" fontWeight="600">Swim here</text>
+      <text x="176" y="154" fill="#8FA9B4" fontSize="11" fontWeight="600">Stay out</text>
+    </svg>
+  )
+}
+
+function RouteArt() {
+  return (
+    <svg className="art" viewBox="0 0 240 70" width="100%" role="img" aria-label="Illustration of a driving route between two pins">
+      <path d="M16 52 C60 52 70 18 120 22 S190 54 224 20" fill="none" stroke="#64DBE8" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 7" />
+      <circle cx="16" cy="52" r="6" fill="#04141E" stroke="#64DBE8" strokeWidth="2.5" />
+      <circle cx="224" cy="20" r="6" fill="#64DBE8" />
+    </svg>
+  )
+}
+
+// A small working filter — tapping a chip toggles it, like in the app.
+function FilterChips() {
+  const all = ['Calm water', 'Snorkeling', 'Family-friendly', 'Kayaking', 'Bio Bay', 'Hiking', 'Sunsets', 'Stargazing']
+  const [on, setOn] = useState(['Calm water', 'Snorkeling'])
+  const toggle = (c) => setOn((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]))
+  return (
+    <div className="chips art" role="group" aria-label="Example filters">
+      {all.map((c) => (
+        <button
+          key={c}
+          type="button"
+          className={on.includes(c) ? 'chip on' : 'chip'}
+          aria-pressed={on.includes(c)}
+          onClick={() => toggle(c)}
+          style={{ border: 0, cursor: 'pointer', font: 'inherit', fontSize: 13.5, fontWeight: 600 }}
+        >
+          {c}
+        </button>
+      ))}
+    </div>
   )
 }

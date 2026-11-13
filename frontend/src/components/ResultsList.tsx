@@ -172,7 +172,7 @@ function ResultsList({
 
       <div
         className={`scroll-contain scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 ${
-          navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+          navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : 'pb-4'
         }`}
       >
         {loading &&

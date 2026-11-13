@@ -341,7 +341,7 @@ function PlaceDetailPanel({
       {mappable && (
         <div
           className={`shrink-0 bg-gradient-to-b from-transparent to-background/85 px-4 pt-3 ${
-            navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+            navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : 'pb-4'
           }`}
         >
           <div className="flex gap-2">

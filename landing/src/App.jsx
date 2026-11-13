@@ -1,18 +1,39 @@
-import { Routes, Route } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Home from './pages/Home.jsx'
-import SignUp from './pages/SignUp.jsx'
-import LogIn from './pages/LogIn.jsx'
-import Pricing from './pages/Pricing.jsx'
-import Account from './pages/Account.jsx'
-import Success from './pages/Success.jsx'
-import Welcome from './pages/Welcome.jsx'
-import ForgotPassword from './pages/ForgotPassword.jsx'
-import ResetPassword from './pages/ResetPassword.jsx'
-import { Terms, Privacy, Refunds } from './pages/Legal.jsx'
+
+// Home ships in the main bundle (it is the page people land on and the one
+// search engines rank). Everything else is fetched only when visited, so the
+// homepage doesn't pay for Account, Legal and the password-reset flow.
+const SignUp = lazy(() => import('./pages/SignUp.jsx'))
+const LogIn = lazy(() => import('./pages/LogIn.jsx'))
+const Pricing = lazy(() => import('./pages/Pricing.jsx'))
+const Account = lazy(() => import('./pages/Account.jsx'))
+const Success = lazy(() => import('./pages/Success.jsx'))
+const Welcome = lazy(() => import('./pages/Welcome.jsx'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'))
+const Terms = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Terms })))
+const Privacy = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Privacy })))
+const Refunds = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Refunds })))
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
+// index.html ships one canonical (the homepage) for every route, because
+// Vercel rewrites all paths to that one file. Without this, /pricing, /terms
+// etc. would each tell Google they are duplicates of the homepage.
+function useCanonical() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const url = 'https://explorevieques.org' + (pathname === '/' ? '/' : pathname.replace(/\/$/, ''))
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', url)
+    document.querySelector('meta[property="og:url"]')?.setAttribute('content', url)
+  }, [pathname])
+}
+
 export default function App() {
+  useCanonical()
   return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--pearl)' }} />}>
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/signup" element={<SignUp />} />
@@ -44,5 +65,6 @@ export default function App() {
         }
       />
     </Routes>
+    </Suspense>
   )
 }

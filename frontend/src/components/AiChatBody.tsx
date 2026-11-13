@@ -186,7 +186,7 @@ export default function AiChatBody({ onClose, navPad = false }: Props) {
 
           <div
             className={`shrink-0 border-t border-white/8 p-3 ${
-              navPad ? 'pb-[calc(0.75rem+3.5rem+var(--sab))]' : ''
+              navPad ? 'pb-[calc(0.75rem+var(--nav-clear))]' : ''
             }`}
           >
             <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-white/4 py-1.5 pl-3.5 pr-1.5 focus-within:border-primary/40">

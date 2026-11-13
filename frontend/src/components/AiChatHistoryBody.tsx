@@ -98,7 +98,7 @@ export default function AiChatHistoryBody({ onOpen, navPad = false }: Props) {
 
       <div
         className={`scroll-contain scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 pt-3 ${
-          navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+          navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : 'pb-4'
         }`}
       >
         {conversations.length === 0 && !listLoading && (

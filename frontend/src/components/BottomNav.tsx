@@ -23,6 +23,9 @@ const ITEMS: { mode: ShellMode; label: string; Icon: typeof Compass }[] = [
  * phone. Each one swaps what the map sheet is showing rather than navigating —
  * see lib/shell.ts.
  *
+ * Icon-only, floating capsule. Labels live in aria-label/title so screen
+ * readers and long-press tooltips still name each tab.
+ *
  * Three details here are load-bearing rather than cosmetic:
  *
  *  - `z-[60]` beats the sheet's `z-50` (ui/drawer.tsx). At the FULL snap the
@@ -40,36 +43,51 @@ const ITEMS: { mode: ShellMode; label: string; Icon: typeof Compass }[] = [
  */
 export default function BottomNav({ mode, onChange, accent, showCreditDot }: Props) {
   return (
+    // Floating capsule (Instagram/Facebook style): inset from the screen edges
+    // and lifted by --nav-offset, so map shows around it. The space it takes is
+    // published as --nav-clear (index.css) for the panels that scroll under it.
     <nav
       aria-label="Main"
-      className="glass pointer-events-auto fixed inset-x-0 bottom-0 z-[60] grid grid-cols-4
-                 border-t border-white/8 pad-safe-bottom"
-      style={{ touchAction: 'manipulation' }}
+      className="pointer-events-auto fixed z-[60]"
+      style={{
+        touchAction: 'manipulation',
+        left: 'max(0.75rem, env(safe-area-inset-left))',
+        right: 'max(0.75rem, env(safe-area-inset-right))',
+        bottom: 'var(--nav-offset)',
+      }}
     >
-      {ITEMS.map(({ mode: m, label, Icon }) => {
-        const active = mode === m
-        // Explore carries the active category's colour so "I am in Beaches" is
-        // the same hue in the pill row, the results header and here. The other
-        // three have no category, so they use the app's primary.
-        const tint = active && m === 'explore' && accent ? accent : undefined
-        return (
-          <button
-            key={m}
-            onClick={() => onChange(m)}
-            aria-current={active ? 'page' : undefined}
-            className={`relative flex h-14 flex-col items-center justify-center gap-1 transition-colors ${
-              active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
-            style={tint ? { color: tint } : undefined}
-          >
-            <Icon size={22} strokeWidth={active ? 2.4 : 2} />
-            <span className="text-[10px] font-medium leading-none">{label}</span>
-            {m === 'profile' && showCreditDot && (
-              <span className="absolute right-[calc(50%-1.15rem)] top-2 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-background" />
-            )}
-          </button>
-        )
-      })}
+      <div
+        className="glass mx-auto grid h-16 max-w-md grid-cols-4 gap-1 rounded-full p-1.5
+                   shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+      >
+        {ITEMS.map(({ mode: m, label, Icon }) => {
+          const active = mode === m
+          // Explore carries the active category's colour so "I am in Beaches" is
+          // the same hue in the pill row, the results header and here. The other
+          // three have no category, so they use the app's primary.
+          const tint = active && m === 'explore' && accent ? accent : undefined
+          return (
+            <button
+              key={m}
+              onClick={() => onChange(m)}
+              aria-current={active ? 'page' : undefined}
+              aria-label={label}
+              title={label}
+              className={`relative flex items-center justify-center rounded-full transition-colors duration-200 ${
+                active
+                  ? 'bg-white/12 text-primary'
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+              }`}
+              style={tint ? { color: tint } : undefined}
+            >
+              <Icon size={24} strokeWidth={active ? 2.4 : 2} aria-hidden />
+              {m === 'profile' && showCreditDot && (
+                <span className="absolute right-[calc(50%-1.1rem)] top-2.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
+              )}
+            </button>
+          )
+        })}
+      </div>
     </nav>
   )
 }

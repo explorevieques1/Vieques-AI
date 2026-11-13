@@ -2,10 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getSession, signOut, supabase } from '../lib/supabase.js'
 import { mapUrlWithSession, launchMapApp } from '../lib/mapApp.js'
+import { UserIcon } from './icons.jsx'
 
-// Redesigned landing banner: EV brand tile, centered links, Launch App
-// button, and a profile dropdown reflecting the real Supabase session.
-export default function NavBar() {
+// Landing banner: a floating iOS-style capsule with the brand, section links,
+// the one orange action, and a profile menu reflecting the Supabase session.
+// Section links are absolute (/#map) so they also work from inner pages.
+//
+// `action` ({ to, label }) swaps the orange button + profile menu for a single
+// quiet link. The auth pages use it: on /signup the form's own button is the
+// one orange action, so the banner offers "Log in" instead of competing.
+export default function NavBar({ action } = {}) {
   const navigate = useNavigate()
   const [session, setSession] = useState(null)
 
@@ -32,24 +38,30 @@ export default function NavBar() {
   }
 
   return (
-    <header className="nav">
-      <a href="#top" className="brand-mark">
-        <img src="/logo.svg" className="brand-tile" alt="" width="44" height="44" />
-        <span className="brand-wrap">
-          <span className="brand-name">EXPLORE <span>VIEQUES</span></span>
-          <span className="brand-sub">AI ISLAND GUIDE</span>
-        </span>
-      </a>
+    <header className={action ? "nav nav-simple" : "nav"}>
+      <div className="nav-bar">
+        <a href="/#top" className="brand-mark" aria-label="Explore Vieques home">
+          <img src="/logo.svg" className="brand-tile" alt="" width="30" height="30" />
+          <span className="brand-name">Explore Vieques</span>
+        </a>
 
-      <nav className="nav-center">
-        <a href="#features">Features</a>
-        <a href="#how">How it works</a>
-        <a href="#pricing">Pricing</a>
-      </nav>
+        <nav className="nav-center" aria-label="Sections">
+          <a href="/#map">The map</a>
+          <a href="/#how">How it works</a>
+          <a href="/#pricing">Pricing</a>
+          <a href="/#faq">FAQ</a>
+        </nav>
 
-      <div className="nav-actions">
-        <button className="btn btn-primary launch-btn" onClick={launchApp}>Launch App →</button>
-        <ProfileCard session={session} onLogout={handleLogout} />
+        <div className="nav-actions">
+          {action ? (
+            <Link to={action.to} className="btn btn-ghost launch-btn">{action.label}</Link>
+          ) : (
+            <>
+              <button className="btn btn-primary launch-btn" onClick={launchApp}>Open the map</button>
+              <ProfileCard session={session} onLogout={handleLogout} />
+            </>
+          )}
+        </div>
       </div>
     </header>
   )
@@ -72,9 +84,8 @@ function ProfileCard({ session, onLogout }) {
 
   return (
     <div className="profile" ref={ref}>
-      <button className="profile-trigger" onClick={() => setOpen((o) => !o)} aria-label="Account menu">
-        <span className="profile-burger" aria-hidden="true">☰</span>
-        <span className={session ? 'profile-avatar on' : 'profile-avatar'}>{session ? initial : '👤'}</span>
+      <button className="profile-trigger" onClick={() => setOpen((o) => !o)} aria-label="Account menu" aria-expanded={open}>
+        {session ? <span className="profile-avatar on">{initial}</span> : <UserIcon />}
       </button>
 
       {open && (
@@ -87,17 +98,17 @@ function ProfileCard({ session, onLogout }) {
                   <span className="profile-email">{email}</span>
                 </div>
               </div>
-              <Link to="/account" className="profile-item" onClick={() => setOpen(false)}>⚙️ Account settings</Link>
-              <a href={mapUrlWithSession(session)} className="profile-item">🗺️ Open the map</a>
+              <Link to="/account" className="profile-item" onClick={() => setOpen(false)}>Account settings</Link>
+              <a href={mapUrlWithSession(session)} className="profile-item">Open the map</a>
               <div className="profile-div" />
-              <button className="profile-item" onClick={() => { setOpen(false); onLogout() }}>↩️ Sign out</button>
+              <button className="profile-item" onClick={() => { setOpen(false); onLogout() }}>Sign out</button>
             </>
           ) : (
             <>
               <Link to="/login" className="profile-item bold" onClick={() => setOpen(false)}>Sign in</Link>
               <Link to="/signup" className="profile-item" onClick={() => setOpen(false)}>Create account</Link>
               <div className="profile-div" />
-              <a href="#pricing" className="profile-item" onClick={() => setOpen(false)}>🏷️ List your business</a>
+              <Link to="/pricing?for=business" className="profile-item" onClick={() => setOpen(false)}>List your business</Link>
             </>
           )}
         </div>

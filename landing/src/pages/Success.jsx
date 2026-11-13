@@ -135,15 +135,15 @@ export default function Success() {
 }
 
 const styles = {
-  wrap: { position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#0f172a', padding: 24, fontFamily: 'Manrope, system-ui, sans-serif', overflow: 'hidden' },
-  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(700px 400px at 50% -10%, rgba(6,182,212,.16), transparent 60%)' },
-  card: { position: 'relative', width: '100%', maxWidth: 440, textAlign: 'center', background: '#111c33', border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 40, boxShadow: '0 30px 80px rgba(0,0,0,.4)' },
-  check: { width: 56, height: 56, borderRadius: '50%', background: 'rgba(6,182,212,.15)', border: '2px solid #06b6d4', color: '#06b6d4', fontSize: 28, display: 'grid', placeItems: 'center', margin: '0 auto 20px' },
-  spinner: { width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(148,163,184,.2)', borderTopColor: '#06b6d4', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
-  h1: { fontFamily: 'Space Grotesk, sans-serif', color: '#e2e8f0', fontSize: 28, margin: '0 0 10px' },
-  sub: { color: '#94a3b8', fontSize: 15, lineHeight: 1.5, margin: '0 0 28px' },
+  wrap: { position: 'relative', minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--pearl)', padding: 24, fontFamily: 'var(--font)', overflow: 'hidden' },
+  glow: { position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(700px 400px at 50% -10%, rgba(100,219,232,.16), transparent 60%)' },
+  card: { position: 'relative', width: '100%', maxWidth: 440, textAlign: 'center', background: 'var(--pearl-2)', border: '1px solid rgba(148,163,184,.14)', borderRadius: 16, padding: 40, boxShadow: '0 30px 80px rgba(0,0,0,.4)' },
+  check: { width: 56, height: 56, borderRadius: '50%', background: 'rgba(100,219,232,.15)', border: '2px solid var(--sea)', color: 'var(--sea)', fontSize: 28, display: 'grid', placeItems: 'center', margin: '0 auto 20px' },
+  spinner: { width: 40, height: 40, borderRadius: '50%', border: '3px solid rgba(148,163,184,.2)', borderTopColor: 'var(--sea)', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' },
+  h1: { fontFamily: 'var(--font)', color: 'var(--text)', fontSize: 28, margin: '0 0 10px' },
+  sub: { color: 'var(--muted)', fontSize: 15, lineHeight: 1.5, margin: '0 0 28px' },
   actions: { display: 'grid', gap: 12 },
-  btnPrimary: { padding: '14px 20px', borderRadius: 10, background: '#06b6d4', color: '#0b1120', fontWeight: 700, fontSize: 15, textDecoration: 'none', border: 'none', cursor: 'pointer' },
-  btnGhost: { padding: '13px 20px', borderRadius: 10, background: 'transparent', color: '#e2e8f0', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', cursor: 'pointer' },
-  meta: { marginTop: 20, color: '#64748b', fontSize: 11, fontFamily: 'monospace' },
+  btnPrimary: { padding: '14px 20px', borderRadius: 999, background: 'var(--flush)', color: '#1A0A00', fontWeight: 700, fontSize: 15, textDecoration: 'none', border: 'none', cursor: 'pointer' },
+  btnGhost: { padding: '13px 20px', borderRadius: 10, background: 'transparent', color: 'var(--text)', border: '1px solid rgba(148,163,184,.2)', fontWeight: 600, fontSize: 14, textDecoration: 'none', cursor: 'pointer' },
+  meta: { marginTop: 20, color: 'var(--faint)', fontSize: 11, fontFamily: 'monospace' },
 }

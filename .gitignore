@@ -48,3 +48,6 @@ frontend/public/images/
 
 # Subagent-driven development scratch (ledger, briefs, review packages)
 .superpowers/
+
+# Playwright MCP screenshots / snapshots from local visual checks
+.playwright-mcp/

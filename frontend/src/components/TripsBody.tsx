@@ -40,7 +40,7 @@ export default function TripsBody({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const { trips, loading, activeTrip, activeLoading, error, clearError } = itineraries
 
-  const pad = navPad ? 'pb-[calc(1rem+3.5rem+var(--sab))]' : 'pb-4'
+  const pad = navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : 'pb-4'
 
   if (locked) {
     return (
