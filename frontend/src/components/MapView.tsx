@@ -1360,6 +1360,14 @@ function MapView({
             }
             snap={snap}
             onSnapChange={setSnap}
+            // Every tab gets a way down to the lowest stop (where the nav
+            // returns). Explore's results / place detail carry their own ⌄, and
+            // Map Modes its own close, so the sheet adds one only elsewhere.
+            onCollapse={
+              mode === 'explore' || modesOpen || selected
+                ? undefined
+                : () => setSnap(SHEET_HIDDEN)
+            }
           >
             {sheetBody}
           </MapSheet>
