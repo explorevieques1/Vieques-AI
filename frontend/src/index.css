@@ -30,7 +30,7 @@ html, body, #root {
   --nav-offset: max(0.75rem, var(--sab));
   /* Shrinks to 0 as the nav fades out (MapSheet's --sheet-low), so lists at
      the middle and full stops don't end in a nav-sized blank gap. */
-  --nav-clear: calc((4rem + var(--nav-offset)) * (1 - var(--sheet-low, 0)));
+  --nav-clear: calc((3.5rem + var(--nav-offset)) * (1 - var(--sheet-low, 0)));
 }
 
 @theme inline {
@@ -152,7 +152,12 @@ html, body, #root {
   /* Frosted panel fill + hairline. Alpha is deliberate — `.glass` blurs
      whatever map tiles sit behind it. */
   --glass: oklch(0.17 0.028 258 / 82%);
-  --glass-border: oklch(1 0 0 / 10%);
+  /* 10% vanished over bright map tiles; 18% holds. */
+  --glass-border: oklch(1 0 0 / 18%);
+  --glass-rim:
+    inset 0 1px 0 oklch(1 0 0 / 14%),
+    0 0 0 0.5px oklch(0 0 0 / 40%),
+    0 6px 20px oklch(0 0 0 / 28%);
   --scrollbar-thumb: oklch(1 0 0 / 20%);
   --scrollbar-thumb-hover: oklch(1 0 0 / 34%);
   --chart-1: oklch(0.78 0.13 200);
@@ -229,6 +234,11 @@ html, body, #root {
   .glass {
     background: var(--glass);
     border: 1px solid var(--glass-border);
+    /* The rim that makes floating controls hold their edge over bright sand
+       and water: a top-edge highlight (light from above, like iOS), a dark
+       hairline outside the border for contrast on pale tiles, and a soft
+       lift. A `shadow-*` utility on the same element replaces all three. */
+    box-shadow: var(--glass-rim);
     /* Via @apply rather than a hand-written `backdrop-filter`: writing the
        property and its -webkit- prefix by hand collapses to prefix-only after
        minification, which loses the blur in Chrome and Firefox. Tailwind's
@@ -423,17 +433,31 @@ html, body, #root {
   .vq-load__ring:nth-child(3) { opacity: 0; }
 }
 
-/* Bottom nav on React Bits GlassSurface (BottomNav.tsx). The component pads its
-   content 8px; the nav's cells were laid out for 6px (p-1.5) — keep that so
-   the 52px cells and --nav-clear stay what they were. */
-.vq-nav-glass .glass-surface__content {
+/* Liquid-glass chrome (React Bits GlassSurface + lib/glass.ts): the bottom nav,
+   the bento's suggestion row and the map controls (GlassControl.tsx). The component pads its content 8px; both are laid out
+   for 6px — the nav's 56px capsule / 44px cells (BOTTOM_NAV_H, --nav-clear)
+   and the bento's two 44px rows (TOP_BENTO_H). */
+.vq-glass .glass-surface__content {
   padding: 6px;
+}
+/* Single controls fill their glass (map buttons, the bento's suggestion row);
+   stacks keep a 4px inset (zoom). */
+/* Map controls (GlassControl) sit on bright tiles: denser navy, like their
+   65% Chromium tint. */
+.vq-glass.vq-glass--control.glass-surface--fallback {
+  background: oklch(0.17 0.028 258 / 0.78);
+}
+.vq-glass.vq-glass--flush .glass-surface__content {
+  padding: 0;
+}
+.vq-glass.vq-glass--tight .glass-surface__content {
+  padding: 4px;
 }
 /* Safari/iOS + Firefox get the component's frosted fallback, whose tint is
    WHITE (backgroundOpacity raises it) — on this dark app that read as a milky
    grey pill with washed-out grey icons. Same blur/sheen/rim, dark tint instead,
    matching the 35% dark tint Chromium gets. */
-.vq-nav-glass.glass-surface--fallback {
+.vq-glass.glass-surface--fallback {
   background: oklch(0.17 0.028 258 / 0.5);
 }
 
@@ -449,7 +473,60 @@ html, body, #root {
   right: calc(10px * (1 - var(--sheet-full, 0)));
   border-top-left-radius: calc(14px + 18px * (1 - var(--sheet-full, 0)));
   border-top-right-radius: calc(14px + 18px * (1 - var(--sheet-full, 0)));
-  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.35);
+  /* Glass, matching the frosted GlassSurface the nav / category strip /
+     map controls show on iPhone: lighter navy than `.glass`'s 82% so the map
+     reads through, a stronger blur so list text stays legible over it, and
+     the component's rim + sheen (::before / ::after below). NOT the refracting
+     GlassSurface: its bending band is ~7% of the short side (~27px here),
+     wider than the 16px content padding, so it would warp the list text —
+     and a full-screen SVG backdrop filter is heavy on a phone. */
+  background: oklch(0.17 0.028 258 / 0.7);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  border-color: oklch(1 0 0 / 0.16);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.3),
+    inset 0 0 12px 3px hsl(0 0% 100% / 0.06),
+    0 -8px 30px rgb(0 0 0 / 0.35);
+}
+/* Sheen and rim, the same gradients as GlassSurface's frosted fallback
+   (.glass-surface__sheen / __rim). Behind the content (z -1 inside the
+   sheet's own stacking context — vaul's transform makes one) and never
+   hit-testable. */
+.vq-map-sheet::before,
+.vq-map-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+}
+.vq-map-sheet::before {
+  background: linear-gradient(
+    160deg,
+    hsl(0 0% 100% / 0.1) 0%,
+    transparent 22%,
+    transparent 80%,
+    hsl(0 0% 100% / 0.04) 100%
+  );
+}
+.vq-map-sheet::after {
+  padding: 2px;
+  background: linear-gradient(
+    150deg,
+    hsl(0 0% 100% / 0.34),
+    hsl(0 0% 100% / 0.03) 30%,
+    hsl(0 0% 100% / 0.02) 70%,
+    hsl(0 0% 100% / 0.14)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
 }
 
 /* ---- Bottom nav: only at the lowest stop ----

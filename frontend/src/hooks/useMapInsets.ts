@@ -67,7 +67,7 @@ export const CHROME_GAP = 6
  */
 export const CHROME_TOP_PAD = 10
 /** Height of the floating bottom-nav capsule. */
-export const BOTTOM_NAV_H = 64
+export const BOTTOM_NAV_H = 56
 /** Minimum lift of the capsule off the bottom edge (CSS: --nav-offset). */
 export const BOTTOM_NAV_GAP = 12
 
@@ -116,8 +116,9 @@ export const TOP_BAR_H_MOBILE = 246
  * so a downward drag at the lowest stop is ignored rather than throwing away the
  * category. Before that, "let me see the map" cost you your results.
  */
-// 176 = the old 168 + 8: the floating nav (64 + gap) is 8px taller than the
-// old 56px bar, and this keeps the same strip of sheet visible above it.
+// 176: handle + search field (~80px) above the 56px glass nav, with ~18px
+// between field and nav on a notched iPhone (34px home-indicator inset) — about
+// the same as the nav's 16px side padding inside the sheet, so it sits evenly.
 export const SHEET_HIDDEN = '176px'
 export const SHEET_PREVIEW = 0.45
 export const SHEET_FULL = 0.93

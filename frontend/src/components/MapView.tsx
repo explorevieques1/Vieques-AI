@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import { Globe, PanelLeftOpen } from 'lucide-react'
+import { Globe, LocateFixed, Minus, PanelLeftOpen, Plus } from 'lucide-react'
 
 import {
   fetchDirections,
@@ -52,6 +52,7 @@ import AiChatBody from './AiChatBody'
 import BottomNav from './BottomNav'
 import FilterRow from './FilterRow'
 import TopBento from './TopBento'
+import { GlassButton, GlassStack } from './GlassControl'
 import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
 import MapModesBody from './MapModesBody'
@@ -1485,7 +1486,8 @@ function MapView({
             Desktop already carries the four-up switcher permanently in the
             results panel, so there is nothing here for it to add. */}
         {isMobile && (
-          <button
+          <GlassButton
+            label="Map modes"
             onClick={() => {
               setModesOpen(true)
               // Raise the sheet with it. The body is clipped to the active snap
@@ -1496,31 +1498,31 @@ function MapView({
               // map change behind it.
               setSnap(SHEET_PREVIEW)
             }}
-            aria-label="Map modes"
-            className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8"
           >
             <Globe size={20} />
-          </button>
+          </GlassButton>
         )}
 
-        <div className="glass flex flex-col rounded-2xl p-1">
+        {/* 89 = 4 + 40 + 1 (divider) + 40 + 4 */}
+        <GlassStack height={89}>
           <button
             onClick={() => mapRef.current?.zoomIn()}
             aria-label="Zoom in"
-            className="grid h-10 w-10 place-items-center rounded-xl text-foreground hover:bg-white/8"
+            className="grid h-10 w-10 place-items-center rounded-full text-foreground hover:bg-white/8 active:bg-white/12"
           >
-            +
+            <Plus size={18} />
           </button>
-          <div className="mx-2 h-px bg-white/8" />
+          <div className="h-px w-6 bg-white/12" />
           <button
             onClick={() => mapRef.current?.zoomOut()}
             aria-label="Zoom out"
-            className="grid h-10 w-10 place-items-center rounded-xl text-foreground hover:bg-white/8"
+            className="grid h-10 w-10 place-items-center rounded-full text-foreground hover:bg-white/8 active:bg-white/12"
           >
-            −
+            <Minus size={18} />
           </button>
-        </div>
-        <button
+        </GlassStack>
+        <GlassButton
+          label="Recentre map"
           onClick={() =>
             mapRef.current?.easeTo({
               center: userLoc ?? VIEQUES_CENTER,
@@ -1528,11 +1530,9 @@ function MapView({
               padding: padding(),
             })
           }
-          aria-label="Recentre map"
-          className="glass grid h-12 w-12 place-items-center rounded-2xl text-foreground hover:bg-white/8"
         >
-          ◎
-        </button>
+          <LocateFixed size={19} />
+        </GlassButton>
       </div>
 
       {/* Scale / attribution strip. */}

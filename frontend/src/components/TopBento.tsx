@@ -2,7 +2,9 @@ import { ArrowRight } from 'lucide-react'
 
 import type { Suggestion } from '../lib/api'
 import type { CategorySlug } from '../lib/place'
+import { LIQUID_GLASS } from '../lib/glass'
 import CategoryRow from './CategoryRow'
+import GlassSurface from './reactbits/GlassSurface'
 
 type Props = {
   suggestion: Suggestion | null
@@ -26,6 +28,11 @@ type Props = {
  *
  * "Same size" is enforced by construction: both rows share ROW, so they have the
  * same height, radius, fill and left inset. If you change one, change ROW.
+ *
+ * The card is the shared frosted `.glass`. Only the category slider is liquid
+ * glass (React Bits GlassSurface, lib/glass.ts tuning) — a glass control
+ * strip inside the card, the way the glass bottom nav sits inside the collapsed
+ * sheet. Same 44px height and 16px radius as the suggestion row (ROW).
  *
  * `pointer-events-auto` is load-bearing — the map sheet is a modal Radix dialog
  * (see the note in MapTopBar), so the body is `pointer-events: none`.
@@ -72,10 +79,13 @@ export default function TopBento({
         </button>
       </div>
 
-      {/* Row 2 — the category slider, same shell as row 1. */}
-      <div className={ROW}>
-        <CategoryRow active={activeCategory} onSelect={onSelectCategory} variant="embedded" />
-      </div>
+      {/* Row 2 — the category slider, on liquid glass. Same 44px height and
+          16px radius as row 1, so the two rows stay equal. */}
+      <GlassSurface {...LIQUID_GLASS} width="100%" height={44} borderRadius={16} className="vq-glass vq-glass--flush">
+        <div className="flex h-full w-full items-center px-1.5">
+          <CategoryRow active={activeCategory} onSelect={onSelectCategory} variant="embedded" />
+        </div>
+      </GlassSurface>
     </div>
   )
 }

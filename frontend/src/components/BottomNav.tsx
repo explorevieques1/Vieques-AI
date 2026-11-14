@@ -1,6 +1,7 @@
 import { Compass, Heart, Menu, Sparkles, User } from 'lucide-react'
 
 import type { ShellMode } from '../lib/shell'
+import { LIQUID_GLASS } from '../lib/glass'
 import GlassSurface from './reactbits/GlassSurface'
 
 type Props = {
@@ -79,29 +80,22 @@ export default function BottomNav({ mode, onChange, accent, showCreditDot }: Pro
       className="vq-bottom-nav pointer-events-auto fixed z-[60]"
       style={{
         touchAction: 'manipulation',
-        left: 'max(0.75rem, env(safe-area-inset-left))',
-        right: 'max(0.75rem, env(safe-area-inset-right))',
+        // Sits INSIDE the collapsed sheet, lined up with its search field:
+        // 27px = the sheet's 10px side gap + 1px border + 16px (px-4) padding.
+        // At 12px it was wider than the sheet's interior and read as hanging
+        // off the sheet's edge. Change with .vq-map-sheet's gap in index.css.
+        left: 'max(27px, calc(env(safe-area-inset-left) + 17px))',
+        right: 'max(27px, calc(env(safe-area-inset-right) + 17px))',
         bottom: 'var(--nav-offset)',
       }}
     >
       <GlassSurface
         width="100%"
-        height={64}
-        borderRadius={32}
-        backgroundOpacity={0.35}
-        // Tuned for TEXT underneath, not the React Bits demo's photo: the
-        // default per-channel offsets (0/10/20) split list text into RGB
-        // fringes and put a rainbow on the curved ends. One shared offset =
-        // no colour split; a gentler bend; displace 2 = a light blur so the
-        // rows read as "content under glass", not garbled glyphs.
-        distortionScale={-70}
-        redOffset={0}
-        greenOffset={0}
-        blueOffset={0}
-        displace={2}
-        saturation={1.4}
-        className="vq-nav-glass mx-auto max-w-md"
-        style={{ colorScheme: 'dark' }}
+        height={56}
+        borderRadius={28}
+        // Shared with TopBento — see lib/glass.ts for why each value.
+        {...LIQUID_GLASS}
+        className="vq-glass vq-nav-glass mx-auto max-w-md"
       >
         <div className="grid h-full w-full grid-cols-5 gap-1">
         {ITEMS.map(({ mode: m, label, Icon }) => {
@@ -124,7 +118,7 @@ export default function BottomNav({ mode, onChange, accent, showCreditDot }: Pro
               }`}
               style={tint ? { color: tint } : undefined}
             >
-              <Icon size={24} strokeWidth={active ? 2.4 : 2} aria-hidden />
+              <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden />
               {m === 'profile' && showCreditDot && (
                 <span className="absolute right-[calc(50%-1.1rem)] top-2.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
               )}
