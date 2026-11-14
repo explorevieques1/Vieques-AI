@@ -56,6 +56,11 @@ function seoJsonLd() {
 
 export default defineConfig({
   plugins: [react(), seoJsonLd()],
+  // Shared by the client build and the SSR pre-render build, so date-based
+  // guide content (the bio bay moon calendar) hydrates identically.
+  // `npm run build` pins BUILD_DATE once for both builds (they could straddle
+  // midnight UTC otherwise); `vite dev` falls back to today.
+  define: { __BUILD_DATE__: JSON.stringify(process.env.BUILD_DATE || new Date().toISOString().slice(0, 10)) },
   // strictPort so it always owns 5174 (or fails loudly) instead of silently
   // drifting to 5175 — which would break the backend CORS allowlist.
   server: { port: 5174, host: true, strictPort: true },

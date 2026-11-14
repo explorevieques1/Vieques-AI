@@ -288,6 +288,10 @@ function MapView({
     if (tagFilters.size > 0) list = list.filter((p) => matchesFilters(p, tagFilters))
     const sorted = [...list]
     sorted.sort((a, b) => {
+      // Paid "Top" placements stay first, in the slot order the server sent
+      // (Array.sort is stable, so equal keys keep that order). Re-sorting a
+      // bought slot by distance would sell a position we don't deliver.
+      if (a.sponsored || b.sponsored) return (b.sponsored ? 1 : 0) - (a.sponsored ? 1 : 0)
       if (sort === 'name') return a.name.localeCompare(b.name)
       const da = distances.get(a.id)
       const db = distances.get(b.id)

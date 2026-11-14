@@ -4,6 +4,7 @@ import { signUp } from '../lib/supabase.js'
 import { SELLABLE_TRAVELER_PLANS } from '../lib/plans.js'
 import AuthLayout, { AuthTrust } from '../components/AuthLayout.jsx'
 import { TERMS_VERSION } from '../lib/legal.js'
+import { getAttribution } from '../lib/attribution.js'
 
 export default function SignUp() {
   const navigate = useNavigate()
@@ -52,7 +53,8 @@ export default function SignUp() {
     if (plan) confirmUrl.searchParams.set('plan', plan)
 
     const { data, error: signUpError } = await signUp(email, password, {
-      data: { full_name: name, terms_version: TERMS_VERSION },
+      // Attribution first so it can never overwrite the real fields.
+      data: { ...getAttribution(), full_name: name, terms_version: TERMS_VERSION },
       emailRedirectTo: confirmUrl.toString(),
     })
 

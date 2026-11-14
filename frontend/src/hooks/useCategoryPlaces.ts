@@ -3,17 +3,20 @@ import { useEffect, useState } from 'react'
 import {
   fetchActivityCategories,
   fetchActivityListings,
+  fetchTopActivities,
   fetchBeaches,
   fetchEssentialCategories,
   fetchEssentialListings,
   fetchKayakSpots,
   fetchRestaurantCategories,
+  fetchAllRestaurants,
   fetchRestaurantListings,
   fetchServiceCategories,
   fetchServiceListings,
   fetchSnorkelSpots,
   fetchStayCategories,
   fetchStays,
+  fetchTopStays,
   fetchTrails,
   fetchTransportCategories,
   fetchTransportListings,
@@ -213,8 +216,9 @@ export function useCategoryPlaces(
         fetchBeaches(beachFilters).then((rows) => finish(rows.map(beachToPlace)), fail)
         break
 
+      // No sub picked = the "Top" chip: the top 5 restaurants, sponsors first (backend/featured.js).
       case 'restaurants':
-        fetchRestaurantListings(subSlug!).then(
+        (subSlug ? fetchRestaurantListings(subSlug) : fetchAllRestaurants()).then(
           (rows) => finish(rows.map(restaurantToPlace)),
           fail,
         )
@@ -224,10 +228,20 @@ export function useCategoryPlaces(
       // request, same as beaches. The chip row is a filter over that list, so
       // `subSlug` is passed when set and the null case is the default view.
       case 'stays':
-        fetchStays(subSlug).then((rows) => finish(rows.map(stayToPlace)), fail)
+        (subSlug ? fetchStays(subSlug) : fetchTopStays()).then((rows) => finish(rows.map(stayToPlace)), fail)
         break
 
       case 'activities':
+        // No sub picked = the "Top" chip: 5 operators, paid sponsors first.
+        // 'adventures' is only the icon fallback (activityToPlace keys icons
+        // by sub slug).
+        if (!subSlug) {
+          fetchTopActivities().then(
+            (rows) => finish(rows.map((r) => activityToPlace(r, 'adventures'))),
+            fail,
+          )
+          break
+        }
         // Three activity subcategories are backed by their own table rather
         // than activity_listings, so they branch before the generic fetch. All
         // still appear as ordinary chips — the `activity_categories` rows

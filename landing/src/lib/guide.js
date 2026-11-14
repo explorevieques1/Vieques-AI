@@ -17,10 +17,23 @@
 // ============================================================================
 
 import data from '../content/guide/beaches.json'
+import listings from '../content/guide/listings.json'
+import { TOPICS } from '../content/guide/topics.js'
 
 export const SITE = 'https://explorevieques.org'
 export const BEACHES = data.beaches
 export const COUNTS = data.counts
+export const LISTINGS = listings
+export { TOPICS }
+
+// The build date, baked in by vite.config.js `define`. Date-dependent content
+// (the bio bay moon calendar) must use this — never new Date() — so the
+// pre-rendered HTML and the browser's hydration render the same thing.
+// eslint-disable-next-line no-undef
+export const BUILD_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '2026-11-14'
+
+// Cluster pages in the order the hub and cross-links show them.
+export const TOPIC_PATHS = ['/ferry', '/getting-around', '/bio-bay', '/restaurants']
 
 export const beachBySlug = (slug) => BEACHES.find((b) => b.slug === slug) || null
 
@@ -68,7 +81,46 @@ const BRAND = ' | Explore Vieques'
 // Every guide path that should exist as static HTML. The prerender script
 // and the sitemap both read this list.
 export function guidePaths() {
-  return ['/guide', '/beaches', ...BEACHES.map((b) => `/beaches/${b.slug}`)]
+  return ['/guide', '/beaches', ...TOPIC_PATHS, ...BEACHES.map((b) => `/beaches/${b.slug}`)]
+}
+
+const faqPage = (faq) => ({
+  '@type': 'FAQPage',
+  mainEntity: faq.map(({ q, a }) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+})
+
+const VIEQUES = { '@type': 'Place', name: 'Vieques, Puerto Rico' }
+
+// Page-specific structured data on top of breadcrumb + FAQ.
+function topicJsonLd(path) {
+  if (path === '/bio-bay') {
+    return [{
+      '@type': 'TouristAttraction',
+      name: 'Mosquito Bay (Bioluminescent Bay)',
+      alternateName: ['Puerto Mosquito', 'Vieques Bio Bay'],
+      description: 'Bioluminescent bay on the south coast of Vieques, named the brightest in the world by Guinness World Records. Visited only on licensed kayak or electric-boat tours; swimming is not allowed.',
+      url: `${SITE}/bio-bay`,
+      containedInPlace: VIEQUES,
+      touristType: ['Ecotourism', 'Kayaking'],
+    }]
+  }
+  if (path === '/restaurants') {
+    return [{
+      '@type': 'ItemList',
+      name: 'Restaurants in Vieques, Puerto Rico',
+      numberOfItems: LISTINGS.restaurants.length,
+      itemListElement: LISTINGS.restaurants.map((r, i) => ({
+        '@type': 'ListItem', position: i + 1,
+        item: {
+          '@type': 'Restaurant', name: r.name,
+          ...(r.cuisine && { servesCuisine: r.cuisine }),
+          ...(r.price && { priceRange: r.price }),
+          address: { '@type': 'PostalAddress', addressLocality: r.town === 'Elsewhere on the island' ? 'Vieques' : r.town, addressRegion: 'PR', addressCountry: 'US' },
+        },
+      })),
+    }]
+  }
+  return []
 }
 
 const breadcrumb = (items) => ({
@@ -84,8 +136,8 @@ export function pageMeta(pathname) {
 
   if (path === '/guide') {
     return {
-      title: 'Vieques Island Guide — Beaches, Snorkeling & Local Tips' + BRAND,
-      description: `A local's guide to Vieques, Puerto Rico: all ${BEACHES.length} beaches with water conditions, access and tips, plus what else is on the interactive island map.`,
+      title: 'Vieques Travel Guide: Ferry, Bio Bay, Beaches & Restaurants',
+      description: `A local's guide to Vieques, Puerto Rico: the ferry and flights, car and golf cart rentals, the bio bay calendar, all ${COUNTS.restaurants} restaurants and all ${BEACHES.length} beaches.`,
       jsonLd: [breadcrumb([['Island guide', '/guide']])],
     }
   }
@@ -105,6 +157,18 @@ export function pageMeta(pathname) {
           })),
         },
       ],
+    }
+  }
+
+  const t = TOPICS[path]
+  if (t) {
+    // No brand suffix: Google cuts titles at ~60 characters, and on these
+    // pages every one of them should be the keyword, not our name.
+    const yr = (s) => s.replace(/\{year\}/g, BUILD_DATE.slice(0, 4))
+    return {
+      title: yr(t.title),
+      description: yr(t.description),
+      jsonLd: [breadcrumb([['Island guide', '/guide'], [t.nav, path]]), ...topicJsonLd(path), faqPage(t.faq)],
     }
   }
 

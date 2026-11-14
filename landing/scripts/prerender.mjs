@@ -78,6 +78,11 @@ const entries = [
   ['/', 'weekly', '1.0'],
   ['/guide', 'weekly', '0.9'],
   ['/beaches', 'weekly', '0.9'],
+  // Cluster pages: the island's highest-intent searches (see topics.js).
+  ['/ferry', 'weekly', '0.9'],
+  ['/bio-bay', 'weekly', '0.9'],
+  ['/getting-around', 'weekly', '0.9'],
+  ['/restaurants', 'weekly', '0.9'],
   ['/pricing', 'monthly', '0.8'],
   ...paths.filter((p) => p.startsWith('/beaches/')).map((p) => [p, 'monthly', '0.7']),
   ['/signup', 'yearly', '0.5'],

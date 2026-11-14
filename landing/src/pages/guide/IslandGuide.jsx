@@ -20,26 +20,30 @@ export default function IslandGuide() {
       <section className="guide-sec" aria-labelledby="g-free">
         <h2 id="g-free" className="guide-h2">Free guides</h2>
         <div className="group-list">
-          <Link to="/beaches" className="guide-row">
-            <span>
-              <b>Vieques beaches</b>
-              <span>All {BEACHES.length} — calm or rough, how to get there, local tips</span>
-            </span>
-            <ChevronIcon />
-          </Link>
+          {/* Trip order: get there, get around, the big night, eat, beaches. */}
+          {[
+            ['/ferry', 'Getting to Vieques', 'Ferry from Ceiba: fare, tickets, parking. Flights from San Juan'],
+            ['/getting-around', 'Getting around', 'Car, jeep and golf cart rentals, taxis and públicos, with numbers'],
+            ['/bio-bay', 'Bio Bay (Mosquito Bay)', 'The best nights by date for the next 12 months, and the tours'],
+            ['/restaurants', 'Restaurants', `All ${COUNTS.restaurants}, by town: Esperanza and Isabel Segunda`],
+            ['/beaches', 'Beaches', `All ${BEACHES.length}: calm or rough, how to get there, local tips`],
+          ].map(([to, label, blurb]) => (
+            <Link key={to} to={to} className="guide-row">
+              <span><b>{label}</b><span>{blurb}</span></span>
+              <ChevronIcon />
+            </Link>
+          ))}
         </div>
       </section>
 
       <section className="guide-sec" aria-labelledby="g-app">
         <h2 id="g-app" className="guide-h2">Also on the map</h2>
         <ul className="group-list guide-plain">
-          {/* Each line describes columns/categories that exist in Supabase
-              (restaurant_listings.cuisine/hours/price, activity_categories,
-              transport_categories). Don't promise a feature the app lacks. */}
-          <li className="guide-row"><span><b>{COUNTS.restaurants} restaurants</b><span>Cuisine, hours and price range</span></span></li>
-          <li className="guide-row"><span><b>{COUNTS.snorkel_spots} snorkel spots</b><span>Entry points and snorkel zones on the map</span></span></li>
-          <li className="guide-row"><span><b>{COUNTS.activities} activities</b><span>Bio bay tours, kayaking, horseback riding, fishing</span></span></li>
-          <li className="guide-row"><span><b>{COUNTS.transport} ways to get around</b><span>Ferry, car and golf-cart rentals, taxis and públicos</span></span></li>
+          {/* Each line describes data that exists in Supabase. Don't promise
+              a feature the app lacks. */}
+          <li className="guide-row"><span><b>{COUNTS.snorkel_spots} snorkel spots</b><span>Entry points and snorkel zones drawn on the water</span></span></li>
+          <li className="guide-row"><span><b>{COUNTS.activities} activities</b><span>Horseback riding, kayaking, fishing, landmarks</span></span></li>
+          <li className="guide-row"><span><b>{COUNTS.essentials} essentials</b><span>Gas stations, ATMs, groceries, pharmacy</span></span></li>
         </ul>
       </section>
     </GuideLayout>

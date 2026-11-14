@@ -16,6 +16,7 @@ import {
   Car,
   Compass,
   ShoppingBasket,
+  Star,
   Umbrella,
   UtensilsCrossed,
   Wrench,
@@ -94,6 +95,12 @@ export type Place = {
   statLimit?: number
   description?: string
   /**
+   * A paid "Top" placement (featured_placements, 0052). PlaceCard labels it
+   * "Sponsored" — paid placement must be disclosed — and the list keeps
+   * sponsored rows first, in the order bought, whatever the sort.
+   */
+  sponsored?: boolean
+  /**
    * Hero photo for the detail panel. Absent means the striped placeholder —
    * most listings still have no photo. Kept on the view model rather than read
    * off `raw` per category so the panel stays ignorant of which kind it holds.
@@ -165,6 +172,13 @@ export type CategoryMeta = {
    * it — with an "All" chip to widen it back (see ResultsList).
    */
   optionalSubcategories?: boolean
+  /**
+   * The chip that means "no sub-category" when chips are optional — first in
+   * the row and selected by default. Stays: "All". Restaurants: "Top" (every
+   * restaurant, ordered by `metadata.top_rank` then name — see
+   * GET /api/restaurants in backend/server.js; Top is capped at 5).
+   */
+  allChip?: { label: string; icon?: LucideIcon }
   /** Rendered instead of a list when there's no backend for this category yet. */
   comingSoon?: boolean
 }
@@ -176,7 +190,12 @@ export const CATEGORIES: CategoryMeta[] = [
     label: 'Restaurants',
     icon: UtensilsCrossed,
     color: '#f97316',
-    hasSubcategories: true,
+    // Opens on the Top 5 (sponsors, then editorial rank) rather than an empty list waiting on a
+    // pick — the chips narrow it, like stays. It used to gate on a pick, and
+    // the panel opened to "0 restaurants".
+    hasSubcategories: false,
+    optionalSubcategories: true,
+    allChip: { label: 'Top', icon: Star },
   },
   // Hiking lives here as the `hiking` subcategory, not as its own top-level
   // pill: it is a thing to do on the island, and the fact that its rows happen
@@ -188,7 +207,11 @@ export const CATEGORIES: CategoryMeta[] = [
     label: 'Activities',
     icon: Compass,
     color: '#22c55e',
-    hasSubcategories: true,
+    // Opens on "Top" (5 tour operators, sponsors first) instead of an empty
+    // list waiting for a pick — same as restaurants and stays.
+    hasSubcategories: false,
+    optionalSubcategories: true,
+    allChip: { label: 'Top', icon: Star },
   },
   // Lodging loads in one shot like beaches — there are ~6 properties
   // island-wide — but carries a chip row over the top of that list
@@ -201,6 +224,8 @@ export const CATEGORIES: CategoryMeta[] = [
     color: '#8b5cf6',
     hasSubcategories: false,
     optionalSubcategories: true,
+    // "Top" = 5 stays, sponsored vacation rentals first; the type chips list all.
+    allChip: { label: 'Top', icon: Star },
   },
   { slug: 'services', label: 'Services', icon: Wrench, color: '#0ea5e9', hasSubcategories: true },
   {
@@ -331,6 +356,7 @@ export function restaurantToPlace(r: RestaurantListing): Place {
     id: `restaurant:${r.id}`,
     kind: 'restaurant',
     name: r.name,
+    sponsored: r.sponsored || undefined,
     subtitle: [r.cuisine, r.location_area].filter(Boolean).join(' · ') || undefined,
     latitude: r.latitude,
     longitude: r.longitude,
@@ -386,6 +412,7 @@ export function stayToPlace(s: StayListing): Place {
     id: `stay:${s.id}`,
     kind: 'stay',
     name: s.name,
+    sponsored: s.sponsored || undefined,
     subtitle: [s.property_type, s.location_area].filter(Boolean).join(' · ') || undefined,
     latitude: s.latitude,
     longitude: s.longitude,
@@ -426,6 +453,7 @@ export function activityToPlace(a: ActivityListing, slug: string): Place {
     id: `activity:${a.id}`,
     kind: 'activity',
     name: a.name,
+    sponsored: a.sponsored || undefined,
     subtitle: a.location_area ?? undefined,
     // Gated on has_location like every other listing category: an operator
     // with no walk-in address still lists, it just does not get a pin.

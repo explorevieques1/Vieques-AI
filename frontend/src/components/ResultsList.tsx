@@ -3,7 +3,10 @@ import { AlertTriangle, ChevronDown, PanelLeftClose, X } from 'lucide-react'
 import type { Subcategory } from '../hooks/useCategoryPlaces'
 import { ApiError, LANDING_URL } from '../lib/api'
 import { categoryMeta, type CategorySlug, type Place } from '../lib/place'
+import { LIQUID_GLASS } from '../lib/glass'
 import PlaceCard from './PlaceCard'
+import PillSlider from './PillSlider'
+import GlassSurface from './reactbits/GlassSurface'
 import { Skeleton } from './ui/skeleton'
 
 export type SortKey = 'nearest' | 'name'
@@ -127,44 +130,33 @@ function ResultsList({
         </div>
       </div>
 
-      {/* Subcategory chips — the old sidebars' entire job, compressed to a row.
-          Visible scrollbar, not `.no-scrollbar`: these chips are the only way
-          into a subcategory, and there are more of them than fit the panel
-          width. A hidden bar leaves the overflowed ones both undiscoverable and
-          unreachable with a mouse. The inner `pb-2` reserves the track's height
-          so it sits under the chips rather than over them. */}
+      {/* Sub-category slider — the same glass strip + PillSlider as the top
+          bento's category row, so every pill row in the app scrolls and looks
+          the same. Replaced plain chips over a visible scrollbar; PillSlider's
+          edge fades and wheel-to-horizontal scrolling keep the overflowed
+          pills findable and reachable without one. Accent = the category's
+          colour, matching its pins and the top pill. */}
       {subcategories.length > 0 && (
-        <div className="scrollbar-thin shrink-0 overflow-x-auto px-4 pb-2">
-          <div className="flex w-max gap-1.5 pb-2">
-            {/* Where the chips only filter (stays), the unfiltered list is a
-                real state the user started in — so it needs a chip to get back
-                to. Categories that gate on a pick have no such state. */}
-            {meta.optionalSubcategories && (
-              <button
-                onClick={() => onSelectSub(null)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition-colors ${
-                  activeSub == null
-                    ? 'border border-primary/30 bg-primary/15 font-medium text-primary'
-                    : 'border border-white/8 bg-white/4 text-foreground hover:bg-white/8'
-                }`}
-              >
-                All
-              </button>
-            )}
-            {subcategories.map((s) => (
-              <button
-                key={s.slug}
-                onClick={() => onSelectSub(s.slug)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs transition-colors ${
-                  activeSub === s.slug
-                    ? 'border border-primary/30 bg-primary/15 font-medium text-primary'
-                    : 'border border-white/8 bg-white/4 text-foreground hover:bg-white/8'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
+        <div className="shrink-0 px-4 pb-3">
+          <GlassSurface {...LIQUID_GLASS} width="100%" height={44} borderRadius={16} className="vq-glass vq-glass--flush">
+            <div className="flex h-full w-full items-center px-1.5">
+              <PillSlider
+                label={`${meta.label} types`}
+                accent={meta.color}
+                active={activeSub}
+                onSelect={onSelectSub}
+                items={[
+                  // Where chips only narrow a loaded list (stays, restaurants),
+                  // "no sub" is a real state the user starts in — it gets the
+                  // first pill. Categories that gate on a pick have no such state.
+                  ...(meta.optionalSubcategories
+                    ? [{ key: null, label: meta.allChip?.label ?? 'All', icon: meta.allChip?.icon }]
+                    : []),
+                  ...subcategories.map((sc) => ({ key: sc.slug, label: sc.label })),
+                ]}
+              />
+            </div>
+          </GlassSurface>
         </div>
       )}
 

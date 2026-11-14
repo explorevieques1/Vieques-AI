@@ -1,0 +1,579 @@
+{
+  "exportedAt": "2026-11-14",
+  "transport": [
+    {
+      "name": "Bravos Boyz Rent-A-Car",
+      "cats": [
+        "car-rental"
+      ],
+      "phones": [
+        "787-741-1856"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Fun Brothers UTV Rental",
+      "cats": [
+        "golfcart-utv"
+      ],
+      "phones": [
+        "787-435-9372"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Kalet Pérez",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-585-9560"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Letty Perez / Kiany Tours",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-556-6003"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "M&M Taxi",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "939-208-1600"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Maritza's Car Rental",
+      "cats": [
+        "car-rental"
+      ],
+      "phones": [
+        "787-741-0078"
+      ],
+      "hours": "Mon-Sun 8am-6pm",
+      "website": null
+    },
+    {
+      "name": "Maritza's Car Rental (In Town)",
+      "cats": [
+        "car-rental"
+      ],
+      "phones": [
+        "787-741-0078"
+      ],
+      "hours": "Mon-Sat 8am-5pm",
+      "website": null
+    },
+    {
+      "name": "Miguel Ayala",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-328-3940"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Seguras Car Rental",
+      "cats": [
+        "car-rental"
+      ],
+      "phones": [
+        "939-699-4673"
+      ],
+      "hours": "Daily 7am-7pm",
+      "website": null
+    },
+    {
+      "name": "Tata Robles",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-486-0267"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Tuty",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-209-3007"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Vieques Island Taxi 24/7",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "939-367-2733"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Vieques Taxi",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-741-8294"
+      ],
+      "hours": null,
+      "website": null
+    },
+    {
+      "name": "Vieques Tours & Transportation",
+      "cats": [
+        "taxis"
+      ],
+      "phones": [
+        "787-397-2048"
+      ],
+      "hours": null,
+      "website": null
+    }
+  ],
+  "bioBay": [
+    {
+      "name": "Abes",
+      "about": "Guided snorkeling, kayaking, and Bio Bay tours led by experienced local guides with over 30 years of exploring Vieques' waters.",
+      "prices": [
+        "Tours: $70–$150+"
+      ],
+      "website": "https://abessnorkeling.com/"
+    },
+    {
+      "name": "Black Beard Sports",
+      "about": "Guided snorkeling, scuba diving, Bio Bay kayaking, paddle tours, and watersport rentals led by experienced local guides.",
+      "prices": [
+        "Rentals: $10–$50/day",
+        "Tours: $65–$200+"
+      ],
+      "website": "https://www.blackbeardsports.com/"
+    },
+    {
+      "name": "Fun Brothers",
+      "about": "Adventure company offering Bio Bay tours, UTV rentals, snorkeling tours, kayak adventures, and watersport equipment rentals",
+      "prices": [
+        "Bio Bay Tours: $65+",
+        "UTV Rentals: $175+",
+        "Snorkel Tours: $85+",
+        "Equipment Rentals: $10+"
+      ],
+      "website": "https://funbrothersvieques.com/"
+    },
+    {
+      "name": "Isla Nena Bio Bay Tours",
+      "about": "Experience Mosquito Bay aboard an electric boat or kayak with guided bioluminescent tours for all ages.",
+      "prices": [
+        "Kayak Tours: $65+",
+        "Boat Tours: $85+"
+      ],
+      "website": "https://www.islanenabiobay.com/"
+    },
+    {
+      "name": "Jak Water Sports",
+      "about": "Family-owned adventure company offering Bio Bay tours, snorkeling, kayaking, paddleboarding, boat tours, and beach equipment rentals",
+      "prices": [
+        "Rentals: $10–$100/day",
+        "Tours: $65–$85+/person"
+      ],
+      "website": "https://jakwatersports.com/"
+    },
+    {
+      "name": "Melaya's Tours",
+      "about": "Locally guided clear-bottom kayak Bio Bay tours offering a personalized experience in the world-famous Mosquito Bay",
+      "prices": [
+        "Bio Bay Tours: $65+",
+        "Private Tours: Call for Pricing"
+      ],
+      "website": "http://melayastours.net/"
+    },
+    {
+      "name": "Mosquito Bay Tours",
+      "about": "Guided clear-bottom kayak Bio Bay tours and snorkeling adventures led by experienced local guides in Vieques.",
+      "prices": [
+        "Bio Bay Tours: $65+",
+        "Kayak & Snorkel Tours: $145+"
+      ],
+      "website": "https://mosquitobiobaytours.com/"
+    }
+  ],
+  "restaurants": [
+    {
+      "name": "Aurora's Chicken",
+      "town": "Florida",
+      "cuisine": "Fried Chicken",
+      "price": "$",
+      "cats": [
+        "local"
+      ]
+    },
+    {
+      "name": "Bananas",
+      "town": "Esperanza",
+      "cuisine": "Bar & grill",
+      "price": "$$",
+      "cats": [
+        "waterfront",
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "Bieke's Bistro",
+      "town": "Isabel Segunda",
+      "cuisine": "Bistro / breakfast",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Bili",
+      "town": "Esperanza",
+      "cuisine": "Caribbean / waterfront",
+      "price": "$$",
+      "cats": [
+        "seafood",
+        "waterfront"
+      ]
+    },
+    {
+      "name": "Burgernauta",
+      "town": "Isabel Segunda",
+      "cuisine": "Burgers",
+      "price": "$$",
+      "cats": [
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "Cafe Del Mar",
+      "town": "Esperanza",
+      "cuisine": "Cafe / waterfront",
+      "price": "$$",
+      "cats": [
+        "waterfront",
+        "casual"
+      ]
+    },
+    {
+      "name": "Carambola",
+      "town": "Elsewhere on the island",
+      "cuisine": "Fine dining / romantic",
+      "price": "$$$",
+      "cats": [
+        "fine-dining",
+        "waterfront"
+      ]
+    },
+    {
+      "name": "Casa Nativo",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "D'Frozz",
+      "town": "Isabel Segunda",
+      "cuisine": "Frozen treats & snacks",
+      "price": "$",
+      "cats": [
+        "casual"
+      ]
+    },
+    {
+      "name": "Duffy's",
+      "town": "Esperanza",
+      "cuisine": "Bar & grill",
+      "price": "$$",
+      "cats": [
+        "waterfront",
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "El Blok",
+      "town": "Esperanza",
+      "cuisine": "Contemporary Puerto Rican",
+      "price": "$$$",
+      "cats": [
+        "fine-dining",
+        "waterfront"
+      ]
+    },
+    {
+      "name": "El Norte",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "El Plaza",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "El Quenepo",
+      "town": "Esperanza",
+      "cuisine": "Fine dining seafood",
+      "price": "$$$",
+      "cats": [
+        "fine-dining",
+        "seafood",
+        "waterfront"
+      ]
+    },
+    {
+      "name": "El Reencuentro",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "El Yate",
+      "town": "Isabel Segunda",
+      "cuisine": "Seafood",
+      "price": "$$",
+      "cats": [
+        "seafood",
+        "local"
+      ]
+    },
+    {
+      "name": "Gracias De Nada",
+      "town": "Elsewhere on the island",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "Kristy's",
+      "town": "Esperanza",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "La Palma",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "La Tabla",
+      "town": "Isabel Segunda",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "Lazy Jacks",
+      "town": "Esperanza",
+      "cuisine": "Bar & grill / pizza",
+      "price": "$$",
+      "cats": [
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "Lydia's Bakery",
+      "town": "Isabel Segunda",
+      "cuisine": "Bakery & breakfast",
+      "price": "$",
+      "cats": [
+        "casual",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Mama Mia",
+      "town": "Isabel Segunda",
+      "cuisine": "Italian",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "italian"
+      ]
+    },
+    {
+      "name": "Mana",
+      "town": "Isabel Segunda",
+      "cuisine": "Healthy / vegan-friendly",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "vegan"
+      ]
+    },
+    {
+      "name": "Mango Taphouse",
+      "town": "Elsewhere on the island",
+      "cuisine": "Bar & grill",
+      "price": "$$",
+      "cats": [
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "Mar Azul",
+      "town": "Isabel Segunda",
+      "cuisine": "Waterfront bar",
+      "price": "$$",
+      "cats": [
+        "waterfront",
+        "bar-grill"
+      ]
+    },
+    {
+      "name": "Mesita",
+      "town": "Isabel Segunda",
+      "cuisine": "Italian",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "italian"
+      ]
+    },
+    {
+      "name": "Passione",
+      "town": "Isabel Segunda",
+      "cuisine": "Italian",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "italian"
+      ]
+    },
+    {
+      "name": "Rancho Choli",
+      "town": "Esperanza",
+      "cuisine": "Local Puerto Rican",
+      "price": "$$",
+      "cats": [
+        "local",
+        "casual"
+      ]
+    },
+    {
+      "name": "Rising Roost",
+      "town": "Isabel Segunda",
+      "cuisine": "Cafe & breakfast",
+      "price": "$$",
+      "cats": [
+        "casual",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Robins Mojito Bar",
+      "town": "Elsewhere on the island",
+      "cuisine": "Bar",
+      "price": "$$",
+      "cats": [
+        "bar-grill",
+        "casual"
+      ]
+    },
+    {
+      "name": "Taverna",
+      "town": "Isabel Segunda",
+      "cuisine": "Italian",
+      "price": "$$",
+      "cats": [
+        "fine-dining",
+        "italian"
+      ]
+    },
+    {
+      "name": "Trade Winds",
+      "town": "Esperanza",
+      "cuisine": "American / breakfast",
+      "price": "$$",
+      "cats": [
+        "waterfront",
+        "casual",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "Vieques Bakery",
+      "town": "Isabel Segunda",
+      "cuisine": "Bakery & breakfast",
+      "price": "$",
+      "cats": [
+        "casual",
+        "breakfast"
+      ]
+    },
+    {
+      "name": "William's Pizza",
+      "town": "Isabel Segunda",
+      "cuisine": "Pizza",
+      "price": "$",
+      "cats": [
+        "casual",
+        "italian"
+      ]
+    }
+  ]
+}

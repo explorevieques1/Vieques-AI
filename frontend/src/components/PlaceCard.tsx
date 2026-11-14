@@ -55,6 +55,13 @@ function PlaceCard({
             corner buttons is actually there. */}
         <span className={`min-w-0 flex-1 ${onToggleSave && onAddToTrip ? 'pr-14' : onToggleSave ? 'pr-7' : ''}`}>
           <span className="block truncate text-sm font-semibold text-foreground">{place.name}</span>
+          {/* Paid placement must be disclosed (FTC) — and it's what keeps the
+              unpaid "Top" ranking trustworthy. Quiet, but always visible. */}
+          {place.sponsored && (
+            <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.08em] text-amber-300/90">
+              Sponsored
+            </span>
+          )}
           {place.subtitle && (
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">
               {place.subtitle}

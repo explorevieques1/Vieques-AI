@@ -2,9 +2,37 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/guide", "destination": "/guide/index.html" },
-    { "source": "/beaches", "destination": "/beaches/index.html" },
-    { "source": "/beaches/:slug", "destination": "/beaches/:slug/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/guide",
+      "destination": "/guide/index.html"
+    },
+    {
+      "source": "/beaches",
+      "destination": "/beaches/index.html"
+    },
+    {
+      "source": "/beaches/:slug",
+      "destination": "/beaches/:slug/index.html"
+    },
+    {
+      "source": "/bio-bay",
+      "destination": "/bio-bay/index.html"
+    },
+    {
+      "source": "/ferry",
+      "destination": "/ferry/index.html"
+    },
+    {
+      "source": "/getting-around",
+      "destination": "/getting-around/index.html"
+    },
+    {
+      "source": "/restaurants",
+      "destination": "/restaurants/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

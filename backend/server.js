@@ -45,6 +45,8 @@ import { fail } from './httpError.js'
 import { mountItineraries } from './itineraries.js'
 import { mountAiConversations, persistTurn } from './aiConversations.js'
 import { mountAccount } from './account.js'
+import { mountAdmin } from './admin.js'
+import { topListings } from './featured.js'
 
 // ----------------------------------------------------------------------------
 //  Third-party clients & app instance
@@ -362,6 +364,22 @@ app.get('/api/activity-categories', requireAuth, requireTier(pool, 'activities')
 })
 
 // Listings (pins) for one activity slug
+// The "Top" chip for activities — 5 tour companies / operators, sponsors
+// first, then editorial rank. See /api/restaurants above and featured.js.
+const ACTIVITY_COLUMNS = `l.id, l.name, l.description, l.phones, l.website, l.address,
+  l.location_area, l.latitude, l.longitude, l.has_location,
+  l.images, l.image_credit, l.price_info, l.hours`
+
+app.get('/api/activities', requireAuth, requireTier(pool, 'activities'), async (_req, res) => {
+  try {
+    res.json(await topListings(pool, {
+      kind: 'activity', table: 'activity_listings', columns: ACTIVITY_COLUMNS,
+    }))
+  } catch (e) {
+    fail(res, 'GET /api/activities', e)
+  }
+})
+
 app.get('/api/activities/:slug', requireAuth, requireTier(pool, 'activities'), async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -719,12 +737,41 @@ app.get('/api/transport/:slug', requireAuth, requireTier(pool, 'transport'), asy
 // Restaurant categories for the sidebar
 app.get('/api/restaurant-categories', requireAuth, requireTier(pool, ['restaurant_preview', 'restaurants']), async (_req, res) => {
   try {
+    // Only categories with at least one active listing: a chip that opens an
+    // empty list (Mexican had 0) reads as broken, not as "none yet".
     const { rows } = await pool.query(
-      'SELECT slug, label FROM restaurant_categories ORDER BY sort_order'
+      `SELECT c.slug, c.label
+         FROM restaurant_categories c
+        WHERE EXISTS (
+          SELECT 1 FROM restaurant_listing_categories lc
+            JOIN restaurant_listings l ON l.id = lc.listing_id AND l.is_active
+           WHERE lc.category_id = c.id)
+        ORDER BY c.sort_order`
     )
     res.json(rows)
   } catch (e) {
     fail(res, 'GET /api/restaurant-categories', e)
+  }
+})
+
+// The "Top" chip for restaurants — 5 listings: paid sponsors first (slot
+// order, labelled in the app), then editorial rank (metadata->>'top_rank'),
+// then name. What the Restaurants panel opens on. See backend/featured.js and
+// db/migrations/0052_featured_placements.sql (how to book a sponsor / rank).
+// The type chips (Seafood, Local, …) still list every restaurant in that type.
+const RESTAURANT_COLUMNS = `l.id, l.name, l.description, l.phones, l.cuisine, l.price,
+  l.hours, l.email, l.website, l.address, l.location_area,
+  l.latitude, l.longitude, l.has_location`
+
+app.get('/api/restaurants', requireAuth, requireTier(pool, ['restaurant_preview', 'restaurants']), async (req, res) => {
+  try {
+    const rows = await topListings(pool, {
+      kind: 'restaurant', table: 'restaurant_listings', columns: RESTAURANT_COLUMNS,
+    })
+    // Same free-tier taste as the per-category route.
+    res.json(tierHas(req.tier, 'restaurants') ? rows : rows.slice(0, 3))
+  } catch (e) {
+    fail(res, 'GET /api/restaurants', e)
   }
 })
 
@@ -787,9 +834,28 @@ app.get('/api/stay-categories', requireAuth, requireTier(pool, ['stay_preview', 
 // the unfiltered list is the default view and not a state you pass through —
 // there are ~6 properties island-wide. `/api/stays/:id/tripadvisor` also
 // already owns the `/api/stays/:something` shape.
+// Shared with the Top list (featured.js). tripadvisor_location_id stays off
+// the wire — see the note in the route below.
+const STAY_COLUMNS = `l.id, l.name, l.local_name, l.description, l.property_type,
+  l.sleeps, l.bedrooms, l.bathrooms, l.unit_count,
+  l.price_band, l.nightly_min, l.nightly_max, l.price_note, l.min_nights, l.currency,
+  l.check_in, l.check_out, l.pets_allowed, l.accessible, l.amenities,
+  l.phones, l.email, l.website, l.booking_url, l.hours, l.images, l.image_credit,
+  l.latitude, l.longitude, l.has_location,
+  l.address, l.location_area, l.location_precision, l.directions_note`
+
 app.get('/api/stays', requireAuth, requireTier(pool, ['stay_preview', 'stays']), async (req, res) => {
   try {
     const category = req.query.category || null
+    // ?top=1 = the "Top" chip: 5 stays, sponsors first (featured.js). No
+    // category and no top = EVERY stay — island search indexes from that, so it
+    // must not be capped.
+    if (!category && req.query.top) {
+      const rows = await topListings(pool, {
+        kind: 'stay', table: 'stay_listings', columns: STAY_COLUMNS,
+      })
+      return res.json(tierHas(req.tier, 'stays') ? rows : rows.slice(0, 3))
+    }
     // NOTE: tripadvisor_location_id is deliberately NOT selected. It is a
     // server-side join key; keeping it off the wire means the enrichment route
     // resolves it from our own row and enforces its own tier gate, rather than
@@ -1538,6 +1604,9 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
 mountItineraries(app, pool)
 mountAiConversations(app, pool)
 mountAccount(app, pool)
+// Owner data-entry tool — LOCAL ONLY (localhost:5174/admin). Not mounted when
+// NODE_ENV=production; also loopback-only and gated by ADMIN_USER_IDS.
+mountAdmin(app, pool)
 
 // ----------------------------------------------------------------------------
 //  Start the server

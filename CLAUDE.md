@@ -75,6 +75,7 @@ review or generic skill picks:
 | Commit + push + log | `/ship` slash command | Runs the reviewer first, then commits to the `explore-vieques` remote, then chains `vault-log`. This is the normal end-of-session action — don't hand-roll `git push`. |
 | Logging a session to the vault | `vault-log` skill | Run after `/ship`, or whenever asked to "update the vault." Never edits this code repo. |
 | **UI design work** (landing redesign, conversion pass, visual polish anywhere) | `frontend-design` skill **and** `unslop-ui` skill | Load both before touching landing/frontend visuals. `frontend-design` for aesthetic direction/typography so it doesn't read as templated; `unslop-ui` to catch vibe-coded anti-patterns (icon-in-rounded-square, gratuitous gradients, glassmorphism, broken scroll-reveal animations). The vault's own [[Landing Conversion Pass]] note calls these out by name as the intended tools — don't skip them for landing work. Then follow "Landing design system" below and reuse the vendored React Bits in `landing/src/components/reactbits/`. Verify visually with Playwright at 1440 and 390 wide. |
+| **React Bits / map-app UX feel** (glass, pill sliders, sheet + nav motion, map controls, "make it feel like Apple Maps") | `ui-craft` agent | Knows the glass system, PillSlider, sheet/nav rules and the geometry constants that move together; verifies at 390px with a throwaway preview page (and its known traps). Builds + reports; never commits. If it's unclear *which* element a description means, run `ui-navigator` first; one-line bug fixes go to `map-app-ui-fixer`. |
 | **Map work** (MapLibre layers, markers, interactions, map UI) | No dedicated skill yet — use the Playwright MCP browser tools to visually verify changes in a running `frontend` dev server, since map state is interactive and hard to judge from a diff alone | See "Map app — where things live" below for the files that matter |
 | Checking Vercel deploy status/config | Vercel MCP tools, or the `vercel:*` skills (`vercel:status`, `vercel:deploy`, `vercel:deployments-cicd`) | Both Vercel projects (frontend + landing) auto-deploy on push to `main` via GitHub — a plain `git push` is sufficient, no manual `vercel deploy` needed. See the vault's Services Overview for current wiring. |
 | Supabase schema/data questions | Supabase MCP tools (`list_tables`, `execute_sql`, `get_advisors`) | Check RLS and advisors before any schema change, per the server's own guidance. |
@@ -163,11 +164,31 @@ below before changing anything visual.
 - `overflow-x: clip` (not `hidden`) on html/body and on sections holding StarBorder,
   whose glow canvas bleeds 48px by design; `hidden` would break the sticky nav.
 
-### Map app — bottom nav
+### Map app — chrome (as of 2026-11-14)
 
-`frontend/src/components/BottomNav.tsx` is a floating, icon-only capsule. Its footprint
-is the CSS var `--nav-clear` (`index.css`) and `BOTTOM_NAV_H`/`BOTTOM_NAV_GAP`
-(`hooks/useMapInsets.ts`) — change all three together; 8 panels pad by `--nav-clear`.
+- **Top:** `TopBento.tsx` — one frosted card: suggestion row + glass category strip.
+  Greeting/weather removed for now (`useWeather` kept to re-home). No ☰ on the map.
+- **Bottom nav:** `BottomNav.tsx` — 5 cells (Explore, Ask AI, Saved, Profile, Menu);
+  Menu opens `MenuBody` in the sheet. Liquid glass, inset 27px to line up with the
+  sheet's search field. **Visible only when the sheet is at its lowest stop**, in every
+  tab; fades with the sheet (`useSheetMotion` in `MapSheet.tsx` → `--sheet-low`).
+  Every pane therefore needs a way down — `MapSheet onCollapse` (⌄) for tabs
+  without their own collapse.
+- **Sheet:** three stops (`SHEET_HIDDEN` 176px / 0.45 / 0.93). Floating card at low and
+  middle, meets the screen edges middle → full (`--sheet-full`). Frosted glass CSS on
+  `.vq-map-sheet` — not refraction (it would warp list text on a surface this big).
+- **Glass:** `lib/glass.ts` `LIQUID_GLASS` + vendored `reactbits/GlassSurface.jsx`
+  (`.d.ts` beside it). Nav, category strip, sub-category strip and map controls
+  (`GlassControl.tsx`). Never fade/filter an *ancestor* of glass; never `shadow-*` it.
+- **Pill rows:** `PillSlider.tsx` is the only horizontal pill selector (top categories
+  and every sub-category row). Restaurants, Stays and Activities (tours)
+  open on a **Top** chip: 5 listings — paid sponsors first (`featured_placements`,
+  migration 0052, slot order, labelled "Sponsored" on the card and never re-sorted),
+  then editorial rank `metadata->>'top_rank'`, then name (`backend/featured.js`). How to
+  book a sponsor / rank a listing: the 0052 header. Paid placement must stay labelled.
+- **Geometry that moves together** (the map camera pads by it): `TOP_BENTO_H`,
+  `BOTTOM_NAV_H` + `--nav-clear` + `BOTTOM_NAV_GAP`, `SHEET_HIDDEN`, the nav's 27px
+  inset. Measure in the browser after any change — borders add pixels.
 
 ## Cross-origin session hand-off (landing ↔ map app) — don't regress this
 

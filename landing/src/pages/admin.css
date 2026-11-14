@@ -1,0 +1,102 @@
+/* Owner data-entry page. Imported by the lazy Admin chunk only, so public
+   visitors never download it. Uses the landing tokens from public/styles.css.
+   Internal tool: dense, opaque, no motion. Orange stays reserved for buy
+   actions on the public site, so the primary action here is sea. */
+
+.adm-shell {
+  min-height: 100vh;
+  background: var(--pearl);
+  color: var(--text);
+  font: 15px/1.4 var(--font);
+  padding: 16px clamp(16px, 3vw, 32px) 96px;
+}
+.adm-center { display: grid; place-content: center; gap: 12px; text-align: center; color: var(--muted); }
+
+.adm-top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 16px; }
+.adm-top h1 { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0; }
+
+/* Segmented control */
+.adm-seg { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 999px; background: var(--pearl-2, #0a2230); border: 1px solid var(--hair); }
+.adm-seg button { border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.adm-seg button.is-on { background: var(--sea); color: var(--pearl); }
+
+.adm-main { display: grid; grid-template-columns: minmax(260px, 360px) 1fr; gap: 20px; align-items: start; }
+
+/* List */
+.adm-list { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; min-height: 0; }
+.adm-list-tools { display: flex; gap: 8px; }
+.adm-list-tools input { flex: 1; min-width: 0; }
+/* Category filter — mirrors the app's category row */
+.adm-catbar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.adm-catbar .adm-chip span { opacity: .6; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.adm-catbar .adm-chip.is-empty:not(.is-on) { opacity: .45; }
+
+.adm-list-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 10px 2px; }
+.adm-list ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; border: 1px solid var(--hair); border-radius: var(--r-sm); }
+.adm-list li + li { border-top: 1px solid var(--hair); }
+.adm-row { display: grid; gap: 2px; width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 10px 12px; cursor: pointer; }
+.adm-row:hover { background: var(--sea-dim); }
+.adm-row.is-on { background: var(--sea-dim); box-shadow: inset 3px 0 0 var(--sea); }
+.adm-row-name { font-weight: 600; }
+.adm-row-sub { font-size: 12px; color: var(--muted); }
+.adm-gaps { font-size: 12px; color: #F2C26B; }
+.adm-tag { font-style: normal; font-size: 11px; color: var(--faint); border: 1px solid var(--hair); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+.adm-empty { padding: 16px; color: var(--faint); }
+
+/* Editor */
+.adm-editor { border: 1px solid var(--hair); border-radius: var(--r-md); padding: 16px 20px; background: var(--pearl-2, #0a2230); }
+.adm-editor-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.adm-editor-head h2 { flex: 1; font-size: 18px; margin: 0; }
+.adm-editor-head .adm-btn:first-child { display: none; } /* Back: mobile only */
+
+.adm-cats { border: 0; padding: 0; margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-cats legend { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.adm-chip { border: 1px solid var(--hair); background: none; color: var(--muted); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.adm-chip.is-on { border-color: var(--sea); color: var(--sea); background: var(--sea-dim); }
+
+.adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
+.adm-field { display: grid; gap: 4px; align-content: start; }
+.adm-field.is-wide { grid-column: 1 / -1; }
+.adm-field label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.adm-dot { width: 6px; height: 6px; border-radius: 50%; background: #F2C26B; }
+.adm-field.is-missing input:not([type=checkbox]), .adm-field.is-missing textarea { border-color: rgba(242,194,107,.5); }
+
+.adm-shell input:not([type=checkbox]), .adm-shell textarea, .adm-shell select {
+  font: inherit; color: var(--text); background: var(--pearl); border: 1px solid var(--hair);
+  border-radius: 10px; padding: 8px 10px; width: 100%; box-sizing: border-box;
+}
+.adm-shell textarea { resize: vertical; }
+.adm-shell input:focus, .adm-shell textarea:focus, .adm-shell select:focus { outline: 2px solid var(--sea); outline-offset: -1px; }
+.adm-shell input[type=checkbox] { accent-color: var(--sea); width: 18px; height: 18px; }
+.adm-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+
+/* Schedule */
+.adm-sched { display: grid; gap: 8px; }
+.adm-sched-leg { display: grid; grid-template-columns: 1.2fr .8fr 2fr auto; gap: 6px; }
+.adm-sched-extra { display: grid; grid-template-columns: 1fr 1fr 160px; gap: 8px; margin-top: 4px; }
+.adm-sched-extra label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.adm-sched > .adm-btn { justify-self: start; }
+
+/* Buttons */
+.adm-btn { border: 1px solid var(--hair); background: none; color: var(--text); font: inherit; font-weight: 600; border-radius: 999px; padding: 7px 14px; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.adm-btn:hover { border-color: var(--sea); }
+.adm-btn-primary { background: var(--sea); border-color: var(--sea); color: var(--pearl); }
+.adm-btn:disabled { opacity: .45; cursor: default; }
+.adm-btn kbd { font: inherit; font-size: 11px; opacity: .6; margin-left: 4px; }
+
+.adm-savebar { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 20px -20px -16px; padding: 12px 20px; background: var(--pearl-2, #0a2230); border-top: 1px solid var(--hair); border-radius: 0 0 var(--r-md) var(--r-md); }
+.adm-status { font-size: 13px; color: var(--muted); }
+.adm-status.is-ok { color: var(--sea); }
+.adm-status.is-err { color: #FF8A80; }
+
+/* Phone: list OR editor, not both */
+@media (max-width: 820px) {
+  .adm-main { grid-template-columns: 1fr; }
+  .adm-list { position: static; max-height: none; }
+  .adm-main.has-editor .adm-list { display: none; }
+  .adm-editor { padding: 14px; }
+  .adm-editor-head .adm-btn:first-child { display: inline-block; }
+  .adm-savebar { margin: 20px -14px -14px; padding: 12px 14px; }
+  .adm-sched-leg, .adm-sched-extra { grid-template-columns: 1fr; }
+  .adm-top h1 { width: 100%; }
+}

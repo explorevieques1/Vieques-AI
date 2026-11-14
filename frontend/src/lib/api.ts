@@ -167,6 +167,8 @@ export async function fetchBeaches(filters: BeachFilters = {}): Promise<Beach[]>
 export type ActivityCategory = { slug: string; label: string }
 
 export type ActivityListing = {
+  /** Top lists only: a paid placement (featured_placements). Shown labelled. */
+  sponsored?: boolean
   id: string
   name: string
   description: string | null
@@ -196,6 +198,13 @@ export type ActivityListing = {
 export async function fetchActivityCategories(): Promise<ActivityCategory[]> {
   const res = await apiFetch(`/api/activity-categories`)
   if (!res.ok) throw new Error(`Activity categories failed: ${res.status}`)
+  return res.json()
+}
+
+/** The "Top" chip for activities — 5 operators, paid sponsors first. */
+export async function fetchTopActivities(): Promise<ActivityListing[]> {
+  const res = await apiFetch('/api/activities')
+  if (!res.ok) throw new Error(`Activity listings failed: ${res.status}`)
   return res.json()
 }
 
@@ -425,6 +434,8 @@ export async function fetchTransportListings(slug: string): Promise<TransportLis
 export type RestaurantCategory = { slug: string; label: string }
 
 export type RestaurantListing = {
+  /** Top lists only: a paid placement (featured_placements). Shown labelled. */
+  sponsored?: boolean
   id: string
   name: string
   description: string | null
@@ -447,6 +458,16 @@ export async function fetchRestaurantCategories(): Promise<RestaurantCategory[]>
   return res.json()
 }
 
+/**
+ * The "Top" chip — 5 restaurants, paid sponsors first, then editorial rank.
+ * Ordered server-side by `metadata.top_rank` (unranked last), then name.
+ */
+export async function fetchAllRestaurants(): Promise<RestaurantListing[]> {
+  const res = await apiFetch('/api/restaurants')
+  if (!res.ok) throw new Error(`Restaurant listings failed: ${res.status}`)
+  return res.json()
+}
+
 export async function fetchRestaurantListings(slug: string): Promise<RestaurantListing[]> {
   const res = await apiFetch(`/api/restaurants/${slug}`)
   if (!res.ok) throw new Error(`Restaurant listings failed: ${res.status}`)
@@ -458,6 +479,8 @@ export async function fetchRestaurantListings(slug: string): Promise<RestaurantL
 // ---------------------------------------------------------------------------
 
 export type StayListing = {
+  /** Top lists only: a paid placement (featured_placements). Shown labelled. */
+  sponsored?: boolean
   id: string
   name: string
   local_name: string | null
@@ -514,9 +537,17 @@ export async function fetchStayCategories(): Promise<StayCategory[]> {
  * Uses `raise` rather than a bare Error so a free-tier 402 arrives as an
  * ApiError with code 'UPGRADE_REQUIRED' and ResultsList can render the upsell.
  */
+/** `category` narrows; none = every stay (search index). Top 5 = fetchTopStays. */
 export async function fetchStays(category?: string | null): Promise<StayListing[]> {
   const qs = category ? `?category=${encodeURIComponent(category)}` : ''
   const res = await apiFetch(`/api/stays${qs}`)
+  if (!res.ok) await raise(res, 'Stays failed')
+  return res.json()
+}
+
+/** The stays "Top" chip: 5, paid sponsors first (backend/featured.js). */
+export async function fetchTopStays(): Promise<StayListing[]> {
+  const res = await apiFetch('/api/stays?top=1')
   if (!res.ok) await raise(res, 'Stays failed')
   return res.json()
 }

@@ -111,6 +111,45 @@ try {
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
   fs.writeFileSync(OUT, JSON.stringify({ exportedAt: new Date().toISOString().slice(0, 10), counts, beaches }, null, 2) + '\n')
   console.log(`wrote ${beaches.length} beaches → ${path.relative(process.cwd(), OUT)}`)
+
+  // ---- listings.json: the /getting-around, /bio-bay and /restaurants pages --
+  //  Public:   business names, category, town, cuisine, price band, and for
+  //            transport/tour operators the phone/website/hours they advertise
+  //            (a searcher for "vieques taxi" needs the number — that IS the
+  //            answer, and these are businesses listing themselves for hire).
+  //  Withheld: coordinates, photos, restaurant contact details — the map's job.
+  const cats = (t, lc, c) => `COALESCE((SELECT array_agg(c.slug ORDER BY c.sort_order) FROM ${lc} lc
+      JOIN ${c} c ON c.id = lc.category_id WHERE lc.listing_id = ${t}.id), '{}') AS cats`
+  const { rows: tr } = await pool.query(`
+    SELECT t.name, t.phones, t.hours, t.website, ${cats('t', 'transport_listing_categories', 'transport_categories')}
+    FROM transport_listings t WHERE t.is_active ORDER BY t.name`)
+  const { rows: ac } = await pool.query(`
+    SELECT a.name, a.description, a.price_info, a.website, ${cats('a', 'activity_listing_categories', 'activity_categories')}
+    FROM activity_listings a WHERE a.is_active ORDER BY a.name`)
+  const { rows: rs } = await pool.query(`
+    SELECT r.name, r.location_area, r.cuisine, r.price, ${cats('r', 'restaurant_listing_categories', 'restaurant_categories')}
+    FROM restaurant_listings r WHERE r.is_active ORDER BY r.name`)
+
+  // Placeholder seed rows (example.com) must never reach a public page.
+  const realSite = (u) => (u && !/example\.(com|org)/i.test(u) ? u : null)
+  const lines = (s) => (clean(s) ? String(s).split(/\n+/).map(clean).filter(Boolean) : [])
+  // "Isabel II" in the DB; searchers type "Isabel Segunda".
+  const town = (a) => ({ 'Isabel II': 'Isabel Segunda', Vieques: 'Elsewhere on the island' }[clean(a)] || clean(a))
+
+  const listings = {
+    transport: tr.map((t) => ({
+      name: clean(t.name), cats: t.cats, phones: t.phones || [], hours: clean(t.hours), website: realSite(t.website),
+    })),
+    bioBay: ac.filter((a) => a.cats.includes('bio-bay') && realSite(a.website)).map((a) => ({
+      name: clean(a.name), about: clean(a.description), prices: lines(a.price_info), website: realSite(a.website),
+    })),
+    restaurants: rs.map((r) => ({
+      name: clean(r.name), town: town(r.location_area), cuisine: clean(r.cuisine), price: clean(r.price), cats: r.cats,
+    })),
+  }
+  const LOUT = path.join(path.dirname(OUT), 'listings.json')
+  fs.writeFileSync(LOUT, JSON.stringify({ exportedAt: new Date().toISOString().slice(0, 10), ...listings }, null, 2) + '\n')
+  console.log(`wrote ${listings.transport.length} transport, ${listings.bioBay.length} bio bay, ${listings.restaurants.length} restaurants → ${path.relative(process.cwd(), LOUT)}`)
 } finally {
   await pool.end()
 }

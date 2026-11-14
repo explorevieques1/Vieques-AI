@@ -22,8 +22,10 @@ export default function SiteFooter() {
           <ul>
             <li><Link to="/guide">Island guide</Link></li>
             <li><Link to="/beaches">Vieques beaches</Link></li>
-            <li><a href="/#faq">Mosquito Bay timing</a></li>
-            <li><a href="/#faq">Getting to Vieques</a></li>
+            <li><Link to="/bio-bay">Bio Bay calendar</Link></li>
+            <li><Link to="/ferry">Vieques ferry</Link></li>
+            <li><Link to="/getting-around">Car rental &amp; taxis</Link></li>
+            <li><Link to="/restaurants">Restaurants</Link></li>
           </ul>
         </nav>
         <nav aria-label="Product">

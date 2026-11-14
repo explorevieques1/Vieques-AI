@@ -756,6 +756,55 @@ a.guide-row:hover svg { color: var(--sea); }
 .guide-cta .title { font-size: clamp(26px, 3.4vw, 34px); max-width: 20ch; margin: 0 auto; }
 .guide-cta .lede { margin: 14px auto 0; font-size: 16.5px; }
 .guide-cta .btn { margin-top: 26px; }
+.guide-cta-note { margin: 12px 0 0; color: var(--faint); font-size: 13.5px; }
+
+/* Cluster pages (/ferry, /getting-around, /bio-bay, /restaurants) — same
+   inset-grouped iOS idiom as the beach pages; sea for links, never orange. */
+.guide-prose-sm { font-size: 16px; color: var(--muted); margin-bottom: 14px; }
+.guide-prose-sm b { color: var(--text); font-weight: 600; }
+.guide-prose i { font-style: italic; }
+.guide-note, .guide-checked { margin: 10px 2px 0; color: var(--faint); font-size: 13.5px; line-height: 1.5; }
+.guide-checked { margin-top: 28px; }
+.guide-fact dd b { color: var(--sea); font-weight: 700; }
+
+.guide-bullets { margin: 0; padding: 0 0 0 1.15em; color: var(--muted); font-size: 16.5px; line-height: 1.6; }
+.guide-bullets li + li { margin-top: 8px; }
+.guide-bullets b { color: var(--text); font-weight: 600; }
+
+.guide-faq .guide-qa { padding: 18px 20px; }
+.guide-faq .guide-qa + .guide-qa { border-top: 1px solid var(--hair); }
+.guide-qa h3 { margin: 0 0 6px; font-size: 16.5px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); }
+.guide-qa p { margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.6; }
+
+.guide-row-top { align-items: flex-start; }
+.guide-row .guide-price { color: var(--text); font-size: 14px; }
+.guide-ext { flex-shrink: 0; color: var(--sea); font-size: 14.5px; font-weight: 600; padding: 6px 0; }
+.guide-ext:hover { text-decoration: underline; }
+.guide-tels { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.guide-tel { color: var(--sea); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 6px 0; }
+.guide-tel:hover { text-decoration: underline; }
+
+.guide-table-wrap { overflow-x: auto; }
+.guide-table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+.guide-table th, .guide-table td { text-align: left; padding: 12px 16px; white-space: nowrap; }
+.guide-table thead th { color: var(--faint); font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--hair); }
+.guide-table tbody tr + tr > * { border-top: 1px solid var(--hair); }
+.guide-table tbody th { font-weight: 600; color: var(--text); }
+.guide-table td { color: var(--muted); }
+.guide-table td.good { color: var(--sea); font-weight: 600; }
+@media (max-width: 460px) {
+  .guide-table th, .guide-table td { padding: 11px 8px; font-size: 13.5px; }
+  .guide-table th:first-child, .guide-table td:first-child { padding-left: 14px; }
+  .guide-table thead th { white-space: normal; font-size: 12px; }
+}
+
+.guide-jump { margin-bottom: 4px; }
+.guide-jump a {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--hair); color: var(--muted); font-size: 14.5px; font-weight: 600;
+}
+.guide-jump a:hover { color: var(--text); border-color: var(--sea); }
+.guide [id] { scroll-margin-top: 96px; }
 
 /* ============================================================
    Map loading screen — "pin drop"

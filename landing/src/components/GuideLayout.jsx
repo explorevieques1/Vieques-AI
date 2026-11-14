@@ -10,7 +10,7 @@ import { pageMeta, COUNTS } from '../lib/guide.js'
 // phone at the ferry dock and judged by Google on load speed; the homepage is
 // where the show is. Same palette, type and capsule buttons, so they still
 // feel like the same site.
-export default function GuideLayout({ crumbs, children }) {
+export default function GuideLayout({ crumbs, cta, children }) {
   useGuideHead()
   return (
     <>
@@ -27,7 +27,7 @@ export default function GuideLayout({ crumbs, children }) {
           </nav>
         )}
         {children}
-        <MapCta />
+        <MapCta {...cta} />
       </main>
       <SiteFooter />
     </>
@@ -36,16 +36,23 @@ export default function GuideLayout({ crumbs, children }) {
 
 // The free sample ends here: one orange action, pointing at the plans.
 // Copy says what the guide does NOT give — that's what people pay for.
-function MapCta() {
+//
+// Topic pages pass their own kicker/title/lede so the pitch matches what the
+// visitor searched for (an ad for "bio bay" should end on a bio bay reason to
+// buy, not a generic one). The button and destination never change.
+function MapCta({ kicker, title, lede } = {}) {
   return (
     <section className="guide-cta">
-      <p className="kicker">The full island, on one map</p>
-      <h2 className="title">Directions, live weather and an AI that answers in pins.</h2>
+      <p className="kicker">{kicker || 'The full island, on one map'}</p>
+      <h2 className="title">{title || 'Directions, live weather and an AI that answers in pins.'}</h2>
       <p className="lede">
-        Exact pins and routes to every beach, {COUNTS.snorkel_spots} snorkel spots,
-        {' '}{COUNTS.restaurants} restaurants, {COUNTS.activities} activities and how to get around — plus Ask AI.
+        {lede || <>
+          Exact pins and routes to every beach, {COUNTS.snorkel_spots} snorkel spots,
+          {' '}{COUNTS.restaurants} restaurants, {COUNTS.activities} activities and how to get around — plus Ask AI.
+        </>}
       </p>
       <a href="/#pricing" className="btn btn-primary btn-lg">See the map plans</a>
+      <p className="guide-cta-note">One-time payment from $7.99. Nothing renews.</p>
     </section>
   )
 }

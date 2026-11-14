@@ -15,6 +15,11 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'))
 const Terms = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Terms })))
 const Privacy = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Privacy })))
+// Owner data-entry tool — LOCAL ONLY. import.meta.env.DEV is false in
+// `vite build`, so this branch (and the whole Admin chunk) is stripped from
+// production: explorevieques.org/admin doesn't exist. The backend's routes are
+// likewise unmounted in production (backend/admin.js).
+const Admin = import.meta.env.DEV ? lazy(() => import('./pages/Admin.jsx')) : null
 const Refunds = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Refunds })))
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import { guideRoutes } from './guideRoutes.jsx'
@@ -61,6 +66,7 @@ export default function App() {
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/refunds" element={<Refunds />} />
+      {Admin && <Route path="/admin" element={<Admin />} />}
       <Route
         path="/account"
         element={
