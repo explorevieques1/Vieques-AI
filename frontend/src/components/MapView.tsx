@@ -1450,17 +1450,28 @@ function MapView({
       )}
 
       {/* Zoom / recentre.
-          Mobile tracks `insets.bottom` rather than the raw sheet height: that
-          value is already clamped to 55% of the viewport AND floored at the
-          bottom nav, so the buttons follow the sheet without sliding off the top
-          of the screen at the full snap or hiding behind the nav at the lowest
-          one. (§4 — "reposition dynamically when the panel changes height".) */}
+          Mobile: pinned 12px above the sheet's measured top (`--controls-y`,
+          written every frame by MapSheet's useSheetMotion), so the buttons ride
+          the sheet through a drag and are never under it. They stop at the
+          middle stop; going full, the sheet slides over them (z-50 vs z-10).
+          This used to be `insets.bottom`, computed from the snap and
+          innerHeight — on iPhone that drifted ~40px from where vaul really put
+          the sheet and the recentre button sat under it (2026-11-14).
+          No opacity/filter on this wrapper: it is an ancestor of glass. */}
       <div
-        className="absolute z-10 flex flex-col gap-2"
-        style={{
-          bottom: isMobile ? `calc(${insets.bottom}px + 0.75rem)` : '1.25rem',
-          right: !isMobile && detailOpen ? `${DETAIL_PANEL_W + 40}px` : '1.25rem',
-        }}
+        className={`${isMobile ? 'fixed' : 'absolute'} z-10 flex flex-col gap-2`}
+        style={
+          isMobile
+            ? {
+                top: 'var(--controls-y, calc(100dvh - 176px))',
+                transform: 'translateY(calc(-100% - 0.75rem))',
+                right: '1.25rem',
+              }
+            : {
+                bottom: '1.25rem',
+                right: detailOpen ? `${DETAIL_PANEL_W + 40}px` : '1.25rem',
+              }
+        }
       >
         {/* Map Modes. Sits directly above the zoom stack, where native Maps puts
             its 3D button — the basemap is a property of the view, so its control

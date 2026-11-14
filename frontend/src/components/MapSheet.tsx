@@ -102,6 +102,8 @@ const NAV_FADE_PX = 90
  * and the nav vanished with the sheet at rest at its lowest stop (2026-11-14).
  */
 let lowRestTop: number | null = null
+/** Same, for the middle stop — where the map controls stop riding upward. */
+let midRestTop: number | null = null
 
 function useSheetMotion(snap: string | number | null) {
   useEffect(() => {
@@ -121,12 +123,17 @@ function useSheetMotion(snap: string | number | null) {
       lastY = y
       const h = window.innerHeight
       const lowTop = lowRestTop ?? h - parseFloat(SHEET_HIDDEN)
-      const midTop = h - SHEET_PREVIEW * h
+      const midTop = midRestTop ?? h - SHEET_PREVIEW * h
       const fullTop = h - SHEET_FULL * h
       const low = Math.min(1, Math.max(0, (lowTop - y) / NAV_FADE_PX))
       const full = Math.min(1, Math.max(0, (midTop - y) / (midTop - fullTop)))
       root.style.setProperty('--sheet-low', low.toFixed(3))
       root.style.setProperty('--sheet-full', full.toFixed(3))
+      // The map controls ride the sheet's REAL top (viewport px, the same space
+      // as position:fixed), stopping at the middle stop so the full sheet slides
+      // over them rather than pushing them under the top bento. Measured, not
+      // computed from innerHeight — that drifts on iPhone (see lowRestTop).
+      root.style.setProperty('--controls-y', `${Math.max(y, midTop).toFixed(1)}px`)
       // Past halfway faded, the nav stops taking taps and drops out of the
       // tab order (see .vq-bottom-nav in index.css).
       root.toggleAttribute('data-nav-hidden', low > 0.5)
@@ -139,6 +146,7 @@ function useSheetMotion(snap: string | number | null) {
      * moves; at rest, "lowest stop ⇒ nav shown" holds whatever the viewport did.
      */
     const settle = (el: HTMLElement) => {
+      if (snap === SHEET_PREVIEW) midRestTop = el.getBoundingClientRect().top
       if (snap === SHEET_HIDDEN) {
         lowRestTop = el.getBoundingClientRect().top
         root.style.setProperty('--sheet-low', '0')
@@ -191,6 +199,7 @@ function useSheetMotion(snap: string | number | null) {
     // toolbar collapse/expand on visualViewport, not always on window.
     const onViewport = () => {
       lowRestTop = null
+      midRestTop = null
       kick()
     }
     window.addEventListener('resize', onViewport)
@@ -211,6 +220,7 @@ function useSheetMotion(snap: string | number | null) {
       const root = document.documentElement
       root.style.removeProperty('--sheet-low')
       root.style.removeProperty('--sheet-full')
+      root.style.removeProperty('--controls-y')
       root.removeAttribute('data-nav-hidden')
     },
     [],
