@@ -91,6 +91,18 @@ function MapSheet({ title, snap, onSnapChange, onCollapse, children }: Props) {
  */
 const NAV_FADE_PX = 90
 
+/**
+ * Where the sheet's top actually rests at the lowest stop, measured — not
+ * computed. Module-level so it survives the effect re-running on every snap.
+ *
+ * Why measured: the pixel maths below derives the lowest stop from
+ * `window.innerHeight`, and on iPhone Safari that number changes as the
+ * toolbar collapses/expands while vaul keeps the sheet where it put it. The
+ * two drifted ~46px apart after a few minutes of use — past the halfway fade —
+ * and the nav vanished with the sheet at rest at its lowest stop (2026-11-14).
+ */
+let lowRestTop: number | null = null
+
 function useSheetMotion(snap: string | number | null) {
   useEffect(() => {
     const root = document.documentElement
@@ -108,7 +120,7 @@ function useSheetMotion(snap: string | number | null) {
       if (y === lastY) return false
       lastY = y
       const h = window.innerHeight
-      const lowTop = h - parseFloat(SHEET_HIDDEN)
+      const lowTop = lowRestTop ?? h - parseFloat(SHEET_HIDDEN)
       const midTop = h - SHEET_PREVIEW * h
       const fullTop = h - SHEET_FULL * h
       const low = Math.min(1, Math.max(0, (lowTop - y) / NAV_FADE_PX))
@@ -121,6 +133,22 @@ function useSheetMotion(snap: string | number | null) {
       return true
     }
 
+    /**
+     * The sheet has stopped: the nav's state comes from the stop vaul says it
+     * is at, never from pixels. Measurement only drives the fade WHILE the sheet
+     * moves; at rest, "lowest stop ⇒ nav shown" holds whatever the viewport did.
+     */
+    const settle = (el: HTMLElement) => {
+      if (snap === SHEET_HIDDEN) {
+        lowRestTop = el.getBoundingClientRect().top
+        root.style.setProperty('--sheet-low', '0')
+        root.removeAttribute('data-nav-hidden')
+      } else if (snap != null) {
+        root.style.setProperty('--sheet-low', '1')
+        root.setAttribute('data-nav-hidden', '')
+      }
+    }
+
     const tick = () => {
       const el = document.querySelector<HTMLElement>('.vq-map-sheet')
       if (!el) {
@@ -128,7 +156,12 @@ function useSheetMotion(snap: string | number | null) {
         return
       }
       still = publish(el) ? 0 : still + 1
-      frame = held || still < 20 ? requestAnimationFrame(tick) : 0
+      if (held || still < 20) {
+        frame = requestAnimationFrame(tick)
+      } else {
+        frame = 0
+        settle(el)
+      }
     }
     const kick = () => {
       still = 0
@@ -154,13 +187,21 @@ function useSheetMotion(snap: string | number | null) {
     document.addEventListener('pointerdown', onDown, opts)
     document.addEventListener('touchstart', onDown, opts)
     up.forEach((t) => document.addEventListener(t, onUp, opts))
-    window.addEventListener('resize', kick)
+    // A viewport change re-measures the resting spot from scratch. iOS reports
+    // toolbar collapse/expand on visualViewport, not always on window.
+    const onViewport = () => {
+      lowRestTop = null
+      kick()
+    }
+    window.addEventListener('resize', onViewport)
+    window.visualViewport?.addEventListener('resize', onViewport)
     return () => {
       cancelAnimationFrame(frame)
       document.removeEventListener('pointerdown', onDown, opts)
       document.removeEventListener('touchstart', onDown, opts)
       up.forEach((t) => document.removeEventListener(t, onUp, opts))
-      window.removeEventListener('resize', kick)
+      window.removeEventListener('resize', onViewport)
+      window.visualViewport?.removeEventListener('resize', onViewport)
     }
   }, [snap])
 
