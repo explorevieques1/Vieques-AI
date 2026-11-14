@@ -28,7 +28,9 @@ html, body, #root {
      scrolls under the nav pads by this so its last row clears the capsule.
      Keep in step with BOTTOM_NAV_H / BOTTOM_NAV_GAP in hooks/useMapInsets.ts. */
   --nav-offset: max(0.75rem, var(--sab));
-  --nav-clear: calc(4rem + var(--nav-offset));
+  /* Shrinks to 0 as the nav fades out (MapSheet's --sheet-low), so lists at
+     the middle and full stops don't end in a nav-sized blank gap. */
+  --nav-clear: calc((4rem + var(--nav-offset)) * (1 - var(--sheet-low, 0)));
 }
 
 @theme inline {
@@ -433,4 +435,39 @@ html, body, #root {
    matching the 35% dark tint Chromium gets. */
 .vq-nav-glass.glass-surface--fallback {
   background: oklch(0.17 0.028 258 / 0.5);
+}
+
+/* ---- Map sheet: Apple Maps-style morph (MapSheet.tsx → useSheetMotion) ----
+   --sheet-full is 0 at the lowest and middle stops and 1 at full, tracked
+   every frame of a drag. A floating card (side gap, big corners) that meets
+   the screen edges as it is pulled to full. Side gap and radius only — never
+   a bottom offset: the snap value is the sheet's visible height and the map
+   camera pads by it (see MapSheet / ResponsivePanel). Unlayered, so it beats
+   the drawer's `inset-x-0 rounded-t-3xl` utilities. */
+.vq-map-sheet {
+  left: calc(10px * (1 - var(--sheet-full, 0)));
+  right: calc(10px * (1 - var(--sheet-full, 0)));
+  border-top-left-radius: calc(14px + 18px * (1 - var(--sheet-full, 0)));
+  border-top-right-radius: calc(14px + 18px * (1 - var(--sheet-full, 0)));
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.35);
+}
+
+/* ---- Bottom nav: only at the lowest stop ----
+   Opacity on the GLASS ELEMENT ITSELF, never on <nav> or another ancestor:
+   an ancestor with opacity < 1 becomes the backdrop root and the glass would
+   go clear mid-fade (see BottomNav). Follows --sheet-low, so it fades with
+   the finger and with vaul's glide; the short transition only smooths
+   frame-to-frame steps. */
+.vq-bottom-nav .vq-nav-glass {
+  opacity: calc(1 - var(--sheet-low, 0));
+  transition: opacity 120ms linear;
+}
+.vq-bottom-nav {
+  transition: visibility 0s linear 0s;
+}
+html[data-nav-hidden] .vq-bottom-nav {
+  pointer-events: none !important;
+  visibility: hidden;
+  /* Hide only after the fade has had time to finish. */
+  transition: visibility 0s linear 160ms;
 }

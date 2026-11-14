@@ -61,6 +61,11 @@ const ITEMS: { mode: ShellMode; label: string; Icon: typeof Compass }[] = [
  * `color-scheme: dark` pins its light-dark() colours to the dark side; the app
  * is dark-only but never declares a colour scheme.
  *
+ * ONLY AT THE LOWEST STOP: the nav fades out as the sheet rises off its floor
+ * and back in as it returns (MapSheet's useSheetMotion + .vq-bottom-nav in
+ * index.css). So once a pin is open or a list is up, leaving it means pulling
+ * the sheet down — same as Apple Maps.
+ *
  * Tapping the cell you are already on collapses the sheet — "I picked this,
  * now let me see the map" is the same gesture as the map-drag collapse.
  */
@@ -71,7 +76,7 @@ export default function BottomNav({ mode, onChange, accent, showCreditDot }: Pro
     // published as --nav-clear (index.css) for the panels that scroll under it.
     <nav
       aria-label="Main"
-      className="pointer-events-auto fixed z-[60]"
+      className="vq-bottom-nav pointer-events-auto fixed z-[60]"
       style={{
         touchAction: 'manipulation',
         left: 'max(0.75rem, env(safe-area-inset-left))',
