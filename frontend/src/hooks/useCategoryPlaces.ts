@@ -42,6 +42,43 @@ import {
 export type Subcategory = { slug: string; label: string }
 
 /**
+ * Beach chips — values of `beaches.type`, picked for having 3+ beaches each
+ * (swimming 8, secluded 6, snorkeling 6, family 5, scenic 5, hiking 3 as of
+ * 2026-11-14). Singletons (surfing, camping…) would be a chip per beach.
+ */
+const BEACH_SUBCATEGORIES: Subcategory[] = [
+  { slug: 'swimming', label: 'Swimming' },
+  { slug: 'snorkeling', label: 'Snorkeling' },
+  { slug: 'family', label: 'Family' },
+  { slug: 'secluded', label: 'Secluded' },
+  { slug: 'scenic', label: 'Scenic' },
+  { slug: 'hiking', label: 'Hike-in' },
+]
+
+/**
+ * The beaches "Top" chip, in order. Editorial — beaches have no rank column.
+ * Matched on the exact `beaches.name`; any name that stops matching is
+ * skipped and the 5 are topped up alphabetically, so a rename never empties it.
+ */
+const TOP_BEACHES = [
+  'Playa Caracas (Red Beach)',
+  'Playa La Chiva (Blue Beach)',
+  'Sun Bay (Balneario Sombe)',
+  'Playa Navio',
+  'Playa Negra',
+]
+
+function topBeaches(all: Place[]): Place[] {
+  const picked = TOP_BEACHES.map((n) => all.find((p) => p.name === n)).filter(
+    (p): p is Place => p != null,
+  )
+  const rest = all
+    .filter((p) => !picked.includes(p))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return [...picked, ...rest].slice(0, 5)
+}
+
+/**
  * Activity subcategories backed by their own spots+zones dataset and gated at
  * Vacation tier. Kept as a set so the `locked` check and the fetch branches
  * below cannot drift apart — adding a third water activity means adding its
@@ -59,6 +96,12 @@ type Result = {
   loading: boolean
   /** Set when snorkelling was requested without the entitlement for it. */
   locked: boolean
+  /**
+   * The sub-category actually shown: the user's pick, or — for categories that
+   * gate on a pick (services, transportation, essentials) — the first chip, so
+   * the panel never opens empty. Highlight THIS, not the raw pick.
+   */
+  activeSub: string | null
   /**
    * Whatever made the panel empty, if anything.
    *
@@ -82,7 +125,7 @@ type Result = {
  */
 export function useCategoryPlaces(
   category: CategorySlug | null,
-  subSlug: string | null,
+  pickedSub: string | null,
   /**
    * Vacation-tier water content — snorkelling AND kayaking (PRICING.md §4).
    * Skip the fetch without it so a free-tier user gets the upsell rather than a
@@ -111,9 +154,8 @@ export function useCategoryPlaces(
   /**
    * Server-side beach filters.
    *
-   * Unused by the UI since the filter chips became client-side and category-wide
-   * (lib/filters.ts) — beach type, water and facilities are all in `Place.tags`
-   * now, so they filter in memory like every other category. Kept because
+   * Unused by the UI — beaches narrow by type with the glass chip row
+   * (BEACH_SUBCATEGORIES, filtered in memory). Kept because
    * /api/beaches still implements them and its `facilities` matching is an
    * array-overlap + ILIKE query no client pass can reproduce over trimmed
    * free-tier columns; a future "filter on the server for big result sets" path
@@ -138,6 +180,11 @@ export function useCategoryPlaces(
 
   const subFresh = category != null && subCache?.category === category
   const subcategories = subFresh ? subCache!.rows : []
+  // Derived, not set from an effect: no extra render, and the default's fetch
+  // starts on the same render the chips arrive.
+  const subSlug =
+    pickedSub ??
+    (category && categoryMeta(category).hasSubcategories ? (subcategories[0]?.slug ?? null) : null)
 
   // Entitlement is known synchronously, so this is derived rather than state.
   const locked =
@@ -170,6 +217,7 @@ export function useCategoryPlaces(
     if (!meta.hasSubcategories && !meta.optionalSubcategories) return
     let cancelled = false
     const load = {
+      beaches: async () => BEACH_SUBCATEGORIES,
       restaurants: fetchRestaurantCategories,
       activities: fetchActivityCategories,
       services: fetchServiceCategories,
@@ -213,7 +261,16 @@ export function useCategoryPlaces(
 
     switch (category) {
       case 'beaches':
-        fetchBeaches(beachFilters).then((rows) => finish(rows.map(beachToPlace)), fail)
+        // One request for every beach; the chip narrows it here (type values
+        // are case-inconsistent in the data — 'Camping' — so compare lowered).
+        fetchBeaches(beachFilters).then((rows) => {
+          const all = rows.map(beachToPlace)
+          finish(
+            subSlug
+              ? all.filter((p) => p.tags.some((t) => t.toLowerCase() === subSlug))
+              : topBeaches(all),
+          )
+        }, fail)
         break
 
       // No sub picked = the "Top" chip: the top 5 restaurants, sponsors first (backend/featured.js).
@@ -331,5 +388,5 @@ export function useCategoryPlaces(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, shouldFetch])
 
-  return { places, subcategories, loading, locked, error }
+  return { places, subcategories, loading, locked, error, activeSub: subSlug }
 }

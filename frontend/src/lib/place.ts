@@ -184,7 +184,17 @@ export type CategoryMeta = {
 }
 
 export const CATEGORIES: CategoryMeta[] = [
-  { slug: 'beaches', label: 'Beaches', icon: Umbrella, color: '#06b6d4', hasSubcategories: false },
+  {
+    slug: 'beaches',
+    label: 'Beaches',
+    icon: Umbrella,
+    color: '#06b6d4',
+    // All beaches load in one request; the chips (beach types) narrow it
+    // client-side and "Top" is an editorial 5 (TOP_BEACHES in useCategoryPlaces).
+    hasSubcategories: false,
+    optionalSubcategories: true,
+    allChip: { label: 'Top', icon: Star },
+  },
   {
     slug: 'restaurants',
     label: 'Restaurants',
@@ -319,12 +329,9 @@ export function beachToPlace(b: Beach): Place {
     longitude: b.longitude,
     // Type first, then water, then normalised facilities. Order matters twice
     // over: PlaceCard shows only the first three, so a card still reads
-    // "swimming · snorkeling · family" rather than leading with a restroom — and
-    // this field is also what the filter chips are derived from
-    // (lib/filters.ts), which is why water and facilities are here at all rather
-    // than only in `stats` below. The beach filters used to be a hardcoded
-    // popover posting them to /api/beaches; now every category filters the same
-    // way, off this field.
+    // "swimming · snorkeling · family" rather than leading with a restroom. The
+    // beach chips (BEACH_SUBCATEGORIES in useCategoryPlaces) match on the type
+    // values here, lowercased.
     tags: [
       ...(b.type ?? []),
       ...(b.water_conditions ? [b.water_conditions] : []),

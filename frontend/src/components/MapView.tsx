@@ -19,7 +19,6 @@ import {
   type Place,
 } from '../lib/place'
 import { milesBetween } from '../lib/geo'
-import { deriveFilters, matchesFilters } from '../lib/filters'
 import { makeMarkerEl, makeUserDotEl } from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
@@ -50,7 +49,6 @@ import { useEntitlement, useFeature } from '../lib/entitlement'
 import AddToTripSheet from './AddToTripSheet'
 import AiChatBody from './AiChatBody'
 import BottomNav from './BottomNav'
-import FilterRow from './FilterRow'
 import TopBento from './TopBento'
 import { GlassButton, GlassStack } from './GlassControl'
 import MapSearchBar from './MapSearchBar'
@@ -195,14 +193,12 @@ function MapView({
   const [subSlug, setSubSlug] = useState<string | null>(null)
   const [selected, setSelected] = useState<Place | null>(null)
   /**
-   * Client-side filter chips, derived from the loaded result set (lib/filters.ts).
-   *
-   * All seven categories filter this way, beaches included: their type, water and
-   * facilities are all in `Place.tags`, so the same code that filters restaurants
-   * by cuisine filters beaches by "has a restroom". Free, because the whole
-   * category is already in memory.
+   * The place a search hit opened, kept in the loaded set even when the list
+   * it lands in is a "Top" 5 that doesn't contain it (a beach or stay ranked
+   * 6th+). Without this the camera flies to a place with no pin and no row.
+   * Cleared by any category or chip pick — those ask for a different list.
    */
-  const [tagFilters, setTagFilters] = useState<Set<string>>(() => new Set())
+  const [hitPlace, setHitPlace] = useState<Place | null>(null)
   const [sort, setSort] = useState<SortKey>('nearest')
   const [tourFilter, setTourFilter] = useState<'all' | 'tours'>('all')
   /** Zone legend for whichever water activity is selected — snorkel or kayak. */
@@ -239,7 +235,7 @@ function MapView({
   const part = daypart()
   const { suggestion, loading: loadingSuggestion, next: nextSuggestion } = useSuggestion(part)
 
-  const { places: rawPlaces, subcategories, loading, locked, error } = useCategoryPlaces(
+  const { places: rawPlaces, subcategories, loading, locked, error, activeSub } = useCategoryPlaces(
     category,
     subSlug,
     canWaterZones,
@@ -254,8 +250,10 @@ function MapView({
    */
   const islandSearch = useIslandSearch()
 
-  const snorkelling = category === 'activities' && subSlug === 'snorkeling'
-  const kayaking = category === 'activities' && subSlug === 'kayaking'
+  // `activeSub` (what the hook actually fetched), not the raw pick — one
+  // source of truth if a category ever gains a default pick.
+  const snorkelling = category === 'activities' && activeSub === 'snorkeling'
+  const kayaking = category === 'activities' && activeSub === 'kayaking'
   /**
    * The two activities that are a spots-plus-zones dataset *and* have tour
    * companies in the directory — so both get the "Go Yourself / Book a Tour"
@@ -284,9 +282,15 @@ function MapView({
     // rows arrive they are already the right kind. Filtering on `offers_tours`
     // at this layer was what made "Book a Tour" show snorkel spots: it could
     // only ever narrow the spot list, never reach the companies.
-    let list = rawPlaces
-    if (tagFilters.size > 0) list = list.filter((p) => matchesFilters(p, tagFilters))
-    const sorted = [...list]
+    const sorted =
+      // Only while its panel is open: back/close returns to a true Top 5.
+      hitPlace &&
+      selected?.id === hitPlace.id &&
+      !loading &&
+      !error &&
+      !rawPlaces.some((p) => p.id === hitPlace.id)
+        ? [...rawPlaces, hitPlace]
+        : [...rawPlaces]
     sorted.sort((a, b) => {
       // Paid "Top" placements stay first, in the slot order the server sent
       // (Array.sort is stable, so equal keys keep that order). Re-sorting a
@@ -301,20 +305,7 @@ function MapView({
       return da - db
     })
     return sorted
-  }, [rawPlaces, tagFilters, sort, distances])
-
-  /**
-   * Chips for the current category, counted over the *unfiltered* list.
-   *
-   * `rawPlaces`, not `places`: counting over the filtered list would make every
-   * chip read "1" the moment one was active, and chips for values the remaining
-   * results happen not to have would vanish — so you could never widen back out
-   * without clearing everything.
-   */
-  const filterChips = useMemo(
-    () => (category ? deriveFilters(category, rawPlaces, tagFilters) : []),
-    [category, rawPlaces, tagFilters],
-  )
+  }, [rawPlaces, hitPlace, selected, loading, error, sort, distances])
 
   // Collapsed counts as closed for the camera: the map really does have that
   // width back, and padding for a panel that isn't there parks pins off-centre.
@@ -597,6 +588,7 @@ function MapView({
     (slug: CategorySlug | null) => {
       setCategory(slug)
       setSubSlug(null)
+      setHitPlace(null)
       setSelected(null)
       // Tapping the category you are already in toggles the sheet rather than
       // reloading the same list — a second tap on "Beaches" means "show me the
@@ -613,9 +605,6 @@ function MapView({
       setResultsCollapsed(false)
       setTourFilter('all')
       setZoneLegend([])
-      // Chips are derived per category, so any carried over would filter on a
-      // tag the new list has never heard of and show an empty panel.
-      setTagFilters(new Set())
       const map = mapRef.current
       if (map) {
         removeAllZones(map)
@@ -643,10 +632,7 @@ function MapView({
     (hit: SearchHit) => {
       setCategory(hit.category)
       setSubSlug(hit.sub)
-      // Chips are derived per category, so any left from the previous one
-      // would filter on tags this list has never heard of — and could hide the
-      // very place the user just picked.
-      setTagFilters(new Set())
+      setHitPlace(hit.place)
       setTourFilter('all')
       setResultsCollapsed(false)
       setZoneLegend([])
@@ -662,18 +648,6 @@ function MapView({
     },
     [onModeChange, selectPlace],
   )
-
-  /** A chip tap must not leave the user staring at a sheet they cannot see. */
-  const toggleTagFilter = useCallback((key: string) => {
-    setTagFilters((cur) => {
-      const next = new Set(cur)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-    setSelected(null)
-    setSnap((cur) => (cur === SHEET_HIDDEN ? SHEET_PREVIEW : cur))
-  }, [])
 
   /**
    * Drop a suggestion on the map as its own pin.
@@ -845,7 +819,7 @@ function MapView({
     const map = mapRef.current
     if (!map || (aiPins && aiPins.length > 0)) return
     const mappable = places.filter(isMappable)
-    const key = `${category}:${subSlug}:${mappable.map((p) => p.id).join(',')}`
+    const key = `${category}:${activeSub}:${mappable.map((p) => p.id).join(',')}`
     if (key === framedKey.current) return
     framedKey.current = key
     if (mappable.length === 0) return
@@ -857,7 +831,7 @@ function MapView({
       else bounds.extend([p.longitude, p.latitude])
     })
     map.fitBounds(bounds, { padding: padding(), maxZoom: 14 })
-  }, [places, category, subSlug, aiPins, padding])
+  }, [places, category, activeSub, aiPins, padding])
 
   // Re-centre when the chrome moves: a panel opens/closes, or the mobile sheet
   // snaps to a new height. This single effect is the whole "swipe down and the
@@ -1177,9 +1151,10 @@ function MapView({
       selectedId={selected?.id ?? null}
       onSelect={selectPlace}
       subcategories={subcategories}
-      activeSub={subSlug}
+      activeSub={activeSub}
       onSelectSub={(s) => {
         setSubSlug(s)
+        setHitPlace(null)
         clearSelection()
       }}
       sort={sort}
@@ -1196,25 +1171,22 @@ function MapView({
     />
   )
 
-  /** The filter chips + search field that sit above the results in both layouts. */
+  /**
+   * The search field above the results in both layouts. Order below it is
+   * search → glass sub-category slider → count + sort → list (ResultsList).
+   * The old tag-chip row (FilterRow, lib/filters.ts) sat between search and the
+   * slider — two pill rows doing overlapping jobs — and was removed 2026-11-14.
+   * With a category open the category's accent hairline is the divider, so the
+   * border only shows when there is no list underneath.
+   */
   const exploreHeader = (
-    <>
-      <div
-        className={`shrink-0 px-4 pb-3 pt-1 sm:p-4 ${
-          sheetCollapsed ? '' : 'border-b border-white/8'
-        }`}
-      >
-        {searchBar}
-      </div>
-      {category && !sheetCollapsed && (
-        <FilterRow
-          chips={filterChips}
-          onToggle={toggleTagFilter}
-          onClear={() => setTagFilters(new Set())}
-          accent={accent}
-        />
-      )}
-    </>
+    <div
+      className={`shrink-0 px-4 pb-3 pt-1 sm:p-4 ${
+        sheetCollapsed || category ? '' : 'border-b border-white/8'
+      }`}
+    >
+      {searchBar}
+    </div>
   )
 
   /**

@@ -88,7 +88,41 @@ function ResultsList({
         style={{ background: `linear-gradient(to right, ${meta.color}, transparent)` }}
         aria-hidden="true"
       />
-      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
+      {/* Order under the search bar: slider → count + sort → list, so the
+          control you use most sits closest to your thumb and the count reads
+          as the caption of the list it counts.
+
+          Sub-category slider — the same glass strip + PillSlider as the top
+          bento's category row, so every pill row in the app scrolls and looks
+          the same. Replaced plain chips over a visible scrollbar; PillSlider's
+          edge fades and wheel-to-horizontal scrolling keep the overflowed
+          pills findable and reachable without one. Accent = the category's
+          colour, matching its pins and the top pill. */}
+      {subcategories.length > 0 && (
+        <div className="shrink-0 px-4 pt-3">
+          <GlassSurface {...LIQUID_GLASS} width="100%" height={44} borderRadius={16} className="vq-glass vq-glass--flush">
+            <div className="flex h-full w-full items-center px-1.5">
+              <PillSlider
+                label={`${meta.label} types`}
+                accent={meta.color}
+                active={activeSub}
+                onSelect={onSelectSub}
+                items={[
+                  // Where chips only narrow a loaded list (stays, restaurants),
+                  // "no sub" is a real state the user starts in — it gets the
+                  // first pill. Categories that gate on a pick have no such state.
+                  ...(meta.optionalSubcategories
+                    ? [{ key: null, label: meta.allChip?.label ?? 'All', icon: meta.allChip?.icon }]
+                    : []),
+                  ...subcategories.map((sc) => ({ key: sc.slug, label: sc.label })),
+                ]}
+              />
+            </div>
+          </GlassSurface>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2.5">
         <div
           className="font-mono text-[10px] uppercase tracking-[0.16em]"
           style={{ color: meta.color }}
@@ -129,36 +163,6 @@ function ResultsList({
           )}
         </div>
       </div>
-
-      {/* Sub-category slider — the same glass strip + PillSlider as the top
-          bento's category row, so every pill row in the app scrolls and looks
-          the same. Replaced plain chips over a visible scrollbar; PillSlider's
-          edge fades and wheel-to-horizontal scrolling keep the overflowed
-          pills findable and reachable without one. Accent = the category's
-          colour, matching its pins and the top pill. */}
-      {subcategories.length > 0 && (
-        <div className="shrink-0 px-4 pb-3">
-          <GlassSurface {...LIQUID_GLASS} width="100%" height={44} borderRadius={16} className="vq-glass vq-glass--flush">
-            <div className="flex h-full w-full items-center px-1.5">
-              <PillSlider
-                label={`${meta.label} types`}
-                accent={meta.color}
-                active={activeSub}
-                onSelect={onSelectSub}
-                items={[
-                  // Where chips only narrow a loaded list (stays, restaurants),
-                  // "no sub" is a real state the user starts in — it gets the
-                  // first pill. Categories that gate on a pick have no such state.
-                  ...(meta.optionalSubcategories
-                    ? [{ key: null, label: meta.allChip?.label ?? 'All', icon: meta.allChip?.icon }]
-                    : []),
-                  ...subcategories.map((sc) => ({ key: sc.slug, label: sc.label })),
-                ]}
-              />
-            </div>
-          </GlassSurface>
-        </div>
-      )}
 
       {banner && <div className="shrink-0 px-4 pb-3">{banner}</div>}
 
