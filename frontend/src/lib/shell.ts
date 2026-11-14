@@ -1,5 +1,5 @@
 /**
- * Which of the four things the app is doing right now.
+ * Which of the five things the app is doing right now.
  *
  * On a phone these are not separate screens — they are what the one bottom
  * sheet is currently showing, driven by the bottom nav. That is the whole point
@@ -10,5 +10,9 @@
  * Directions is deliberately NOT here. It is a task you start and finish, not a
  * place you are, so it stays a hamburger overlay that can sit on top of any
  * mode.
+ *
+ * 'menu' is phone-only: the ☰ list (Home, Build Itinerary, Directions, Buy
+ * Credits, Log Out) shown in the sheet. Desktop keeps the dropdown in MapTopBar
+ * and never enters this mode.
  */
-export type ShellMode = 'explore' | 'ai' | 'saved' | 'profile'
+export type ShellMode = 'explore' | 'ai' | 'saved' | 'profile' | 'menu'

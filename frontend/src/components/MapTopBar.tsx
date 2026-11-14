@@ -192,10 +192,9 @@ function MapTopBar({
     </DropdownMenu>
   )
 
-  // Phone: no banner. MapView renders <MapTopBar> inside its own chrome stack,
-  // below the category row, and owns the positioning — all this contributes is
-  // the trigger, at the right gutter opposite the map controls.
-  if (isMobile) return <div className="flex w-full justify-end px-3">{menu}</div>
+  // Phone: nothing. The menu is the Menu cell in the bottom nav, which opens
+  // MenuBody in the sheet — keep its items in step with the dropdown above.
+  if (isMobile) return null
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 pad-safe-top pad-safe-x">

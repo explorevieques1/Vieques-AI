@@ -1,6 +1,7 @@
-import { Compass, Heart, Sparkles, User } from 'lucide-react'
+import { Compass, Heart, Menu, Sparkles, User } from 'lucide-react'
 
 import type { ShellMode } from '../lib/shell'
+import GlassSurface from './reactbits/GlassSurface'
 
 type Props = {
   mode: ShellMode
@@ -16,10 +17,13 @@ const ITEMS: { mode: ShellMode; label: string; Icon: typeof Compass }[] = [
   { mode: 'ai', label: 'Ask AI', Icon: Sparkles },
   { mode: 'saved', label: 'Saved', Icon: Heart },
   { mode: 'profile', label: 'Profile', Icon: User },
+  // Far right: the ☰ list in the sheet (MenuBody). Replaced the floating ☰
+  // button that used to sit on the map under the category row.
+  { mode: 'menu', label: 'Menu', Icon: Menu },
 ]
 
 /**
- * The four things the app does, and the only way to switch between them on a
+ * The five things the app does, and the only way to switch between them on a
  * phone. Each one swaps what the map sheet is showing rather than navigating —
  * see lib/shell.ts.
  *
@@ -37,6 +41,25 @@ const ITEMS: { mode: ShellMode; label: string; Icon: typeof Compass }[] = [
  *    opt back in is dead to touch.
  *  - `touch-action: manipulation` suppresses the double-tap-to-zoom delay. Without
  *    it a quick double tap on a nav cell reaches the map underneath as a zoom.
+ *
+ * LIQUID GLASS (React Bits GlassSurface)
+ * ------------------------------------
+ * The capsule is see-through so the results list and map stay readable under
+ * it — panels already scroll beneath it (they pad by --nav-clear). How it
+ * renders depends on the browser, by the component's own design:
+ *  - Chromium (Android, desktop Chrome): real refraction via an SVG backdrop
+ *    filter, plus a 35% dark tint so the grey icons hold contrast when a bright
+ *    thumbnail or map tile passes under them.
+ *  - Safari / iOS and Firefox: SVG backdrop filters are unsupported there, and
+ *    the WebGL path needs a `backdrop` element to sample — the MapLibre canvas
+ *    can't be (preserveDrawingBuffer is off), so these get the frosted
+ *    fallback: 12px blur, sheen and rim. That is what most iPhones will see.
+ * Do NOT put `filter`, `opacity < 1` or `will-change` on an ancestor: any of
+ * them makes that ancestor the backdrop root, and the glass would then refract
+ * nothing (a transparent pill). Nor a Tailwind `shadow-*` on the surface —
+ * it would replace the component's inset rim shadows.
+ * `color-scheme: dark` pins its light-dark() colours to the dark side; the app
+ * is dark-only but never declares a colour scheme.
  *
  * Tapping the cell you are already on collapses the sheet — "I picked this,
  * now let me see the map" is the same gesture as the map-drag collapse.
@@ -56,10 +79,26 @@ export default function BottomNav({ mode, onChange, accent, showCreditDot }: Pro
         bottom: 'var(--nav-offset)',
       }}
     >
-      <div
-        className="glass mx-auto grid h-16 max-w-md grid-cols-4 gap-1 rounded-full p-1.5
-                   shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+      <GlassSurface
+        width="100%"
+        height={64}
+        borderRadius={32}
+        backgroundOpacity={0.35}
+        // Tuned for TEXT underneath, not the React Bits demo's photo: the
+        // default per-channel offsets (0/10/20) split list text into RGB
+        // fringes and put a rainbow on the curved ends. One shared offset =
+        // no colour split; a gentler bend; displace 2 = a light blur so the
+        // rows read as "content under glass", not garbled glyphs.
+        distortionScale={-70}
+        redOffset={0}
+        greenOffset={0}
+        blueOffset={0}
+        displace={2}
+        saturation={1.4}
+        className="vq-nav-glass mx-auto max-w-md"
+        style={{ colorScheme: 'dark' }}
       >
+        <div className="grid h-full w-full grid-cols-5 gap-1">
         {ITEMS.map(({ mode: m, label, Icon }) => {
           const active = mode === m
           // Explore carries the active category's colour so "I am in Beaches" is
@@ -87,7 +126,8 @@ export default function BottomNav({ mode, onChange, accent, showCreditDot }: Pro
             </button>
           )
         })}
-      </div>
+        </div>
+      </GlassSurface>
     </nav>
   )
 }

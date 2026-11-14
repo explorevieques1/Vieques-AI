@@ -420,3 +420,17 @@ html, body, #root {
   .vq-load__ring:nth-child(2) { opacity: .18; transform: scale(.75); }
   .vq-load__ring:nth-child(3) { opacity: 0; }
 }
+
+/* Bottom nav on React Bits GlassSurface (BottomNav.tsx). The component pads its
+   content 8px; the nav's cells were laid out for 6px (p-1.5) — keep that so
+   the 52px cells and --nav-clear stay what they were. */
+.vq-nav-glass .glass-surface__content {
+  padding: 6px;
+}
+/* Safari/iOS + Firefox get the component's frosted fallback, whose tint is
+   WHITE (backgroundOpacity raises it) — on this dark app that read as a milky
+   grey pill with washed-out grey icons. Same blur/sheen/rim, dark tint instead,
+   matching the 35% dark tint Chromium gets. */
+.vq-nav-glass.glass-surface--fallback {
+  background: oklch(0.17 0.028 258 / 0.5);
+}

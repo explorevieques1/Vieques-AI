@@ -8,8 +8,9 @@ type Props = {
   /**
    * `floating` — the phone's own glass row under the greeting card.
    * `inline`   — sits inside the desktop top bar's control row.
+   * `embedded` — bare pills, for a parent that supplies the shell (TopBento).
    */
-  variant?: 'floating' | 'inline'
+  variant?: 'floating' | 'inline' | 'embedded'
 }
 
 /**
@@ -45,7 +46,7 @@ export default function CategoryRow({ active, onSelect, variant = 'floating' }: 
     <nav
       ref={rowRef}
       aria-label="Categories"
-      className="no-scrollbar fade-r snap-x snap-mandatory overflow-x-auto"
+      className="no-scrollbar fade-r min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto"
     >
       <div className="flex w-max gap-1">
         {CATEGORIES.map((c) => {
@@ -57,8 +58,10 @@ export default function CategoryRow({ active, onSelect, variant = 'floating' }: 
               data-slug={c.slug}
               onClick={() => onSelect(c.slug)}
               aria-current={on ? 'page' : undefined}
-              className={`flex shrink-0 snap-start items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px]
+              className={`flex shrink-0 snap-start items-center gap-1.5 rounded-xl px-2.5 text-[11px]
                           whitespace-nowrap transition-colors sm:text-[13px] ${
+                            variant === 'embedded' ? 'h-8 text-[13px]' : 'py-1.5'
+                          } ${
                             on
                               ? 'font-semibold'
                               : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
@@ -80,6 +83,8 @@ export default function CategoryRow({ active, onSelect, variant = 'floating' }: 
       </div>
     </nav>
   )
+
+  if (variant === 'embedded') return pills
 
   if (variant === 'inline') {
     return (

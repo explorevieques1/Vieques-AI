@@ -45,18 +45,19 @@ export const TOP_BAR_H = 88
  * so the menu is now a term at the bottom of the stack rather than 52px at the
  * top of it.
  *
- * Budget at 390x844 with the greeting expanded:
- *   47 notch + 10 pad + 100 greeting + 6 + 40 categories + 6 + 36 menu = 245
- *   431 map band
+ * Budget at 390x844 in Explore:
+ *   47 notch + 10 pad + 108 bento = 165
+ *   511 map band (was 431 with the greeting card, category row and ☰ row)
+ * The ☰ trigger moved into the bottom nav, so outside Explore the top is clear.
  *   168 sheet at its lowest stop (the bottom nav overlays its lowest 90)
- * Keep these in step with the actual classes in MapTopBar / GreetingCard /
+ * Keep these in step with the actual classes in MapTopBar / TopBento /
  * CategoryRow — they are measurements of those components, not free parameters.
  */
-export const GREETING_H = 100
-export const GREETING_H_MIN = 40
-export const CATEGORY_ROW_H = 40
-/** The ☰ row below the categories: a 36px (h-9) trigger, always on screen. */
-export const MENU_ROW_H = 36
+/**
+ * TopBento: 1px glass border + p-1.5 + two h-11 rows + gap-1.5 + p-1.5 + 1px = 108 (measured).
+ * Replaced the greeting card (100) + gap (6) + category row (40) = 146.
+ */
+export const TOP_BENTO_H = 108
 export const CHROME_GAP = 6
 /**
  * Breathing room between the safe-area top and the greeting card.
@@ -79,20 +80,14 @@ export const BOTTOM_NAV_GAP = 12
  */
 export function mobileTopInset({
   safeTop,
-  greeting,
-  categories,
+  bento,
 }: {
   safeTop: number
-  greeting: 'expanded' | 'minimized' | 'hidden'
-  categories: boolean
+  /** TopBento (suggestion + categories) is on screen — Explore only. */
+  bento: boolean
 }): number {
   let h = safeTop + CHROME_TOP_PAD
-  if (greeting !== 'hidden') {
-    h += greeting === 'expanded' ? GREETING_H : GREETING_H_MIN
-  }
-  if (categories) h += CHROME_GAP + CATEGORY_ROW_H
-  // The ☰ row is the one piece that is on screen in every mode.
-  h += CHROME_GAP + MENU_ROW_H
+  if (bento) h += TOP_BENTO_H
   return h
 }
 

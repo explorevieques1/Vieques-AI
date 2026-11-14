@@ -34,7 +34,6 @@ import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useSafeArea } from '../hooks/useSafeArea'
 import { daypart, useSuggestion } from '../hooks/useSuggestion'
-import { useWeather } from '../hooks/useWeather'
 import {
   mobileTopInset,
   safeInsets,
@@ -51,15 +50,15 @@ import { useEntitlement, useFeature } from '../lib/entitlement'
 import AddToTripSheet from './AddToTripSheet'
 import AiChatBody from './AiChatBody'
 import BottomNav from './BottomNav'
-import CategoryRow from './CategoryRow'
 import FilterRow from './FilterRow'
-import GreetingCard from './GreetingCard'
+import TopBento from './TopBento'
 import MapSearchBar from './MapSearchBar'
 import MapSheet from './MapSheet'
 import MapModesBody from './MapModesBody'
 import MapTopBar from './MapTopBar'
 import PlaceDetailPanel from './PlaceDetailPanel'
 import ProfileBody from './ProfileBody'
+import MenuBody from './MenuBody'
 import SavedBody from './SavedBody'
 import TripadvisorBlock, { hasTripadvisor } from './TripadvisorBlock'
 import ResultsList, { type SortKey } from './ResultsList'
@@ -144,7 +143,6 @@ function MapView({
   // on the top bar's profile button.
   const { credits, hasAccess } = useEntitlement()
   const { pinsSeq } = useAiChat()
-  const weather = useWeather()
 
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -214,8 +212,6 @@ function MapView({
   // Desktop: the results panel is folded to an edge tab. The category and its
   // results survive — this is "get out of my way", not "close".
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
-  /** Mobile: the greeting card collapsed to a weather pill, giving the map 60px. */
-  const [greetingMin, setGreetingMin] = useState(false)
   /** The trip+day picker, opened from a place card or the detail panel. */
   const [addToTripFor, setAddToTripFor] = useState<Place | null>(null)
   /**
@@ -365,10 +361,9 @@ function MapView({
     if (!isMobile) return undefined
     return mobileTopInset({
       safeTop: safeArea.top,
-      greeting: mode !== 'explore' ? 'hidden' : greetingMin ? 'minimized' : 'expanded',
-      categories: mode === 'explore',
+      bento: mode === 'explore',
     })
-  }, [isMobile, safeArea.top, mode, greetingMin])
+  }, [isMobile, safeArea.top, mode])
 
   const insets = useMapInsets({
     resultsOpen,
@@ -745,7 +740,8 @@ function MapView({
       // open, tapping Ask AI would show the basemap picker under the AI title.
       setModesOpen(false)
       setSnap(
-        next === 'ai' || next === 'profile'
+        // Menu opens full too: at PREVIEW the Log Out row sits under the nav.
+        next === 'ai' || next === 'profile' || next === 'menu'
           ? SHEET_FULL
           : next === 'saved'
             ? SHEET_PREVIEW
@@ -1263,6 +1259,17 @@ function MapView({
     />
   ) : mode === 'profile' ? (
     <ProfileBody navPad />
+  ) : mode === 'menu' ? (
+    <MenuBody
+      navPad
+      onBuildItinerary={() => changeMode('saved')}
+      onDirections={() => {
+        // Back to the map first: Directions is an overlay over Explore, and the
+        // menu list left open underneath it would be covered chrome.
+        changeMode('explore')
+        onDirections()
+      }}
+    />
   ) : (
     <>
       {exploreHeader}
@@ -1302,47 +1309,39 @@ function MapView({
         // Desktop keeps its own absolutely-positioned banner row.
         if (!isMobile) return topBar
 
-        /* Phone chrome, top to bottom: greeting card flush to the safe-area top,
-           then the category row, then the ☰ trigger. There is no banner above
+        /* Phone chrome: just TopBento (suggestion + categories in one card)
+           flush to the safe-area top. The ☰ menu is now the Menu cell in the
+           bottom nav (MenuBody in the sheet). There is no banner above
            any of it — no logo, no Build Itinerary button (that moved into the
-           menu) — so the stack starts at `var(--sat)` and the greeting sits
+           menu) — so the stack starts at `var(--sat)` and the bento sits
            against the top of the screen.
 
            Everything here floats over the map and must opt back into pointer
            events: the sheet below is a modal Radix dialog, so the body carries
            `pointer-events: none` (see the note in MapTopBar).
 
-           The greeting and categories are Explore-only — in the chat or the
-           profile the sheet is full-height and they would just be covered chrome
-           stealing 150px from the map. The menu is not: it is the only route to
-           Home / Buy Credits / Log Out, so it renders in every mode. */
+           The bento is Explore-only — in the chat or the profile the sheet is
+           full-height and it would just be covered chrome. Outside Explore the
+           top of the map is now completely clear. */
         return (
           <div
             className="pointer-events-none absolute inset-x-0 z-30 flex flex-col items-start gap-1.5 pad-safe-x"
             style={{ top: `calc(var(--sat) + ${CHROME_TOP_PAD}px)` }}
           >
             {mode === 'explore' && (
-              <>
-                <div className="w-full">
-                  <GreetingCard
-                    daypart={part}
-                    weather={weather}
-                    suggestion={suggestion}
-                    loadingSuggestion={loadingSuggestion}
-                    minimized={greetingMin}
-                    onToggleMinimize={() => setGreetingMin((v) => !v)}
-                    onOpenSuggestion={openSuggestion}
-                    onNextSuggestion={() => {
-                      void nextSuggestion().then((s) => s && openSuggestion(s))
-                    }}
-                  />
-                </div>
-                <div className="w-full">
-                  <CategoryRow active={category} onSelect={selectCategory} />
-                </div>
-              </>
+              <div className="w-full">
+                <TopBento
+                  suggestion={suggestion}
+                  loadingSuggestion={loadingSuggestion}
+                  onOpenSuggestion={openSuggestion}
+                  onNextSuggestion={() => {
+                    void nextSuggestion().then((s) => s && openSuggestion(s))
+                  }}
+                  activeCategory={category}
+                  onSelectCategory={selectCategory}
+                />
+              </div>
             )}
-            {topBar}
           </div>
         )
       })()}
@@ -1353,7 +1352,9 @@ function MapView({
             title={
               modesOpen
                 ? 'Map Modes'
-                : (selected?.name ??
+                : mode === 'menu'
+                  ? 'Menu'
+                  : (selected?.name ??
                   (category ? categoryMeta(category).label : 'Explore Vieques'))
             }
             snap={snap}
