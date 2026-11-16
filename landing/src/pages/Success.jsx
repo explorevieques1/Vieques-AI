@@ -3,8 +3,21 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
 import { launchMapApp } from '../lib/mapApp.js'
 import { PLAN_LABELS } from '../lib/plans.js'
+import { trackPurchase } from '../lib/ads.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001'
+
+// What Stripe actually charged for THIS checkout, once the webhook has
+// fulfilled it. null = not fulfilled yet (404) or not reachable.
+async function fetchReceipt(sessionId) {
+  const { data } = await getSession()
+  const token = data?.session?.access_token
+  if (!token) return null
+  const res = await fetch(`${API_BASE}/api/checkout/receipt?session_id=${encodeURIComponent(sessionId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return res.ok ? res.json() : null
+}
 
 // Ask the backend whether THIS user actually has access. This is the
 // source of truth — the webhook wrote it after Stripe confirmed payment.
@@ -55,15 +68,42 @@ export default function Success() {
     return () => { cancelled = true }
   }, [sessionId])
 
+  // Report the sale to Google Ads — only for a checkout the webhook has
+  // fulfilled, with the real amount. Independent of the entitlement poll above:
+  // someone who already holds a pass and buys a message pack reads as "active"
+  // before this purchase's webhook lands. `reported` gates the auto-redirect
+  // below so the page doesn't unload mid-send; the 6s cap means a slow webhook
+  // or an ad blocker can delay the buyer, never strand them.
+  const [reported, setReported] = useState(false)
+  useEffect(() => {
+    if (!sessionId) { setReported(true); return }
+    let cancelled = false
+    let attempts = 0
+    const cap = setTimeout(() => setReported(true), 6000)
+    async function report() {
+      const receipt = await fetchReceipt(sessionId).catch(() => null)
+      if (cancelled) return
+      if (receipt) {
+        await trackPurchase({ transactionId: receipt.sessionId, valueCents: receipt.amountTotal })
+        if (!cancelled) setReported(true)
+        return
+      }
+      if (attempts++ < 3) setTimeout(report, 1500)
+      else setReported(true)
+    }
+    report()
+    return () => { cancelled = true; clearTimeout(cap) }
+  }, [sessionId])
+
   // Once the webhook has landed and access is real, hand off to the map without
   // making the user click. The short pause is deliberate: it lets them see WHICH
   // plan activated before the page navigates away. The button below stays as a
   // manual fallback for anyone whose browser blocks the programmatic redirect.
   useEffect(() => {
-    if (state !== 'active') return
+    if (state !== 'active' || !reported) return
     const timer = setTimeout(() => { void launchMapApp() }, 1800)
     return () => clearTimeout(timer)
-  }, [state])
+  }, [state, reported])
 
   return (
     <main style={styles.wrap}>

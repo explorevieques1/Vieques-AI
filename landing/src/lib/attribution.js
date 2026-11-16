@@ -50,6 +50,12 @@ function read() {
 export function getAttribution() {
   const a = read()
   if (!a) return {}
+  // Older than the window: it no longer explains this signup. Drop it, as the
+  // privacy policy promises ("kept for 30 days").
+  if (!a.ts || Date.now() - a.ts > ATTRIBUTION_DAYS * 864e5) {
+    try { localStorage.removeItem(KEY) } catch { /* fine */ }
+    return {}
+  }
   const { ts, ...rest } = a
   return { ...rest, landed_at: new Date(ts).toISOString().slice(0, 10) }
 }

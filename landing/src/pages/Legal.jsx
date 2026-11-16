@@ -123,6 +123,10 @@ const REFUNDS = {
 //  called by code in this repo. If you add a provider — analytics, email,
 //  error tracking — it goes in this list in the same commit.
 //
+//  Google Ads (landing/src/lib/ads.js): measurement only — restricted data
+//  processing on, ad personalization off, EEA/UK/CH consent denied by default.
+//  The "not sold or shared" statement below depends on those three settings.
+//
 //  Location: MapView.tsx uses navigator.geolocation.watchPosition for the blue
 //  dot and "miles away" labels only. The coordinates never leave the browser.
 //  If that ever changes (e.g. sending position to /api/directions), category
@@ -131,9 +135,9 @@ const REFUNDS = {
 const PRIVACY = {
   title: 'Privacy policy',
   intro:
-    'We collect the minimum needed to sell you a pass and show you a map. We do not sell or share ' +
-    'your data for advertising, we do not run analytics or tracking, and you can delete your account ' +
-    'yourself at any time.',
+    'We collect the minimum needed to sell you a pass and show you a map. We do not sell your data or ' +
+    'use it to target you with ads. The one measurement tool on our website tells us which of our own ' +
+    'Google ads led to a purchase, and nothing more. You can delete your account yourself at any time.',
   sections: [
     {
       h: 'Who we are',
@@ -162,6 +166,10 @@ const PRIVACY = {
         'Information collected automatically: like almost every website, the companies that host our ' +
           'Services keep standard server logs — IP address, browser type, the page or API requested, and ' +
           'the time — which we use only to keep the Services secure and working.',
+        'Ad measurement: on explorevieques.org (not the map app), a Google Ads tag notes whether you ' +
+          'arrived by clicking one of our ads and, if you then buy a pass, reports that purchase, its ' +
+          'amount and an order number to Google, so we can tell which ads are worth paying for. See ' +
+          '“Cookies and browser storage” below.',
         'We do not collect phone numbers, social media profiles, or any sensitive information such as ' +
           'health, ethnicity, religion, or sexual orientation.',
       ],
@@ -199,10 +207,15 @@ const PRIVACY = {
         'OSRM and Open-Meteo — return driving directions and the island weather forecast. They receive ' +
           'place coordinates, not your location or identity.',
         'Railway and Vercel — host the API and the websites.',
+        'Google (Google Ads) — measures which of our ads lead to purchases. Receives the ad-click ' +
+          'identifier, the pages of explorevieques.org you visit, your IP address and browser details, ' +
+          'and for a purchase its amount and order number. It does not receive your name or email. We ' +
+          'run it with Google’s restricted data processing and ad personalization turned off, so Google ' +
+          'acts as our service provider and does not use it to build advertising profiles of you.',
       ],
       after: [
-        'That is the complete list. We do not use advertising networks, analytics trackers, or data ' +
-          'brokers, and we do not sell or rent your information to anyone.',
+        'That is the complete list. We do not use remarketing, analytics trackers or data brokers, and ' +
+          'we do not sell or rent your information to anyone.',
         'If Red Oak LLC or the Explore Vieques business is ever sold or merged, your information may ' +
           'transfer to the new owner, who would remain bound by this notice for the data already collected. ' +
           'We may also disclose information when the law requires it.',
@@ -220,9 +233,14 @@ const PRIVACY = {
     {
       h: 'Cookies and browser storage',
       p: [
-        'We store one thing in your browser: the token that keeps you signed in. There are no ' +
-          'advertising or analytics cookies, which is why you are not shown a cookie banner. Because we ' +
-          'do not track you across sites, there is nothing for a browser “Do Not Track” signal to switch off.',
+        'We store the token that keeps you signed in and, if you arrived from a link or ad of ours, a ' +
+          'note of which one (kept for 30 days and attached to your account if you sign up).',
+        'On explorevieques.org, Google Ads also sets first-party cookies (named _gcl_…) that hold the ' +
+          'ad-click identifier for up to 90 days, so a later purchase can be matched to the ad. They are ' +
+          'used only to measure our own ads, never for remarketing or personalised advertising, and they ' +
+          'are not set in the map app. If you are in the EEA, the UK or Switzerland, the tag runs without ' +
+          'cookies by default. You can block or delete these cookies in your browser, or use an ad ' +
+          'blocker; everything on the site keeps working.',
       ],
     },
     {
@@ -280,11 +298,12 @@ const PRIVACY = {
           '12 months we have collected these categories of personal information:',
       ],
       list: [
-        'Identifiers — YES: name, email address, account ID, and IP address in server logs.',
+        'Identifiers — YES: name, email address, account ID, IP address in server logs, and the ' +
+          'Google ad-click identifier if you arrived from one of our ads.',
         'Customer records (California Civil Code 1798.80) — YES: name and email address.',
         'Commercial information — YES: passes and message packs purchased, amount and date.',
-        'Internet or network activity — YES: Ask AI questions and places saved within our app. ' +
-          'Not your browsing on other sites.',
+        'Internet or network activity — YES: Ask AI questions and places saved within our app, and ' +
+          'whether a visit to explorevieques.org came from one of our ads. Not your browsing on other sites.',
         'Geolocation — NO: your location stays on your device.',
         'Protected characteristics, biometric data, audio or video, professional or education ' +
           'information, inferences or profiles, and sensitive personal information — NO.',

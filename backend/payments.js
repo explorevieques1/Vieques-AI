@@ -732,6 +732,44 @@ export async function getCreditHistory(pool, req, res) {
   }
 }
 
+/**
+ * Purchase receipt — handler for GET /api/checkout/receipt?session_id=…
+ *
+ * /success calls this to report the sale to Google Ads with the amount Stripe
+ * actually charged. It only answers once the webhook has written the
+ * fulfillments row, so a conversion is never reported for an unpaid or
+ * abandoned checkout. Reads over the pg pool (bypasses RLS): the
+ * `user_id = $2` filter is what stops one user reading another's receipt.
+ *
+ * Responds 200 { sessionId, plan, amountTotal } (cents) or 404 until fulfilled.
+ */
+export async function getPurchaseReceipt(pool, req, res) {
+  try {
+    const user = await getUserFromAuthHeader(req)
+    if (!user) return res.status(401).json({ error: 'Not signed in' })
+
+    const sessionId = String(req.query.session_id || '')
+    if (!/^cs_(test|live)_[A-Za-z0-9]{10,200}$/.test(sessionId)) {
+      return res.status(400).json({ error: 'Bad session id' })
+    }
+
+    const { rows } = await pool.query(
+      `SELECT plan, amount_total FROM public.fulfillments
+        WHERE stripe_session_id = $1 AND user_id = $2`,
+      [sessionId, user.id],
+    )
+    if (!rows.length) return res.status(404).json({ error: 'Not fulfilled yet' })
+
+    // amount_total is NULL only on rows backfilled before it was recorded
+    // (migration 0042); fall back to the catalog price, not a guess.
+    const { plan, amount_total } = rows[0]
+    res.json({ sessionId, plan, amountTotal: amount_total ?? PLANS[plan]?.amount ?? null })
+  } catch (err) {
+    console.error('receipt:', err)
+    res.status(500).json({ error: 'Could not load receipt' })
+  }
+}
+
 export async function getEntitlement(pool, req, res) {
   try {
     const user = await getUserFromAuthHeader(req)

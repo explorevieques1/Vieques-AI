@@ -3,9 +3,11 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { captureAttribution } from './lib/attribution.js'
+import { loadGoogleTag } from './lib/ads.js'
 
 // Before anything can navigate away from the landing URL's ?utm_…&gclid=….
 captureAttribution()
+loadGoogleTag() // production only; see lib/ads.js
 
 const root = document.getElementById('root')
 const tree = (

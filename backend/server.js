@@ -39,7 +39,7 @@ import pg from 'pg'
 import Anthropic from '@anthropic-ai/sdk'
 import { TOOLS, runTool } from './aiTools.js'
 import { runChatLoop, describeProviderError } from './aiProvider.js'
-import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, tierHas, bestTier } from './payments.js'
+import { createCheckoutSession, handleWebhook, getEntitlement, getCreditHistory, getPurchaseReceipt, tierHas, bestTier } from './payments.js'
 import { requireAuth, requireTier, requireCredits, refundCredit, rateLimit } from './middleware.js'
 import { fail } from './httpError.js'
 import { mountItineraries } from './itineraries.js'
@@ -622,6 +622,11 @@ app.post('/api/checkout', (req, res) => createCheckoutSession(pool, req, res))
 // GET /api/entitlement — the map app's paywall asks this "can this user in?"
 // Returns { hasAccess, plans, credits } for the signed-in user.
 app.get('/api/entitlement', (req, res) => getEntitlement(pool, req, res))
+
+// GET /api/checkout/receipt?session_id=cs_… — the amount Stripe charged for
+// the caller's own completed checkout, so /success can report the sale to
+// Google Ads. 404 until the webhook has fulfilled it.
+app.get('/api/checkout/receipt', rateLimit({ max: 30 }), (req, res) => getPurchaseReceipt(pool, req, res))
 
 // GET /api/credits/history — AI credit purchase receipts for the signed-in
 // user, failed attempts included. Returns { purchases, creditsPurchased,
