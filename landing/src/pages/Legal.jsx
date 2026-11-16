@@ -235,8 +235,10 @@ const PRIVACY = {
       p: [
         'We store the token that keeps you signed in and, if you arrived from a link or ad of ours, a ' +
           'note of which one (kept for 30 days and attached to your account if you sign up).',
-        'On explorevieques.org, Google Ads also sets first-party cookies (named _gcl_…) that hold the ' +
-          'ad-click identifier for up to 90 days, so a later purchase can be matched to the ad. They are ' +
+        'On explorevieques.org, Google Ads also sets first-party cookies (named _gcl_…) for up to 90 ' +
+          'days: one holds a random identifier for your browser, set for every visitor, and if you ' +
+          'arrived from one of our ads another holds that ad-click identifier, so a later purchase can ' +
+          'be matched to the ad. They are ' +
           'used only to measure our own ads, never for remarketing or personalised advertising, and they ' +
           'are not set in the map app. If you are in the EEA, the UK or Switzerland, the tag runs without ' +
           'cookies by default. You can block or delete these cookies in your browser, or use an ad ' +

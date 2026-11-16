@@ -116,12 +116,14 @@ ideally the first ad-driven sale.
 - **Trip (dates TBD, a couple of days):** beach photos (all 17 beaches have none),
   short videos, Google Business Profile verification, new tagged QR cards.
 
-## Tomorrow (Day 1, Nov 14) — owner checklist
-1. Create the Google Ads account in **Expert Mode** (no Smart campaign), add billing.
-2. Goals → Conversions → New conversion action → Website → manual setup:
-   category **Purchase**, value **use different values for each conversion**,
-   count **One**. Copy the **tag ID (`AW-…`) and conversion label** and give them
-   to Claude so the tag can be installed.
+## Account setup — DONE 2026-11-16
+1. ✅ Google Ads account created (customer 444-709-7421, payments profile Red Oak,
+   Organization). No campaign yet.
+2. ✅ Conversion action `Purchase - Map Pass` (AW-18579379834/BEmuCM6F47kdEPqsq5tF):
+   Primary, different values (fallback 13.99), count **Every** (the tag sends the
+   Stripe session id as transaction_id, so repeats are deduped), 30-day click
+   window, enhanced conversions **off**. Tag live since `c7bc357`. For tracking
+   health, use the `google-ads-health` agent, not this one.
 3. Tools → **Keyword Planner** → "Get search volume and forecasts" for the Ad
    group A + B keywords, location Puerto Rico (then US). Record avg monthly
    searches and top-of-page bid ranges; bring them back so CPC assumptions can
