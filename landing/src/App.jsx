@@ -21,6 +21,7 @@ const Privacy = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m
 // likewise unmounted in production (backend/admin.js).
 const Admin = import.meta.env.DEV ? lazy(() => import('./pages/Admin.jsx')) : null
 const Refunds = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Refunds })))
+const NotFound = lazy(() => import('./pages/NotFound.jsx'))
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import { guideRoutes } from './guideRoutes.jsx'
 
@@ -75,6 +76,10 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      {/* Anything vercel.json doesn't rewrite is served from dist/404.html
+          (status 404). A new SPA route must be added to the rewrite list in
+          landing/vercel.json too, or production will 404 it. */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>
   )

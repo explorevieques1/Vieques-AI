@@ -85,7 +85,8 @@ const entries = [
   ['/restaurants', 'weekly', '0.9'],
   ['/pricing', 'monthly', '0.8'],
   ...paths.filter((p) => p.startsWith('/beaches/')).map((p) => [p, 'monthly', '0.7']),
-  ['/signup', 'yearly', '0.5'],
+  // No /signup: a bare form with no content to rank. Legal pages stay — they
+  // are what Google Ads' policy check and Stripe look for.
   ['/terms', 'yearly', '0.2'],
   ['/privacy', 'yearly', '0.2'],
   ['/refunds', 'yearly', '0.2'],
@@ -96,6 +97,20 @@ ${entries.map(([p, f, pr]) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</l
 </urlset>
 `
 fs.writeFileSync(path.join(DIST, 'sitemap.xml'), xml)
+
+// 404.html — Vercel serves it, with a real 404 status, for any path no
+// rewrite in vercel.json claims. It is the SPA shell (React Router's "*"
+// route renders NotFound), minus everything that says "I am the homepage":
+// canonical, og:url, JSON-LD, the hero preload and the no-JS homepage copy.
+let notFound = template
+notFound = swap(notFound, /<title>[\s\S]*?<\/title>/, '<title>Page not found | Explore Vieques</title>', '<title>')
+notFound = swap(notFound, /<link rel="canonical" href="[^"]*">\s*/, '<meta name="robots" content="noindex">\n', 'canonical')
+notFound = notFound.replace(/<meta property="og:url" content="[^"]*">\s*/, '')
+notFound = notFound.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>\s*/, '')
+notFound = notFound.replace(/<link rel="preload" as="image"[^>]*>\s*/g, '')
+notFound = notFound.replace(/<noscript>[\s\S]*?<\/noscript>/, '<noscript><h1>Page not found</h1><p><a href="/">Go to Explore Vieques</a></p></noscript>')
+fs.writeFileSync(path.join(DIST, '404.html'), notFound)
+
 fs.rmSync(SERVER, { recursive: true, force: true })
 
 console.log(`prerendered ${paths.length} guide pages + sitemap.xml (${entries.length} URLs)`)

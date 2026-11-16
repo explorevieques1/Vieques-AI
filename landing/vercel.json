@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "trailingSlash": false,
   "rewrites": [
     {
       "source": "/guide",
@@ -31,7 +32,7 @@
       "destination": "/restaurants/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/:page(signup|login|pricing|success|welcome|forgot-password|reset-password|terms|privacy|refunds|account)",
       "destination": "/index.html"
     }
   ]
