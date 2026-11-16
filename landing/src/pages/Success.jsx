@@ -75,6 +75,9 @@ export default function Success() {
   // below so the page doesn't unload mid-send; the 6s cap means a slow webhook
   // or an ad blocker can delay the buyer, never strand them.
   const [reported, setReported] = useState(false)
+  // A bank debit (or other delayed method) finished checkout but hasn't
+  // cleared: no access and no conversion yet — say so honestly.
+  const [processing, setProcessing] = useState(false)
   useEffect(() => {
     if (!sessionId) { setReported(true); return }
     let cancelled = false
@@ -83,6 +86,11 @@ export default function Success() {
     async function report() {
       const receipt = await fetchReceipt(sessionId).catch(() => null)
       if (cancelled) return
+      if (receipt?.processing) {
+        setProcessing(true)
+        setReported(true)
+        return
+      }
       if (receipt) {
         await trackPurchase({ transactionId: receipt.sessionId, valueCents: receipt.amountTotal })
         if (!cancelled) setReported(true)
@@ -133,7 +141,22 @@ export default function Success() {
           </>
         )}
 
-        {state === 'pending' && (
+        {state === 'pending' && processing && (
+          <>
+            <div style={styles.check}>⏳</div>
+            <h1 style={styles.h1}>Your payment is processing</h1>
+            <p style={styles.sub}>
+              Bank payments take a few business days to clear. Your pass unlocks
+              automatically as soon as it does, and Stripe will email you a receipt.
+              There's no need to pay again.
+            </p>
+            <div style={styles.actions}>
+              <Link to="/" style={styles.btnGhost}>Return Home</Link>
+            </div>
+          </>
+        )}
+
+        {state === 'pending' && !processing && (
           <>
             <div style={styles.check}>⏳</div>
             <h1 style={styles.h1}>Payment received</h1>

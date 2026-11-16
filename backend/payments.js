@@ -330,7 +330,11 @@ export async function createCheckoutSession(pool, req, res) {
  * Stripe signed. We first verify that signature (rejecting forgeries with 400),
  * then act on the events we care about:
  *
- *   • checkout.session.completed        → grant the purchased plan (fulfill()).
+ *   • checkout.session.completed /
+ *     checkout.session.async_payment_succeeded
+ *                                       → grant the purchased plan (fulfill()),
+ *                                         only once payment_status is 'paid'
+ *                                         (bank debits clear days later).
  *   • customer.subscription.updated     → keep local subscription status in sync
  *   • customer.subscription.deleted     →   (active / past_due / canceled).
  *
@@ -357,13 +361,26 @@ export async function handleWebhook(pool, req, res) {
   }
 
   try {
-    // Payment completed → hand out whatever the plan promised.
-    if (event.type === 'checkout.session.completed') {
+    // Money actually received → hand out whatever the plan promised.
+    //
+    // `completed` means the customer finished checkout, NOT that we were paid:
+    // with a delayed method (US bank debit and other dynamic payment methods)
+    // it arrives with payment_status 'unpaid', and the money — or a failure —
+    // follows days later as async_payment_succeeded / async_payment_failed.
+    // Granting on 'unpaid' would hand out a pass (and report a Google Ads
+    // conversion via /api/checkout/receipt) for money that may never clear.
+    // fulfill() claims the session id first, so if both events ever carry a
+    // paid session, the second is a no-op.
+    if (event.type === 'checkout.session.completed' ||
+        event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object
       const userId = session.metadata?.supabase_user_id
       const planKey = session.metadata?.plan
       const plan = PLANS[planKey]
-      if (userId && plan) {
+      const paid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required'
+      if (!paid) {
+        console.log(`webhook: ${event.type} for ${session.id} is ${session.payment_status}; waiting for async_payment_succeeded`)
+      } else if (userId && plan) {
         await fulfill(pool, { userId, planKey, plan, session })
       }
     }
@@ -611,9 +628,9 @@ async function fulfill(pool, { userId, planKey, plan, session }) {
       // purchase happened: status 'confirmed' here always has a matching +N
       // credit_transactions row, because they commit or roll back together.
       //
-      // UPSERT rather than plain INSERT because a session that took the async
-      // route may already have a 'pending' row from checkout.session.expired's
-      // sibling events; a completed payment is the terminal truth and wins.
+      // UPSERT rather than plain INSERT because Stripe's event order is not
+      // guaranteed: a failure event for this session may already have written
+      // a 'denied' row. A completed payment is the terminal truth and wins.
       await client.query(
         `INSERT INTO public.ai_credit_purchases
            (user_id, stripe_session_id, stripe_payment_intent_id, plan,
@@ -758,7 +775,19 @@ export async function getPurchaseReceipt(pool, req, res) {
         WHERE stripe_session_id = $1 AND user_id = $2`,
       [sessionId, user.id],
     )
-    if (!rows.length) return res.status(404).json({ error: 'Not fulfilled yet' })
+    if (!rows.length) {
+      // Not fulfilled. Tell /success whether that's a webhook a second behind
+      // or a bank debit that will take days, so it doesn't say "Payment
+      // received" to someone whose money hasn't cleared. Only for the
+      // caller's own session (metadata check), else the usual 404.
+      try {
+        const s = await stripe.checkout.sessions.retrieve(sessionId)
+        if (s.metadata?.supabase_user_id === user.id && s.status === 'complete' && s.payment_status === 'unpaid') {
+          return res.status(202).json({ sessionId, processing: true })
+        }
+      } catch { /* unknown session or Stripe unreachable: fall through */ }
+      return res.status(404).json({ error: 'Not fulfilled yet' })
+    }
 
     // amount_total is NULL only on rows backfilled before it was recorded
     // (migration 0042); fall back to the catalog price, not a guess.
