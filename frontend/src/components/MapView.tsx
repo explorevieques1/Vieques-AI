@@ -240,6 +240,8 @@ function MapView({
     subSlug,
     canWaterZones,
     tourFilter,
+    {},
+    sort === 'all',
   )
 
   /**
@@ -296,7 +298,7 @@ function MapView({
       // (Array.sort is stable, so equal keys keep that order). Re-sorting a
       // bought slot by distance would sell a position we don't deliver.
       if (a.sponsored || b.sponsored) return (b.sponsored ? 1 : 0) - (a.sponsored ? 1 : 0)
-      if (sort === 'name') return a.name.localeCompare(b.name)
+      if (sort === 'name' || sort === 'all') return a.name.localeCompare(b.name)
       const da = distances.get(a.id)
       const db = distances.get(b.id)
       // Without geolocation "nearest" has nothing to sort on — fall back to
@@ -1153,6 +1155,8 @@ function MapView({
       subcategories={subcategories}
       activeSub={activeSub}
       onSelectSub={(s) => {
+        // Tapping a chip while viewing All means "narrow to this" — leave All.
+        if (sort === 'all') setSort('name')
         setSubSlug(s)
         setHitPlace(null)
         clearSelection()

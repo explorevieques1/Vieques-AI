@@ -9,7 +9,11 @@ import PillSlider from './PillSlider'
 import GlassSurface from './reactbits/GlassSurface'
 import { Skeleton } from './ui/skeleton'
 
-export type SortKey = 'nearest' | 'name'
+/** `all` is also a view, not just an order: every listing in the category, A–Z. */
+export type SortKey = 'nearest' | 'name' | 'all'
+
+const NEXT_SORT: Record<SortKey, SortKey> = { nearest: 'name', name: 'all', all: 'nearest' }
+const SORT_LABEL: Record<SortKey, string> = { nearest: 'Nearest', name: 'A–Z', all: 'All' }
 
 type Props = {
   category: CategorySlug
@@ -105,7 +109,9 @@ function ResultsList({
               <PillSlider
                 label={`${meta.label} types`}
                 accent={meta.color}
-                active={activeSub}
+                // "All" ignores the chips; a key no pill has hides the thumb
+                // so neither "Top" nor the remembered pick looks selected.
+                active={sort === 'all' ? '__all__' : activeSub}
                 onSelect={onSelectSub}
                 items={[
                   // Where chips only narrow a loaded list (stays, restaurants),
@@ -133,10 +139,10 @@ function ResultsList({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onSortChange(sort === 'nearest' ? 'name' : 'nearest')}
+            onClick={() => onSortChange(NEXT_SORT[sort])}
             className="text-[11px] text-muted-foreground hover:text-foreground"
           >
-            Sort: {sort === 'nearest' ? 'Nearest' : 'A–Z'} ↓
+            Sort: {SORT_LABEL[sort]} ↓
           </button>
           {onCollapse && (
             <button

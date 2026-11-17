@@ -123,6 +123,83 @@ type Result = {
  * bounds and calling fitBounds itself. Fetching belongs here; drawing belongs
  * to the caller, which now does it once for any category.
  */
+/**
+ * Categories with no "every listing" endpoint — `/api/restaurants` and
+ * `/api/activities` are the Top 5, the rest only list per slug. "All" for these
+ * is the union of every chip's list. Safe because every active restaurant and
+ * activity listing is linked to at least one category (checked 2026-11-17);
+ * services/essentials/transport carry one category each by schema.
+ */
+const MERGED_CATEGORIES = new Set<CategorySlug>([
+  'restaurants',
+  'activities',
+  'services',
+  'essentials',
+  'transportation',
+])
+
+/** Every listing in a category, de-duplicated by Place id (first chip wins). */
+async function fetchEverything(
+  category: CategorySlug,
+  subs: Subcategory[],
+  canWaterZones: boolean,
+): Promise<Place[]> {
+  const perSub = <T,>(fetch: (slug: string) => Promise<T[]>, toPlace: (row: T, slug: string) => Place) =>
+    subs.map((s) => fetch(s.slug).then((rows) => rows.map((r) => toPlace(r, s.slug))))
+
+  let groups: Promise<Place[]>[]
+  switch (category) {
+    case 'beaches':
+      groups = [fetchBeaches().then((rows) => rows.map(beachToPlace))]
+      break
+    case 'stays':
+      groups = [fetchStays().then((rows) => rows.map(stayToPlace))]
+      break
+    case 'restaurants':
+      groups = perSub(fetchRestaurantListings, (r) => restaurantToPlace(r))
+      break
+    case 'activities':
+      // Operators under every chip, plus the three chips backed by their own
+      // tables. Water spots only with the tier — same gate as the chips.
+      groups = [
+        // Without the water tier the snorkel/kayak chips are locked, tours
+        // included — All must not show what the chips wouldn't.
+        ...perSub(fetchActivityListings, activityToPlace).filter(
+          (_, i) => canWaterZones || !WATER_SUBS.has(subs[i].slug),
+        ),
+        fetchTrails().then((fc) => fc.features.map(trailToPlace)),
+        ...(canWaterZones
+          ? [
+              fetchSnorkelSpots().then((rows) => rows.map(snorkelToPlace)),
+              fetchKayakSpots().then((rows) => rows.map(kayakToPlace)),
+            ]
+          : []),
+      ]
+      break
+    case 'services':
+      groups = perSub(fetchServiceListings, serviceToPlace)
+      break
+    case 'essentials':
+      groups = perSub(fetchEssentialListings, essentialToPlace)
+      break
+    case 'transportation':
+      groups = perSub(fetchTransportListings, transportToPlace)
+      break
+    default:
+      groups = []
+  }
+
+  // One flaky chip shouldn't blank the whole view: keep whatever loaded, and
+  // only fail (with the first error) when nothing did.
+  const settled = await Promise.allSettled(groups)
+  const ok = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  if (groups.length > 0 && ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason
+
+  const byId = new Map<string, Place>()
+  for (const p of ok.flat()) if (!byId.has(p.id)) byId.set(p.id, p)
+  return [...byId.values()]
+}
+
 export function useCategoryPlaces(
   category: CategorySlug | null,
   pickedSub: string | null,
@@ -162,6 +239,12 @@ export function useCategoryPlaces(
    * starts here rather than from nothing.
    */
   beachFilters: BeachFilters = {},
+  /**
+   * The "Sort: All" view — every listing in the category at once, ignoring the
+   * chip pick, so the owner can see the whole dataset on the map. The pick is
+   * kept (not cleared) so cycling back out of All returns to the same chip.
+   */
+  showAll = false,
 ): Result {
   // Both caches are tagged with the request they answer. Everything the hook
   // returns is then *derived* by comparing that tag to the current request, so
@@ -182,9 +265,10 @@ export function useCategoryPlaces(
   const subcategories = subFresh ? subCache!.rows : []
   // Derived, not set from an effect: no extra render, and the default's fetch
   // starts on the same render the chips arrive.
-  const subSlug =
-    pickedSub ??
-    (category && categoryMeta(category).hasSubcategories ? (subcategories[0]?.slug ?? null) : null)
+  const subSlug = showAll
+    ? null
+    : (pickedSub ??
+      (category && categoryMeta(category).hasSubcategories ? (subcategories[0]?.slug ?? null) : null))
 
   // Entitlement is known synchronously, so this is derived rather than state.
   const locked =
@@ -195,11 +279,20 @@ export function useCategoryPlaces(
     category != null &&
     !locked &&
     !meta!.comingSoon &&
-    !(meta!.hasSubcategories && !subSlug)
+    (showAll
+      ? // "All" merges every chip's list, so it waits for the chip list itself.
+        !MERGED_CATEGORIES.has(category) || subFresh
+      : !(meta!.hasSubcategories && !subSlug))
 
   // `tourFilter` is part of the key: it selects a different endpoint, so
   // leaving it out would serve spots from cache after a toggle to tours.
-  const requestKey = `${category}|${subSlug}|${tourFilter}|${JSON.stringify(beachFilters)}`
+  const requestKey = showAll
+    ? // Chip slugs only matter where All is built from them; for beaches/stays
+      // they'd change the key mid-load and fetch the same list twice.
+      `${category}|*all*|${
+        category && MERGED_CATEGORIES.has(category) ? subcategories.map((s) => s.slug).join(',') : ''
+      }|${canWaterZones}`
+    : `${category}|${subSlug}|${tourFilter}|${JSON.stringify(beachFilters)}`
   const fresh = cache?.key === requestKey
   const places = shouldFetch && fresh ? cache!.rows : []
   const loading = shouldFetch && !fresh
@@ -257,6 +350,13 @@ export function useCategoryPlaces(
       // Cache the failure too — otherwise `loading` stays true forever on a
       // failed request and the list spins with no explanation.
       setCache({ key: requestKey, rows: [], error: err as Error })
+    }
+
+    if (showAll) {
+      fetchEverything(category!, subcategories, canWaterZones).then(finish, fail)
+      return () => {
+        cancelled = true
+      }
     }
 
     switch (category) {
