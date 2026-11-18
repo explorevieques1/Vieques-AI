@@ -24,6 +24,7 @@ import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
+import { CameraDirector, pointShot } from '../lib/camera'
 import type { ShellMode } from '../lib/shell'
 import { useAiChat } from '../lib/aiChat'
 import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
@@ -146,7 +147,18 @@ function MapView({
 
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  /** AI-pin markers. Category pins live in placeMarkersRef, keyed by place id. */
   const markersRef = useRef<maplibregl.Marker[]>([])
+  /**
+   * Category pins keyed by place id, so a selection change can swap just the
+   * two pins whose look changes (old + new selection) instead of tearing down
+   * and rebuilding every pin on the map — which is what made them flash.
+   */
+  const placeMarkersRef = useRef(new Map<string, { marker: maplibregl.Marker; place: Place }>())
+  /** The selected id as of the last render, for effects that must not re-run on selection. */
+  const selectedIdRef = useRef<string | null>(null)
+  /** Owns selection camera moves — see lib/camera.ts for why it has to be one owner. */
+  const directorRef = useRef<CameraDirector | null>(null)
   const routeMarkersRef = useRef<maplibregl.Marker[]>([])
   /** The live-location dot — kept out of markersRef so clearMarkers() can't wipe it. */
   const userMarkerRef = useRef<maplibregl.Marker | null>(null)
@@ -396,10 +408,12 @@ function MapView({
     map.on('load', () => map.resize())
     const t = setTimeout(() => map.resize(), 200)
     mapRef.current = map
+    directorRef.current = new CameraDirector(map)
     return () => {
       clearTimeout(t)
       map.remove()
       mapRef.current = null
+      directorRef.current = null
     }
   }, [])
 
@@ -509,6 +523,8 @@ function MapView({
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
+    placeMarkersRef.current.forEach(({ marker }) => marker.remove())
+    placeMarkersRef.current.clear()
   }
 
   // ---------------------------------------------------------------------------
@@ -520,21 +536,28 @@ function MapView({
       setSelected(p)
       setSnap(SHEET_PREVIEW)
       const map = mapRef.current
-      if (!map || !isMappable(p)) return
+      const director = directorRef.current
+      if (!map || !director || !isMappable(p)) return
       if (p.geometry) {
         // Zooming to a fixed 15 on the trailhead would put a 3-mile trail's far
         // end off screen. Frame the whole line instead — and cap the zoom so a
-        // 100 m spur doesn't slam the camera into max zoom.
+        // 100 m spur doesn't slam the camera into max zoom. Flat on purpose:
+        // cameraForBounds fits for pitch 0, so a tilted trail would overrun.
         const b = new maplibregl.LngLatBounds()
         p.geometry.coordinates.forEach((c) => b.extend(c))
-        map.fitBounds(b, { padding: padding(), maxZoom: 16, speed: 1.2 })
+        director.fly(
+          { target: { type: 'bounds', bounds: b, maxZoom: 16 }, pitch: 0, bearing: map.getBearing() },
+          padding(),
+        )
       } else {
-        map.flyTo({
-          center: [p.longitude, p.latitude],
-          zoom: 15,
-          speed: 1.2,
-          padding: padding(),
-        })
+        director.fly(
+          pointShot([p.longitude, p.latitude], {
+            zoom: map.getZoom(),
+            pitch: map.getPitch(),
+            bearing: map.getBearing(),
+          }),
+          padding(),
+        )
       }
       // Snorkel and kayak spots carry zone polygons; drawing them is the point
       // of the Vacation tier, so load them as soon as one is picked. Identical
@@ -567,6 +590,7 @@ function MapView({
   useEffect(() => {
     selectPlaceRef.current = selectPlace
     paddingRef.current = padding
+    selectedIdRef.current = selected?.id ?? null
   })
 
   const clearSelection = useCallback(() => {
@@ -576,6 +600,7 @@ function MapView({
     if (map) {
       removeAllZones(map)
       setZoneLegend([])
+      directorRef.current?.settle(paddingRef.current())
     }
   }, [])
 
@@ -608,6 +633,7 @@ function MapView({
       setResultsCollapsed(false)
       setTourFilter('all')
       setZoneLegend([])
+      directorRef.current?.release()
       const map = mapRef.current
       if (map) {
         removeAllZones(map)
@@ -667,15 +693,20 @@ function MapView({
       onModeChange('explore')
       // Advice with no coordinates ("cash still runs this island") still has
       // something to say, so show the panel — there is just no pin to fly to.
+      const map = mapRef.current
       if (isMappable(place)) {
         setSelected(place)
         setSnap(SHEET_PREVIEW)
-        mapRef.current?.flyTo({
-          center: [place.longitude, place.latitude],
-          zoom: 14.5,
-          speed: 1.2,
-          padding: padding(),
-        })
+        if (map) {
+          directorRef.current?.fly(
+            pointShot([place.longitude, place.latitude], {
+              zoom: map.getZoom(),
+              pitch: map.getPitch(),
+              bearing: map.getBearing(),
+            }),
+            padding(),
+          )
+        }
       } else {
         setSelected(place)
         setSnap(SHEET_PREVIEW)
@@ -739,6 +770,23 @@ function MapView({
   //  Markers — one effect for every category
   // ---------------------------------------------------------------------------
 
+  /** One category pin. Clicks go through selectPlaceRef so a pin never holds a stale closure. */
+  const addPlaceMarker = (map: maplibregl.Map, p: Place, isSelected: boolean) => {
+    const el = makeMarkerEl(p.icon, isSelected)
+    // The lift-in plays on the badge (inner node) — MapLibre owns the outer
+    // element's transform. Only for the selected pin, and CSS turns it off
+    // under reduced motion.
+    if (isSelected) el.lastElementChild?.classList.add('marker-lift')
+    el.addEventListener('click', (e) => {
+      e.stopPropagation()
+      selectPlaceRef.current(p)
+    })
+    // Callers only pass places that passed isMappable(), so both are set.
+    return new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([p.longitude as number, p.latitude as number])
+      .addTo(map)
+  }
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -747,17 +795,31 @@ function MapView({
 
     clearMarkers()
     places.filter(isMappable).forEach((p) => {
-      const el = makeMarkerEl(p.icon, p.id === selected?.id)
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([p.longitude, p.latitude])
-        .addTo(map)
-      el.addEventListener('click', (e) => {
-        e.stopPropagation()
-        selectPlace(p)
+      placeMarkersRef.current.set(p.id, {
+        marker: addPlaceMarker(map, p, p.id === selectedIdRef.current),
+        place: p,
       })
-      markersRef.current.push(marker)
     })
-  }, [places, selected?.id, aiPins, selectPlace])
+    // Selection is deliberately not a dep — the effect below swaps only the
+    // pins whose look changed. selectedIdRef carries it in for a fresh build.
+  }, [places, aiPins])
+
+  // Selection changed: rebuild the outgoing and incoming pins only. Every
+  // other pin keeps its DOM node, so nothing on the map blinks.
+  const shownSelectionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const map = mapRef.current
+    const next = selected?.id ?? null
+    const prev = shownSelectionRef.current
+    shownSelectionRef.current = next
+    if (!map || prev === next) return
+    for (const id of [prev, next]) {
+      const entry = id ? placeMarkersRef.current.get(id) : undefined
+      if (!entry) continue
+      entry.marker.remove()
+      entry.marker = addPlaceMarker(map, entry.place, id === next)
+    }
+  }, [selected?.id])
 
   // ---------------------------------------------------------------------------
   //  Trails — the one category drawn as lines rather than only pins
@@ -833,7 +895,10 @@ function MapView({
       if (p.geometry) p.geometry.coordinates.forEach((c) => bounds.extend(c))
       else bounds.extend([p.longitude, p.latitude])
     })
-    map.fitBounds(bounds, { padding: padding(), maxZoom: 14 })
+    // A new result set is an overview: drop any selection shot and lay the
+    // map flat, or a tilted fly-in would carry over into the island view.
+    directorRef.current?.release()
+    map.fitBounds(bounds, { padding: padding(), maxZoom: 14, pitch: 0 })
   }, [places, category, activeSub, aiPins, padding])
 
   // Re-centre when the chrome moves: a panel opens/closes, or the mobile sheet
@@ -848,6 +913,14 @@ function MapView({
     // let the next snap down bring the pin back.
     if (isMobile && snap === SHEET_FULL) return
     const pad = padding()
+    // A selection the director flew to: let it re-aim that shot. This is the
+    // fix for "tapping a pin doesn't zoom" — the old easeTo below carried no
+    // zoom and cancelled the fly-in the sheet snap had just interrupted.
+    const director = directorRef.current
+    if (selected && director?.active) {
+      director.reframe(pad)
+      return
+    }
     if (selected?.geometry) {
       // Re-fit rather than re-centre: the selection is a line, and easing to
       // its trailhead would undo the framing selectPlace just did.
@@ -888,7 +961,8 @@ function MapView({
       markersRef.current.push(marker)
       bounds.extend([p.longitude, p.latitude])
     })
-    map.fitBounds(bounds, { padding: padding(), maxZoom: 15 })
+    directorRef.current?.release()
+    map.fitBounds(bounds, { padding: padding(), maxZoom: 15, pitch: 0 })
     // padding is deliberately omitted: re-framing AI pins every time a panel
     // moves would yank the camera away from what the user is reading.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -981,7 +1055,8 @@ function MapView({
       fittedTripIdRef.current = itineraries.activeTrip.id
       const b = new maplibregl.LngLatBounds()
       tripPlaces.forEach((p) => b.extend([p.longitude, p.latitude]))
-      map.fitBounds(b, { padding: paddingRef.current(), maxZoom: 14 })
+      directorRef.current?.release()
+      map.fitBounds(b, { padding: paddingRef.current(), maxZoom: 14, pitch: 0 })
     }
 
     return () => {
