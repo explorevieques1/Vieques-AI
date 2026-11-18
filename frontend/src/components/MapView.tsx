@@ -82,13 +82,14 @@ function detailExtra(place: Place): React.ReactNode {
  * same reason as `detailExtra`.
  *
  * Stays lead with the name and tags, then the Tripadvisor reviews and photos,
- * and only then the nightly/min-stay/sleeps grid above the contact rows: their
- * own hero photo is one stock shot that the review strip already covers better,
- * so it comes off entirely rather than pushing everything a screen down.
+ * and only then the nightly/min-stay/sleeps grid above the contact rows.
+ * The hero shows only when the stay has a real photo (uploaded from the local
+ * admin tool): photo-less stays skip the striped placeholder rather than push
+ * everything a screen down for nothing.
  */
 function detailLayout(place: Place) {
   return place.kind === 'stay'
-    ? ({ hero: false, extraPosition: 'after-tags', statsPosition: 'bottom' } as const)
+    ? ({ hero: !!place.photo, extraPosition: 'after-tags', statsPosition: 'bottom' } as const)
     : {}
 }
 

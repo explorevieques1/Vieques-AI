@@ -450,6 +450,9 @@ export type RestaurantListing = {
   latitude: number | null
   longitude: number | null
   has_location: boolean
+  /** Photo URLs, first = hero (migration 0053; set from the local admin tool). */
+  images?: string[]
+  image_credit?: string | null
 }
 
 export async function fetchRestaurantCategories(): Promise<RestaurantCategory[]> {

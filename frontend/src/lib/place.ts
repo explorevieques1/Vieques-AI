@@ -106,6 +106,11 @@ export type Place = {
    * off `raw` per category so the panel stays ignorant of which kind it holds.
    */
   photo?: string
+  /**
+   * Every photo, in the listing's order (first = `photo`). Two or more turn the
+   * detail hero into the DepthCarousel; one stays a plain image.
+   */
+  photos?: string[]
   /** Attribution overlaid on the hero, when the photo requires one. */
   photoCredit?: string
   /** Amber callout, e.g. the wildlife-refuge warning + gate hours. */
@@ -346,6 +351,7 @@ export function beachToPlace(b: Beach): Place {
     ),
     description: b.notes ?? undefined,
     photo: b.images?.[0],
+    photos: b.images ?? [],
     photoCredit: b.image_credit ?? undefined,
     warning: b.in_wildlife_refuge
       ? `Inside the wildlife refuge${
@@ -376,6 +382,9 @@ export function restaurantToPlace(r: RestaurantListing): Place {
     ),
     description: r.description ?? undefined,
     contact: contactOf(r),
+    photo: r.images?.[0],
+    photos: r.images ?? [],
+    photoCredit: r.image_credit ?? undefined,
     icon: { emoji: '🍽️', color: '#f97316' },
     raw: r,
   }
@@ -447,6 +456,7 @@ export function stayToPlace(s: StayListing): Place {
     statLimit: 8,
     description: s.description ?? undefined,
     photo: s.images?.[0],
+    photos: s.images ?? [],
     photoCredit: s.image_credit ?? undefined,
     warning: caveats.length ? caveats.join(' · ') : undefined,
     contact: contactOf(s),
@@ -467,6 +477,7 @@ export function activityToPlace(a: ActivityListing, slug: string): Place {
     latitude: a.has_location ? a.latitude : null,
     longitude: a.has_location ? a.longitude : null,
     photo: a.images?.[0],
+    photos: a.images ?? [],
     photoCredit: a.image_credit ?? undefined,
     tags: [a.price_info].filter((t): t is string => !!t),
     stats: stats(

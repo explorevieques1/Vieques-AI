@@ -764,9 +764,10 @@ app.get('/api/restaurant-categories', requireAuth, requireTier(pool, ['restauran
 // then name. What the Restaurants panel opens on. See backend/featured.js and
 // db/migrations/0052_featured_placements.sql (how to book a sponsor / rank).
 // The type chips (Seafood, Local, …) still list every restaurant in that type.
+// images / image_credit: migration 0053, filled from the local admin tool.
 const RESTAURANT_COLUMNS = `l.id, l.name, l.description, l.phones, l.cuisine, l.price,
   l.hours, l.email, l.website, l.address, l.location_area,
-  l.latitude, l.longitude, l.has_location`
+  l.latitude, l.longitude, l.has_location, l.images, l.image_credit`
 
 app.get('/api/restaurants', requireAuth, requireTier(pool, ['restaurant_preview', 'restaurants']), async (req, res) => {
   try {
@@ -786,7 +787,7 @@ app.get('/api/restaurants/:slug', requireAuth, requireTier(pool, ['restaurant_pr
     const { rows } = await pool.query(
       `SELECT l.id, l.name, l.description, l.phones, l.cuisine, l.price,
               l.hours, l.email, l.website, l.address, l.location_area,
-              l.latitude, l.longitude, l.has_location
+              l.latitude, l.longitude, l.has_location, l.images, l.image_credit
        FROM restaurant_listings l
        JOIN restaurant_listing_categories lc ON lc.listing_id = l.id
        JOIN restaurant_categories c ON c.id = lc.category_id

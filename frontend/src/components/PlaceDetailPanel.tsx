@@ -14,6 +14,18 @@ import {
 } from 'lucide-react'
 
 import { isMappable, type Place } from '../lib/place'
+import DepthCarousel, { type DepthCarouselProps } from './reactbits/DepthCarousel'
+
+/**
+ * How the DepthCarousel behaves for a given number of photos. Only called with
+ * count >= 2 — a single photo stays a plain <img>. Kept as one function so the
+ * feel of every gallery is decided in one place.
+ */
+function carouselTuning(count: number): Partial<DepthCarouselProps> {
+  // TODO(human): tune the carousel for `count` photos (visibleCards, loop, autoplay, …).
+  void count
+  return {}
+}
 
 type Props = {
   place: Place
@@ -130,6 +142,8 @@ function PlaceDetailPanel({
   // Listings without one still fall through to the striped placeholder below.
   const heroImage = place.photo ?? null
   const heroCredit = place.photoCredit ?? null
+  const gallery = place.photos ?? []
+  const carousel = gallery.length > 1
   const gmaps = mappable
     ? `https://www.google.com/maps/dir/?api=1&destination=${place.latitude},${place.longitude}`
     : null
@@ -224,8 +238,40 @@ function PlaceDetailPanel({
       {/* Hero. Most listing tables still have no photo column, so the striped
           placeholder from the mockups stands in rather than a broken <img>. */}
       {hero && (
-        <div className="relative mx-4 mt-4 h-44 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e]">
-          {heroImage ? (
+        <div
+          className={`relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e] ${
+            carousel ? 'h-60' : 'h-44'
+          }`}
+        >
+          {carousel ? (
+            <>
+              {/* key: a new place starts the gallery back at photo 1. */}
+              <DepthCarousel
+                key={place.id}
+                items={gallery.map((image, i) => ({
+                  image,
+                  alt: `${place.name}, photo ${i + 1} of ${gallery.length}`,
+                }))}
+                cardWidth={300}
+                cardHeight={200}
+                radius={16}
+                depth={160}
+                spread={40}
+                tilt={18}
+                perspective={1100}
+                falloff={0.18}
+                blur={4}
+                duration={350}
+                tint="#04141E"
+                {...carouselTuning(gallery.length)}
+              />
+              {heroCredit && (
+                <div className="pointer-events-none absolute bottom-0 right-0 z-[3001] bg-black/55 px-2 py-1 text-[10px] text-white/70">
+                  © {heroCredit}
+                </div>
+              )}
+            </>
+          ) : heroImage ? (
             <>
               <img src={heroImage} alt={place.name} className="h-full w-full object-cover" />
               {heroCredit && (
