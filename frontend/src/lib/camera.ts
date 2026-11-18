@@ -34,8 +34,8 @@ export type Shot = {
 
 /** Length of the selection fly-in. Long enough to read as travel, short enough not to wait on. */
 export const FLY_MS = 1600
-/** Leaving a place: quicker than arriving. */
-const SETTLE_MS = 700
+/** Leaving a place: a little quicker than arriving, but it can be a long way out. */
+const SETTLE_MS = 1200
 /** Plain re-centre when the chrome moves and nothing is in flight (unchanged from before). */
 const REFRAME_MS = 400
 /** A mid-flight re-aim never gets less than this, or the last few frames would snap. */
@@ -73,6 +73,14 @@ function resolve(map: maplibregl.Map, shot: Shot, padding: Padding): maplibregl.
 export class CameraDirector {
   private shot: Shot | null = null
   private endsAt = 0
+  /**
+   * The flat camera from just before the first fly-in of a selection run.
+   * Captured once, so hopping pin → pin → pin and then pressing ✕ still lands
+   * on the overview the user started from, not on the previous pin.
+   */
+  private home: Shot | null = null
+  /** The current shot is the trip home, which ends the director's job once it lands. */
+  private homing = false
   private readonly map: maplibregl.Map
 
   constructor(map: maplibregl.Map) {
@@ -87,6 +95,11 @@ export class CameraDirector {
 
   /** Is there a selection shot this director is responsible for framing? */
   get active() {
+    if (this.homing && performance.now() >= this.endsAt) {
+      // Landed home: nothing left to frame.
+      this.shot = null
+      this.homing = false
+    }
     return this.shot !== null
   }
 
@@ -94,6 +107,20 @@ export class CameraDirector {
   fly(shot: Shot, padding: Padding) {
     const opts = resolve(this.map, shot, padding)
     if (!opts) return
+    if (!this.home) {
+      // Interrupting a trip home: the place we were heading to *is* home.
+      // Otherwise the camera right now is the overview to come back to.
+      const c = this.map.getCenter()
+      this.home =
+        this.homing && this.shot
+          ? this.shot
+          : {
+              target: { type: 'point', center: [c.lng, c.lat], zoom: this.map.getZoom() },
+              pitch: 0,
+              bearing: this.map.getBearing(),
+            }
+    }
+    this.homing = false
     this.shot = shot
     this.endsAt = performance.now() + FLY_MS
     this.map.flyTo({ ...opts, duration: FLY_MS, curve: 1.6, easing: easeInOutCubic })
@@ -127,24 +154,34 @@ export class CameraDirector {
     this.map.easeTo({ padding, duration: REFRAME_MS })
   }
 
-  /** Leaving a place: lay the map back flat and step out one zoom level. */
+  /**
+   * Leaving a place (the ✕): fly back to the flat overview the user was on
+   * before the first pin tap — the island view or the framed result set.
+   *
+   * Tracked as a shot like any fly-in, so the sheet/panel resizing that
+   * closing a place causes re-aims the trip home instead of cancelling it
+   * (the same race that once stopped pins from zooming in). Once it lands the
+   * shot clears itself — see `active`.
+   */
   settle(padding: Padding) {
-    const wasTilted = this.map.getPitch() > 1
-    this.shot = null
-    this.endsAt = 0
-    if (!wasTilted) return
-    this.map.easeTo({
-      pitch: 0,
-      zoom: Math.max(this.map.getZoom() - 1, 12),
-      padding,
-      duration: SETTLE_MS,
-      easing: easeOutCubic,
-    })
+    const home = this.home
+    this.home = null
+    if (!home) {
+      this.release()
+      return
+    }
+    this.shot = home
+    this.homing = true
+    this.endsAt = performance.now() + SETTLE_MS
+    const opts = resolve(this.map, home, padding)
+    if (opts) this.map.easeTo({ ...opts, duration: SETTLE_MS, easing: easeInOutCubic })
   }
 
   /** Something else (category framing, AI pins, a trip) took the camera over. */
   release() {
     this.shot = null
+    this.home = null
+    this.homing = false
     this.endsAt = 0
   }
 }

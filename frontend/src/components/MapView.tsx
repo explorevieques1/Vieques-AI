@@ -916,8 +916,9 @@ function MapView({
     // A selection the director flew to: let it re-aim that shot. This is the
     // fix for "tapping a pin doesn't zoom" — the old easeTo below carried no
     // zoom and cancelled the fly-in the sheet snap had just interrupted.
+    // Also covers the trip home after ✕ (selected is already null by then).
     const director = directorRef.current
-    if (selected && director?.active) {
+    if (director?.active) {
       director.reframe(pad)
       return
     }
@@ -1069,6 +1070,9 @@ function MapView({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
+    // The route frames itself; don't let a trip home (✕ fires just before
+    // this when Directions closes the place) pull the camera off it.
+    if (route) directorRef.current?.release()
     if (route) drawRoute(map, route, routeMarkersRef.current)
     else removeRoute(map, routeMarkersRef.current)
   }, [route])
