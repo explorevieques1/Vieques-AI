@@ -1,5 +1,5 @@
 /* Vendored from React Bits <Carousel /> (JS + CSS). Upstream rules unchanged;
-   the place-card hero overrides are the `.vq-photo-carousel` block at the end. */
+   the one place-card rule is the `.vq-photo-carousel` block at the end. */
 .carousel-container {
   position: relative;
   display: flex;
@@ -373,68 +373,10 @@
 }
 
 /* ---- Explore Vieques: place-card photo hero --------------------------------
-   Rendered with frame={true} so the stage masks slides as they leave, but the
-   frame itself is stripped: no padding, panel colour, shadow or backdrop blur
-   (the design system rules out glassmorphism on opaque surfaces). The photo is
-   the full width of the hero, and the dots sit ON the photo instead of under
-   it, so the gallery is the same size as the old single image.
-   `isolation` keeps the slides' z-index (≤10) from out-ranking the back/save/
-   close buttons that the panel layers over the hero. */
+   Upstream look kept as-is (frame, tilt, dots under the card). The one local
+   rule: `isolation` keeps the slides' z-index (≤10) and the frame rim (30)
+   inside the carousel, so the back/save/share/close buttons the panel layers
+   over the hero always stay on top. */
 .vq-photo-carousel {
   isolation: isolate;
-}
-
-.vq-photo-carousel.has-frame .carousel-stage {
-  padding: 0;
-  gap: 0;
-  border-radius: var(--carousel-radius);
-  background: none;
-  box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-.vq-photo-carousel .carousel-frame-rim,
-.vq-photo-carousel .carousel-card-rim {
-  display: none;
-}
-
-.vq-photo-carousel .carousel-card {
-  padding: 0;
-  background: #0a1e2e;
-  box-shadow: none;
-}
-
-.vq-photo-carousel .carousel-controls {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  z-index: 31;
-  width: auto !important; /* upstream sets an inline width = card width */
-  padding: 0 4px;
-  border-radius: 999px;
-  background: rgba(4, 20, 30, 0.55); /* --pearl, solid tint — not blurred glass */
-  transform: translateX(-50%);
-}
-
-.vq-photo-carousel .carousel-dot {
-  width: 16px;
-  height: 18px;
-}
-
-.vq-photo-carousel .carousel-dot-mark {
-  width: 6px;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.45);
-}
-
-.vq-photo-carousel .carousel-dot.is-active .carousel-dot-mark {
-  background: #ffffff;
-}
-
-/* The card hover brighten reads as a flicker on a photo; drop it. */
-@media (hover: hover) {
-  .vq-photo-carousel .carousel-slide:hover .carousel-card {
-    filter: none;
-  }
 }

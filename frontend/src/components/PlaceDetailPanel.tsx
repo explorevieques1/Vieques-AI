@@ -239,17 +239,18 @@ function PlaceDetailPanel({
           placeholder from the mockups stands in rather than a broken <img>. */}
       {hero && (
         <div
-          className={`relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e] ${
-            carousel ? '' : 'h-44'
+          className={`relative mx-4 mt-4 shrink-0 ${
+            carousel
+              ? '' // the Carousel's own frame is the container
+              : 'h-44 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e]'
           }`}
         >
           {carousel ? (
             <>
-              {/* Full-width photos at the old h-44 hero's shape (176px on a
-                  ~326px card ≈ 1.85:1); the hero's own
-                  rounded overflow clips the corners. Dots sit on the photo
-                  (Carousel.css `.vq-photo-carousel`). key: a new place starts
-                  the gallery back at photo 1. */}
+              {/* The React Bits Carousel as designed: framed panel, 3D tilt
+                  turn between photos, dots under the card inside the frame.
+                  1.75:1 keeps the photo itself ≈ the old 176px hero.
+                  key: a new place starts the gallery back at photo 1. */}
               <Carousel
                 key={place.id}
                 className="vq-photo-carousel"
@@ -259,17 +260,18 @@ function PlaceDetailPanel({
                   alt: `${place.name}, photo ${i + 1} of ${gallery.length}`,
                 }))}
                 baseWidth="100%"
-                aspectRatio={1.85}
-                radius={0}
-                gap={8}
+                aspectRatio={1.75}
+                radius={12}
                 frame
-                effect="slide"
+                effect="tilt"
                 indicator="dots"
                 arrows={false}
+                theme="dark"
                 {...carouselTuning(gallery.length)}
               />
+              {/* In the frame's dot row, right-aligned, so it never covers the photo. */}
               {heroCredit && (
-                <div className="pointer-events-none absolute bottom-0 right-0 z-[40] bg-black/55 px-2 py-1 text-[10px] text-white/70">
+                <div className="pointer-events-none absolute bottom-[19px] right-4 z-[40] text-[10px] text-white/50">
                   © {heroCredit}
                 </div>
               )}
