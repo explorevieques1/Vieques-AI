@@ -14,15 +14,15 @@ import {
 } from 'lucide-react'
 
 import { isMappable, type Place } from '../lib/place'
-import DepthCarousel, { type DepthCarouselProps } from './reactbits/DepthCarousel'
+import Carousel, { type CarouselProps } from './reactbits/Carousel'
 
 /**
- * How the DepthCarousel behaves for a given number of photos. Only called with
+ * How the photo carousel behaves for a given number of photos. Only called with
  * count >= 2 — a single photo stays a plain <img>. Kept as one function so the
  * feel of every gallery is decided in one place.
  */
-function carouselTuning(count: number): Partial<DepthCarouselProps> {
-  // TODO(human): tune the carousel for `count` photos (visibleCards, loop, autoplay, …).
+function carouselTuning(count: number): Partial<CarouselProps> {
+  // TODO(human): tune the carousel for `count` photos (effect, loop, autoplay, indicator, …).
   void count
   return {}
 }
@@ -240,33 +240,36 @@ function PlaceDetailPanel({
       {hero && (
         <div
           className={`relative mx-4 mt-4 shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#123147] to-[#0a1e2e] ${
-            carousel ? 'h-60' : 'h-44'
+            carousel ? '' : 'h-44'
           }`}
         >
           {carousel ? (
             <>
-              {/* key: a new place starts the gallery back at photo 1. */}
-              <DepthCarousel
+              {/* Full-width photos at the old h-44 hero's shape (176px on a
+                  ~326px card ≈ 1.85:1); the hero's own
+                  rounded overflow clips the corners. Dots sit on the photo
+                  (Carousel.css `.vq-photo-carousel`). key: a new place starts
+                  the gallery back at photo 1. */}
+              <Carousel
                 key={place.id}
+                className="vq-photo-carousel"
                 items={gallery.map((image, i) => ({
+                  id: image,
                   image,
                   alt: `${place.name}, photo ${i + 1} of ${gallery.length}`,
                 }))}
-                cardWidth={300}
-                cardHeight={200}
-                radius={16}
-                depth={160}
-                spread={40}
-                tilt={18}
-                perspective={1100}
-                falloff={0.18}
-                blur={4}
-                duration={350}
-                tint="#04141E"
+                baseWidth="100%"
+                aspectRatio={1.85}
+                radius={0}
+                gap={8}
+                frame
+                effect="slide"
+                indicator="dots"
+                arrows={false}
                 {...carouselTuning(gallery.length)}
               />
               {heroCredit && (
-                <div className="pointer-events-none absolute bottom-0 right-0 z-[3001] bg-black/55 px-2 py-1 text-[10px] text-white/70">
+                <div className="pointer-events-none absolute bottom-0 right-0 z-[40] bg-black/55 px-2 py-1 text-[10px] text-white/70">
                   © {heroCredit}
                 </div>
               )}

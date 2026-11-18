@@ -108,7 +108,7 @@ export type Place = {
   photo?: string
   /**
    * Every photo, in the listing's order (first = `photo`). Two or more turn the
-   * detail hero into the DepthCarousel; one stays a plain image.
+   * detail hero into the photo Carousel; one stays a plain image.
    */
   photos?: string[]
   /** Attribution overlaid on the hero, when the photo requires one. */
