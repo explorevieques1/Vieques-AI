@@ -8,8 +8,8 @@ Steps:
 
 1. Run `git status` and `git diff --stat` to see what will be committed. Show the user a brief summary.
 2. If there are non-trivial code changes (not just docs/config), dispatch the `vieques-diff-reviewer` agent on the pending diff before committing. If it reports `DO NOT SHIP`, stop and show the findings to the user instead of proceeding. If it reports `SHIP WITH NITS`, show the nits, then proceed unless the user says to fix first.
-3. Ensure a remote named `explore-vieques` exists pointing at `https://github.com/explorevieques1/explore-vieques.git`. If it doesn't, add it:
-   `git remote add explore-vieques https://github.com/explorevieques1/explore-vieques.git`
+3. Ensure a remote named `explore-vieques` exists pointing at `https://github.com/explorevieques1/Vieques-AI.git`. If it doesn't, add it:
+   `git remote add explore-vieques https://github.com/explorevieques1/Vieques-AI.git`
 4. Stage all changes: `git add -A`
 5. Commit with a concise, descriptive message summarizing the actual changes (not a generic message), ending with the attribution lines given in the conversation's system-reminder, when one is present.
 6. Push the current branch to the `explore-vieques` remote:
