@@ -1,0 +1,271 @@
+# Vieques Cards — UI spec (rule-ID'd)
+
+Text twin of **Card UI Mapping.pdf** (vault: `04 - Features & Ideas/Card UI Mapping.pdf`).
+Same rule IDs. The `cards-ui-guard` agent checks Cards UI diffs against this file.
+
+**Change order:** spec first (this file + the PDF, together), then code. If code and spec
+disagree, the code is wrong until the spec is updated on purpose.
+
+Scope: every Cards UI surface in the map app (`frontend/src/`). Backend lives in
+`backend/cards.js` (0055); admin authoring in `backend/admin.js` — not covered here.
+
+Owner decisions (2026-11-19): radar button in the map control stack · hold to collect ·
+sound on with mute · free React Bits only.
+
+---
+
+## 0 · The system Cards must match
+
+- Dark only (`<html class="dark">`). Glass `oklch(0.17 0.028 258)`; primary teal
+  `oklch(0.87 0.126 175)`; `--accent-sky`; muted fg `oklch(0.68 0.03 258)`.
+- Type: Geist (UI) · Instrument Serif `font-display` (pane/place titles) · Geist Mono
+  10px uppercase `tracking-[0.14em]` micro-labels (`ProfileBody` `sectionLabel`).
+- Icons: `lucide-react` only, inline. No emoji as UI.
+- Primary CTA: `bg-gradient-to-br from-primary to-accent-sky rounded-2xl h-12
+  font-semibold text-primary-foreground`. No orange in the map app.
+- Reuse: `GlassSurface` + `LIQUID_GLASS` (`lib/glass.ts`), `GlassControl`, `PillSlider`,
+  `SavedBody` `tab()`, `MenuBody` `Group`/`Row`, `AddToTripSheet` modal pattern,
+  ResultsList inline upsell card, `markerIcon.ts`, `zoneLayers.ts` pattern,
+  `CameraDirector` + `padding()`.
+- z ladder: map/markers — · controls 10 · desktop panels 20 · mobile chrome 30 ·
+  scrims 35–40 · sheet 50 · nav 60 · modal 70 · loader 9999.
+
+---
+
+## C · Components
+
+**Allowed inventory** (free registry `reactbits.dev/r/<Name>-JS-CSS.json` → HTTP 200,
+`dependencies: []`, verified 2026-11-19):
+
+| Component | Renderer | Use | Live at once |
+|---|---|---|---|
+| HoloCard | WebGL | Opened card (reveal + detail); preset per rarity; `backImage` | 1 |
+| TiltedCard | CSS | Collection grid thumbnails (touch tilt only) | any |
+| PixelCard | Canvas2D | "Something's here…" in the nearby banner | 1 |
+| Radar | WebGL | Sweep in the radar pill; `targets` = count bucket | 1 |
+| HoldButton | CSS | "Hold to collect" (~1 s) | 1 |
+| Counter | CSS/SVG | Serial roll-up; leaderboard points | any |
+| ShinyText | Canvas2D | RARE / LEGENDARY labels only | few |
+| ElectricBorder | WebGL | Legendary opened card only | 1 |
+| StickerPeel | WebGL | Achievement-unlocked badge moment | 1 |
+| BounceCards | CSS | Achievement set fan-out | 1 |
+| SplitFlapText | CSS | "Your rank" on Top Traveler | 1 |
+| ClickSpark | Canvas2D | Sparks on completed hold | 1 |
+| SoundEngine + SoundCoin / SoundReveal / SoundTreasure / SoundPing (`-JS`) | Web Audio | collect / card appears / legendary / radar warmer | — |
+| GlareHover (optional) | CSS | Sweep on common/basic grid cards | any |
+| ReflectiveCard (optional) | WebGL | Legendary "platinum" reveal | 1 |
+
+**Excluded:** SwipeToast, CountUp, RubberSegment, StatusMark, TearTicket, FlipCard,
+Stack, DecryptedText (need `motion`) · BorderGlow (three) · ProfileCard (superseded) ·
+Scratch Card (Pro).
+
+- **C-1** Only components in the inventory above. ReflectiveCard's two `@hugeicons`
+  icons are inlined as SVG (as Carousel/SlideCommit did) — no icon packages added.
+- **C-2** Vendor verbatim into `frontend/src/components/reactbits/<Name>.{jsx,css}` + a
+  hand-written `<Name>.d.ts` (tsconfig has no `allowJs`). Only change: drop
+  `'use client'` (and inlined icons per C-1). Tune at the call site with a comment.
+- **C-3** Card UI is lazy-loaded (`React.lazy`/dynamic import) — the map's first load
+  must not include it.
+- **C-4** No `motion`, `gsap`, `three`, or any new npm package for Cards UI.
+
+## L · Layering
+
+- **L-1** Radar pill and nearby banner: `position: fixed`, `z-30`,
+  `pointer-events-auto` (the vaul sheet sets `pointer-events:none` on `<body>`).
+- **L-2** Claim reveal, card detail, riddle sheet: `fixed inset-0 z-[70]`, the
+  `AddToTripSheet` pattern, bottom padding includes `var(--sab)`; desktop centres
+  (`sm:items-center`) with a scrim.
+- **L-3** Floating surfaces anchor to the live sheet edge:
+  `bottom: calc(100dvh - var(--controls-y) + 8px)` (banner directly on the sheet, pill
+  above the banner). Never a hard-coded bottom offset.
+- **L-4** Pill + banner hidden when the sheet is at full (`--sheet-full > .5`), the
+  radar is off, or a z-70 overlay is open. With a place open (PlaceDetailPanel), the
+  banner collapses to a slim one-line "card nearby".
+- **L-5** Collection is a sheet pane: a `sheetBody` branch, opens at `SHEET_FULL`, has
+  `onCollapse` (⌄). Desktop: `ResponsivePanel variant="floating"` in Saved's slot.
+- **L-6** The Collection entry is added to `MenuBody` **and** the `MapTopBar` desktop
+  dropdown.
+
+## G · Glass
+
+- **G-1** `GlassSurface` only on surfaces ≤ 64px tall (radar button 48, pill 40,
+  `className="vq-glass …"`). Taller surfaces (banner, panes, overlays) use the frosted
+  CSS recipe of `.vq-map-sheet`.
+- **G-2** No `opacity < 1`, `filter`, `mask`, `clip-path`, `will-change` or transform
+  animation on an ANCESTOR of a GlassSurface. To fade, fade the glass element itself.
+- **G-3** No Tailwind `shadow-*` on glass.
+
+## P · Pins
+
+- **P-1** Card markers live in their own `cardMarkersRef`. `clearMarkers()` never touches
+  them, and they never hide, gate or suppress category or Ask AI markers.
+- **P-2** Card markers exist only while the radar is on; removed on radar off and on
+  unmount.
+- **P-3** Marker element `style.zIndex = 2` (above category pins). Tap →
+  `stopPropagation` → opens card detail (S-7).
+- **P-4** Collect-ring GL layers: source `cards-ring`, layers `cards-ring-fill`,
+  `cards-ring-line`; redrawn when `styleId` changes (trails pattern, not zones);
+  removed with the radar.
+- **P-5** The client never holds or draws an unrevealed card's coordinates; only
+  revealed/owned cards from the API are drawn.
+
+## M · Camera & motion
+
+- **M-1** Never auto-fly the camera on reveal or collect. Only an explicit "Show on map"
+  flies, via `director.fly(pointShot(...), padding())`.
+- **M-2** While the nearby banner is visible, its measured height is added to the
+  bottom camera inset (`useMapInsets`).
+- **M-3** `prefers-reduced-motion`: no radar sweep, foil animation, tilt, flip-board,
+  sparks, peel or roll-up; reveal = fade; riddle shake = border flash. Sound still
+  allowed.
+- **M-4** One entrance moment per surface. The only looping animation is the radar
+  sweep while the radar is on.
+
+## W · WebGL & performance
+
+- **W-1** ≤ 4 live WebGL contexts: map + Radar + one opened card (HoloCard /
+  ReflectiveCard) + one moment (StickerPeel / ElectricBorder).
+- **W-2** Radar paused (static frame) when `document.hidden`, sheet at full, or a z-70
+  overlay is open. WebGL components unmount when their surface closes.
+- **W-3** The grid uses TiltedCard (no WebGL), touch tilt only (no gyro); only one
+  opened card at a time.
+
+## I · iOS & device
+
+- **I-1** Audio unlock (SoundEngine) and `DeviceOrientationEvent.requestPermission()` are
+  called only inside a user tap handler (radar button or card open).
+- **I-2** `navigator.vibrate` is feature-detected and optional (iOS has none).
+- **I-3** Sound on by default; mute persisted in `localStorage` inside try/catch; toggles
+  in the radar pill and the Collection settings row.
+
+## R · Radar & states
+
+- **R-1** `/api/cards/nearby` pings only while the radar is on, after ≥ 75 m moved,
+  ≤ every 20 s, never while `document.hidden`.
+- **R-2** Every lock/error state shows the copy in S-2 / S-4 plus a next step.
+
+## T · Visual tokens
+
+- **T-1** Colours only from tokens: `--color-rarity-common` `oklch(0.78 0.02 250)`,
+  `--color-rarity-basic` `var(--primary)`, `--color-rarity-rare` `oklch(0.75 0.2 320)`
+  (orchid, not stays violet `#8b5cf6`), `--color-rarity-legendary` `#E2A400`; plus
+  primary / accent-sky / muted. No orange (`#FF6D04`), no other raw hex in components.
+  `lib/rarity.ts` maps rarity → token, HoloCard preset/intensity, sound.
+- **T-2** lucide icons only; no emoji in UI chrome, labels or copy. Medals = lucide
+  `Medal` in gold `#E2A400` / silver `#C0C7D0` / bronze `#C77B3A`.
+- **T-3** Titles `font-display`; micro-labels mono 10px uppercase `tracking-[0.14em]`;
+  body Geist.
+- **T-4** Primary actions use the existing teal→sky gradient CTA; HoldButton fill matches.
+- **T-5** Segmented control = `SavedBody` `tab()` styles; chip rows = `PillSlider` (never
+  hand-roll a chip row); list rows = `MenuBody` `Group`/`Row`.
+
+## X · Geometry
+
+- **X-1** Unchanged: `TOP_BENTO_H` 108, `BOTTOM_NAV_H` 56, `BOTTOM_NAV_GAP` 12, sheet
+  snaps `176px / 0.45 / 0.93`, the nav's 27px inset, and the variables written by
+  `useSheetMotion` (`--controls-y`, `--sheet-low`, `--sheet-full`, `data-nav-hidden`).
+- **X-2** New sizes (radar pill 40px, banner height, card pin 26×36) are named constants
+  in `hooks/useMapInsets.ts` (or `lib/rarity.ts` for pin size).
+
+---
+
+## S · Surfaces
+
+**S-1 Radar button.** New `GlassControl` (48px, `CONTROL_GLASS`) in the right control
+stack below recentre; lucide `Radar`. Off = muted; on = `text-primary` + 6px dot;
+`aria-pressed`. First tap: unlock audio + iOS motion permission (I-1).
+
+**S-2 Radar pill.** `GlassSurface` 40px tall, radius 20, `vq-glass vq-glass--tight`,
+left side, above the banner/sheet (L-3), `z-30`. Content: 28px Radar (teal,
+`mode="sweep"`, `ringCount 3`, `spokeCount 0`, `mouseInteraction={false}`,
+`intro={false}`, `grain 0`) · text · mute (lucide `Volume2`/`VolumeX`).
+Copy: `Scanning…` · `No cards nearby · explore` · `1 nearby` / `2–3 nearby` /
+`4+ nearby` + `· cold|warm|warmer|hot` · `Weak GPS · step outside` ·
+`Cards live on Vieques` · `Turn on location to hunt cards`. SoundPing once per warmth
+step up. Steps aside when the banner shows a revealed card.
+
+**S-3 Card pins.** DOM marker 26×36, radius 5, 1.5px rarity rim, category-pin shadow;
+`makeCardMarkerEl()` in `lib/markerIcon.ts`. States: revealed (card back) · owned (art
+crop of the face) · legendary owned (gold glow) · locked (lucide `Lock`). Selected:
+`marker-lift` to 34×47 + rarity pulse. Collect ring for the in-range card only (P-4).
+
+**S-4 Nearby banner.** Frosted (G-1), full width minus 10px gutters, on the sheet edge.
+States: ① PixelCard "Something's here… · within 200 m · walk closer" (SoundReveal) ·
+② in range: rarity label, name, full-width HoldButton "Hold to collect" (1 s, drains on
+release) → ClickSpark → claim · ③ on-site question: `font-display` prompt + input, hold
+disabled until text; wrong → shake, "Not quite — look around", hint after 3 ·
+④ locked: ResultsList-style upsell "A <pass> unlocks <rarity> cards…" + "See passes" →
+`${LANDING_URL}/pricing`.
+Errors: `TOO_FAR` (revealed) "Get a little closer · N m to go" · `TOO_FAR` (warmth)
+"Not here — keep searching · <warmth>" · `LOW_ACCURACY` "Your GPS is fuzzy — step into
+the open" (auto-retry) · `NOT_NOW` "This card appears <hours>" · `SOLD_OUT` "Every copy
+has been collected" · `TOO_FAST` "Whoa, that was fast. Try again in a few minutes" ·
+`TOO_MANY_GUESSES` "Try again in an hour" · `RIDDLE_UNSOLVED` "Solve the riddle first"
+→ opens S-8.
+
+**S-5 Claim reveal.** L-2 overlay. t0 ClickSpark (teal, 8) + overlay fade 180ms ·
+t120 HoloCard (~300 wide, rarity preset) · t600 ShinyText rarity (rare+,
+`trigger="once"`) · t700 Counter serial (`duration .7`) · legendary: ElectricBorder +
+SoundTreasure (optional ReflectiveCard) · otherwise SoundCoin · t1500 achievement:
+StickerPeel → BounceCards. Rest: Share (`navigator.share` with the face image) · Done
+(also tap outside / swipe down). Android `vibrate(30)`. Radar paused while open.
+The claim result is saved regardless of the animation.
+
+**S-6 Collection pane.** Title "Collection" (`font-display`) + ⌄. Segments: Cards ·
+Badges · Top Traveler (T-5).
+- Cards: `9 / 24` + points; progress bar; region tallies (Group/Row, lucide `MapPin`,
+  "1 of 4", riddle-locked under "Mystery"); PillSlider rarity filter; 3-column
+  TiltedCard grid (4 on desktop). Found = face; unfound = shared back; locked rarity =
+  dimmed. Tap → S-7; long-press → flip to back. Settings row: Sound · Card radar.
+- Badges: earned (static sticker image) first; in progress = dashed outline + progress
+  bar "Beach Bum 3/5".
+- Top Traveler: This week / All-time; SplitFlapText "#07" (`loop={false}`, `padTo 3`,
+  numeric); top 20 rows (rank / `Medal` 1–3, initials avatar, name = display name or
+  first name + last initial, "N cards · N badges", points in Geist Mono via Counter);
+  your row pinned (or highlighted in place if top 20); "N pts to pass #k". Opt-out
+  users absent. Tab hidden until the leaderboard endpoint exists.
+- Empty: "Turn on the radar and explore — your first card is closer than you think." +
+  Turn on radar · "Collect a set to earn a badge." · "No legendary cards yet — they hide
+  in the hardest places." · "Be the first Top Traveler this week."
+
+**S-7 Card detail.** L-2 overlay, one live HoloCard; tap flips (`backImage`: island
+outline + find-spot dot, date/time, badges it counts toward). Lore; "Show on map"
+(M-1); Share. Unfound → silhouette (rarity, region unless riddle-locked, hint; no
+name/art). Locked rarity → inline upsell. Close: ✕, swipe down, back.
+
+**S-8 Riddle sheet.** L-2 overlay from the bottom, keyboard-safe (`visualViewport`),
+Enter submits. `font-display` prompt; input; "Check answer" (T-4); "N guesses so far ·
+hint after 3"; shake 240ms (M-3 flash); cooldown copy. Solved → "The card is somewhere
+in <region>." + "Start hunting" (turns radar on). On-site questions are NOT here (S-4 ③).
+
+**S-9 Entry points.** Menu: first Row of the first Group, lucide `GalleryVerticalEnd`,
+"Collection", count right (L-6). Profile: "Your collection" section — count + rarest
+(opens Collection), leaderboard name, "Show me on Top Traveler" switch.
+
+**S-10 Desktop / tablet.** Collection = floating panel (344px, Saved's slot); radar pill
+top-left under `MapTopBar`; banner bottom-left of the map; overlays centred with scrim.
+Desktop banner copy: "Cards are collected on your phone, on the island." Inherited
+641–1024px tablet gap (PLATFORM.md §6.5) — don't make it worse.
+
+**S-11 Card face generator.** Canvas 630×880 drawn after `document.fonts.ready` (not SVG
+in `<img>` — no web fonts there) → `toBlob` → blob URL cached per card + serial. Front:
+12px rarity rim, radius 44; header Geist Mono 22px (rarity · region); art window
+x36 y84 558×470 r20 (engraving duotone); name Instrument Serif 64px; lore Geist 24px one
+line; footer Geist Mono 26px serial + lucide tag glyphs. Back: island outline +
+find-spot dot, date, badges. Undiscovered: shared back (contour lines + "?" +
+"Explore Vieques"). Used by HoloCard `image`, TiltedCard `imageSrc`, pin art crop, Share.
+
+---
+
+## Build order
+
+1 foundations (tokens, `lib/rarity.ts`, S-11) · 2 vendor (C) · 3 S-1/S-2 + `useCardRadar`
+· 4 S-3 · 5 S-4 · 6 S-5 · 7 S-6 Cards/Badges + S-9 · 8 S-7/S-8 · 9 Top Traveler · 10 S-10
+· 11 launch: `CARDS_LIVE = true` + terms bump.
+
+## Testing
+
+Throwaway preview page at 390×844 (+320, 430), desktop 1440, `--sab:34px`; Playwright
+`setGeolocation` at a test card (scan → reveal → hold → reveal → collection); spoof iOS
+UA for the glass fallback; `npx tsc -p tsconfig.app.json --noEmit`, eslint on changed
+files, `npm run build`.

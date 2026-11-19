@@ -27,6 +27,11 @@ You build, verify visually, and report. You do not commit or push (`/ship` does)
   project's named design tools.
 
 ## Systems you must reuse (read the file before touching the area)
+- **Vieques Cards work** (radar, card pins, nearby banner, reveal, Collection, Top
+  Traveler, card detail, riddle, card faces): read `docs/CARD_UI_SPEC.md` FIRST.
+  It names the allowed free React Bits, z-slots, placement and copy for every surface,
+  using rule IDs. Build to it; `cards-ui-guard` checks your diff against it before ship.
+  Need something the spec doesn't cover? Report it as a spec gap. Don't improvise.
 - **Glass** — `frontend/src/lib/glass.ts` (`LIQUID_GLASS`) + vendored
   `components/reactbits/GlassSurface.jsx` (+ `.d.ts`; the map app has no `allowJs`).
   Always `className="vq-glass"` (+ `vq-glass--flush` / `--tight` / `--control`) so the
