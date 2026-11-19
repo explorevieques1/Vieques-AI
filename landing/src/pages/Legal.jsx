@@ -33,7 +33,7 @@
 import { Link } from 'react-router-dom'
 // LAST_UPDATED, the operator details and TERMS_VERSION live in lib/legal.js,
 // shared with the sign-up consent checkbox. Bump both dates together.
-import { LAST_UPDATED, CONTACT, COMPANY, ADDRESS } from '../lib/legal.js'
+import { LAST_UPDATED, CONTACT, COMPANY, ADDRESS, CARDS_LIVE } from '../lib/legal.js'
 
 // ---------------------------------------------------------------------------
 //  REFUNDS
@@ -131,7 +131,39 @@ const REFUNDS = {
 //  dot and "miles away" labels only. The coordinates never leave the browser.
 //  If that ever changes (e.g. sending position to /api/directions), category
 //  G below flips to YES in the same commit.
+//
+//  Vieques Cards (backend/cards.js, migration 0055) is that change: the radar
+//  (POST /api/cards/nearby, only while the Cards layer is on, ≥75 m moved,
+//  ≤ every ~20 s) and Collect (POST /api/cards/:slug/claim) send position to
+//  the API. Positions are not stored; card_discoveries / card_claims keep which
+//  card, when, distance and GPS accuracy — which places the user near a known
+//  landmark at a time. The CARDS_LIVE flag (lib/legal.js) switches the wording
+//  below; flip it on the day the Cards UI ships, not before.
 // ---------------------------------------------------------------------------
+const LOCATION_DEVICE_ONLY = [
+  'If you allow it, the map app uses your device’s location to show where you are and how far ' +
+    'away each place is. This happens entirely in your browser: your location is never sent to ' +
+    'our servers, stored, or shared. You can refuse or turn it off in your browser or device ' +
+    'settings and everything else keeps working.',
+]
+
+const LOCATION_WITH_CARDS = [
+  'If you allow it, the map app uses your device’s location to show where you are and how far ' +
+    'away each place is. That part happens entirely in your browser.',
+  'Vieques Cards — the collectible cards hidden around the island — is the one feature that sends ' +
+    'your location to our servers. While the Cards layer is switched on in the map, the app sends your ' +
+    'current position to us from time to time (only after you have moved, and at most about every 20 ' +
+    'seconds) so we can tell you whether a card is nearby. When you tap Collect, it sends your position ' +
+    'once more to confirm you are at the spot. We use each position for that one request and do not ' +
+    'store it.',
+  'What we do keep is the result: which cards you have found and collected and when, how far you were ' +
+    'from the card when you collected it, and how accurate your device said its location was. Because ' +
+    'each card sits at a known place, that record shows you were near that place at that time. It stays ' +
+    'in your account until you delete it.',
+  'You can switch the card radar off in the map at any time, or refuse location in your browser or ' +
+    'device settings. Everything except finding and collecting cards keeps working.',
+]
+
 const PRIVACY = {
   title: 'Privacy policy',
   intro:
@@ -160,6 +192,10 @@ const PRIVACY = {
         'Ask AI: the questions you ask and the answers given, saved as conversations in your account ' +
           'so you can return to them, plus a count of messages used.',
         'Places you save and trips you plan in the app.',
+        ...(CARDS_LIVE
+          ? ['Vieques Cards: the cards you find and collect and when, and how many guesses you have made ' +
+              'at a card’s riddle. See “Your location” below.']
+          : []),
         'Anything you send us when you email us.',
       ],
       after: [
@@ -176,12 +212,7 @@ const PRIVACY = {
     },
     {
       h: 'Your location',
-      p: [
-        'If you allow it, the map app uses your device’s location to show where you are and how far ' +
-          'away each place is. This happens entirely in your browser: your location is never sent to ' +
-          'our servers, stored, or shared. You can refuse or turn it off in your browser or device ' +
-          'settings and everything else keeps working.',
-      ],
+      p: CARDS_LIVE ? LOCATION_WITH_CARDS : LOCATION_DEVICE_ONLY,
     },
     {
       h: 'How we use it',
@@ -250,7 +281,7 @@ const PRIVACY = {
       p: [
         'Your account and everything in it stays until you delete it. You can do that yourself at any ' +
           'time from your account page; it takes effect immediately and erases your profile, saved ' +
-          'places, trips and Ask AI history.',
+          `places, trips${CARDS_LIVE ? ', card collection' : ''} and Ask AI history.`,
         'Two things outlive a deleted account. We keep an anonymous record of each completed payment ' +
           '(amount, plan and date, with no name or email attached) for as long as tax and accounting ' +
           'rules require, and Stripe keeps its own record of the charge. Server logs held by our hosting ' +
@@ -306,7 +337,11 @@ const PRIVACY = {
         'Commercial information — YES: passes and message packs purchased, amount and date.',
         'Internet or network activity — YES: Ask AI questions and places saved within our app, and ' +
           'whether a visit to explorevieques.org came from one of our ads. Not your browsing on other sites.',
-        'Geolocation — NO: your location stays on your device.',
+        CARDS_LIVE
+          ? 'Geolocation — YES, only if you use Vieques Cards: your position is checked against card ' +
+            'locations and not stored, but the record of which cards you collected, and when, shows you ' +
+            'were near those places. If you do not use Cards, your location stays on your device.'
+          : 'Geolocation — NO: your location stays on your device.',
         'Protected characteristics, biometric data, audio or video, professional or education ' +
           'information, inferences or profiles, and sensitive personal information — NO.',
       ],

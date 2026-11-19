@@ -7,6 +7,14 @@
  *  public.terms_acceptances (db/migrations/0051). */
 export const TERMS_VERSION = '2026-11-16'
 
+/** Vieques Cards sends location to our servers (radar + collect), which the
+ *  privacy policy must disclose — but only once it's true. Keep false until
+ *  the Cards UI ships; on launch day, in ONE commit: set true, bump
+ *  TERMS_VERSION and LAST_UPDATED to that date. Legal.jsx swaps the location
+ *  wording on this flag. (Leaderboard names are not covered yet — add them
+ *  to PRIVACY when Top Traveler ships.) */
+export const CARDS_LIVE = false
+
 /** Shown at the top of every legal page. */
 export const LAST_UPDATED = '16 November 2026'
 

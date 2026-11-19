@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getSession } from '../lib/supabase.js'
-import { adminConfig, adminList, adminCreate, adminUpdate } from '../lib/adminApi.js'
+import { adminConfig, adminList, adminCreate, adminUpdate, adminUploadPhoto } from '../lib/adminApi.js'
 import './admin.css'
 
 // Owner-only data-entry page. Every form is generated from the field config the
@@ -11,15 +11,34 @@ const LABELS = {
   phones: 'Phones (one per line)', images: 'Image URLs (one per line)',
   amenities: 'Amenities (one per line)', location_area: 'Area / barrio',
   tripadvisor_location_id: 'Tripadvisor ID', metadata: 'Schedule & fares',
+  // Vieques Cards
+  radius_m: 'Collect radius (m)', reveal_radius_m: 'Reveal radius (m)',
+  place_id: 'Linked map place', image_path: 'Card art URL', badge_path: 'Badge art URL',
+  active_hours: 'Only collectable between (hours)', max_claims: 'Max copies',
+  starts_at: 'Available from', ends_at: 'Available until', sort: 'Sort order',
+  riddle_kind: 'Riddle type (blank = none)', riddle_prompt: 'Riddle / question',
+  riddle_answers: 'Accepted answers (one per line, EN + ES)', riddle_hint: 'Riddle hint',
+  rule: 'Unlocks when',
 }
 const labelFor = (name) => LABELS[name] || name.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
 // DB value -> form value (strings for inputs, newline text for lists).
 function toForm(field, v) {
   if (field.type === 'list') return (v || []).join('\n')
+  if (field.type === 'photos') return v || []
   // Nullable bool → '' (unknown) | 'true' | 'false', for a three-way select.
   if (field.type === 'bool') return field.nullable ? (v == null ? '' : String(v)) : !!v
   if (field.type === 'schedule') return v || {}
+  // Achievement rule jsonb → the same short syntax the backend parses.
+  if (field.type === 'rule') {
+    if (!v) return ''
+    return Array.isArray(v.all_of) ? v.all_of.join(' + ') : `${v.tag} x${v.count}`
+  }
+  if (field.type === 'date') return v ? new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/Puerto_Rico' }) : ''
+  if (field.type === 'hours') {
+    const m = typeof v === 'string' && v.match(/^\[(\d+),(\d+)\)$/)
+    return m ? `${m[1]}-${m[2]}` : ''
+  }
   return v ?? ''
 }
 
@@ -45,7 +64,7 @@ export default function Admin() {
   const [state, setState] = useState('loading') // loading | login | denied | error | ready
   const [error, setError] = useState('')
   const [config, setConfig] = useState(null)
-  const [kind, setKind] = useState('transport')
+  const [kind, setKind] = useState('beaches')
   const [rows, setRows] = useState([])
   const [query, setQuery] = useState('')
   const [gapsOnly, setGapsOnly] = useState(false)
@@ -160,7 +179,7 @@ export default function Admin() {
             />
             <button className="adm-btn adm-btn-primary" onClick={() => setSelected('new')}>+ New</button>
           </div>
-          <div className="adm-catbar" role="group" aria-label="Filter by category">
+          {cfg.categoryMode !== 'none' && <div className="adm-catbar" role="group" aria-label="Filter by category">
             <button className={`adm-chip ${catFilter === 'all' ? 'is-on' : ''}`} onClick={() => setCatFilter('all')}>
               All <span>{rows.length}</span>
             </button>
@@ -178,7 +197,7 @@ export default function Admin() {
                 No category <span>{catCounts.get('none')}</span>
               </button>
             )}
-          </div>
+          </div>}
           <div className="adm-list-meta">
             <span>{complete}/{rows.length} complete</span>
             <label><input type="checkbox" checked={gapsOnly} onChange={(e) => setGapsOnly(e.target.checked)} /> Gaps only</label>
@@ -206,7 +225,7 @@ export default function Admin() {
           <Editor
             key={`${kind}-${selected}`}
             kind={kind} cfg={cfg} row={row}
-            presetCat={typeof catFilter === 'number' ? catFilter : null}
+            presetCat={catFilter !== 'all' && catFilter !== 'none' ? catFilter : null}
             onClose={() => setSelected(null)}
             onSaved={(saved) => {
               setRows((prev) => {
@@ -243,9 +262,23 @@ function Editor({ kind, cfg, row, presetCat, onClose, onSaved }) {
     setStatus((s) => (s.kind === 'saving' ? s : { kind: 'idle', msg: '' }))
   }
 
-  // After a save the server returns its cleaned-up row (trimmed text, lists as
-  // arrays, '18.10' → 18.1). Re-seed from it so the form isn't "dirty" forever.
-  useEffect(() => setForm(initial), [initial])
+  // After a save (or photo upload) the server returns its cleaned-up row
+  // (trimmed text, lists as arrays, '18.10' → 18.1). Re-seed from it so the form
+  // isn't "dirty" forever — but only fields the user hasn't touched since, so an
+  // upload never wipes half-typed edits elsewhere in the form.
+  const prevInitial = useRef(initial)
+  useEffect(() => {
+    const before = prevInitial.current
+    prevInitial.current = initial
+    if (before === initial) return
+    setForm((cur) => {
+      const next = { ...cur }
+      for (const k of Object.keys(initial)) {
+        if (JSON.stringify(cur[k]) === JSON.stringify(before[k])) next[k] = initial[k]
+      }
+      return next
+    })
+  }, [initial])
 
   const save = useCallback(async () => {
     setStatus({ kind: 'saving', msg: 'Saving…' })
@@ -284,8 +317,8 @@ function Editor({ kind, cfg, row, presetCat, onClose, onSaved }) {
         </label>
       </div>
 
-      <fieldset className="adm-cats">
-        <legend>Category</legend>
+      {cfg.categoryMode !== 'none' && <fieldset className="adm-cats">
+        <legend>{cfg.categoryLabel || 'Category'}</legend>
         {cfg.categoryMode === 'many' ? (
           cfg.categories.map((c) => (
             <button
@@ -302,10 +335,17 @@ function Editor({ kind, cfg, row, presetCat, onClose, onSaved }) {
             {cfg.categories.map((c) => <option key={c.id} value={c.slug}>{c.label}</option>)}
           </select>
         )}
-      </fieldset>
+      </fieldset>}
 
       <div className="adm-grid">
-        {cfg.fields.map((field) => (
+        {cfg.fields.map((field) => field.type === 'photos' ? (
+          <PhotoManager
+            key={field.name} kind={kind} row={row} value={form[field.name]}
+            dirty={JSON.stringify(form[field.name]) !== JSON.stringify(initial[field.name])}
+            onChange={(v) => set(field.name, v)}
+            onUploaded={onSaved}
+          />
+        ) : (
           <Field
             key={field.name} field={field} value={form[field.name]}
             missing={row?.missing.includes(field.name)}
@@ -333,7 +373,7 @@ function Field({ field, value, missing, onChange }) {
   switch (field.type) {
     case 'longtext':
     case 'list':
-      input = <textarea id={id} rows={field.type === 'list' ? 3 : 4} value={value} onChange={(e) => onChange(e.target.value)} />
+      input = <textarea id={id} rows={field.type === 'list' ? 3 : 4} value={value} placeholder={field.placeholder || ''} onChange={(e) => onChange(e.target.value)} />
       break
     case 'bool':
       input = field.nullable ? (
@@ -349,11 +389,23 @@ function Field({ field, value, missing, onChange }) {
     case 'schedule':
       input = <ScheduleEditor value={value} onChange={onChange} />
       break
+    case 'select':
+      input = (
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+          {!field.required && <option value="">—</option>}
+          {field.required && !value && <option value="" disabled>Choose…</option>}
+          {field.options.map((o) => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+        </select>
+      )
+      break
+    case 'date':
+      input = <input id={id} type="date" value={value} onChange={(e) => onChange(e.target.value)} />
+      break
     case 'int': case 'number': case 'lat': case 'lng':
       input = (
         <input
           id={id} inputMode="decimal" value={value}
-          placeholder={field.type === 'lat' ? '18.1…' : field.type === 'lng' ? '-65.4…' : ''}
+          placeholder={field.placeholder || (field.type === 'lat' ? '18.1…' : field.type === 'lng' ? '-65.4…' : '')}
           onChange={(e) => onChange(e.target.value)}
         />
       )
@@ -362,7 +414,7 @@ function Field({ field, value, missing, onChange }) {
       input = (
         <input
           id={id} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
-          value={value} onChange={(e) => onChange(e.target.value)}
+          value={value} placeholder={field.placeholder || ''} onChange={(e) => onChange(e.target.value)}
         />
       )
   }
@@ -373,6 +425,89 @@ function Field({ field, value, missing, onChange }) {
         {missing && <span className="adm-dot" aria-label="missing" />}
       </label>
       {input}
+    </div>
+  )
+}
+
+// Photos for one listing. Order matters: the first photo is the hero the app
+// shows. Uploads go straight to the server (stored + appended there); reorder
+// and remove are ordinary form edits, saved with Save / ⌘S like any field.
+function PhotoManager({ kind, row, value, dirty, onChange, onUploaded }) {
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const [over, setOver] = useState(false)
+  const input = useRef(null)
+  const photos = value || []
+
+  const move = (i, to) => {
+    const next = [...photos]
+    const [p] = next.splice(i, 1)
+    next.splice(to, 0, p)
+    onChange(next)
+  }
+
+  async function upload(files) {
+    const list = [...files].filter((f) => /^image\//.test(f.type) || /\.hei[cf]$/i.test(f.name))
+    if (!list.length) return
+    setErr('')
+    let saved = null
+    for (const [i, file] of list.entries()) {
+      setBusy(`Uploading ${i + 1} of ${list.length}…`)
+      try {
+        saved = await adminUploadPhoto(kind, row.id, file)
+      } catch (e) {
+        setErr(`${file.name}: ${e.message}`)
+        break
+      }
+    }
+    setBusy('')
+    if (saved) onUploaded(saved)
+  }
+
+  if (!row) {
+    return (
+      <div className="adm-field is-wide">
+        <label>Photos</label>
+        <p className="adm-hint">Create the listing first, then add photos.</p>
+      </div>
+    )
+  }
+
+  // Uploading appends on the server; doing that over an unsaved reorder would
+  // silently discard the reorder, so ask for a save first.
+  const blocked = dirty || !!busy
+
+  return (
+    <div className="adm-field is-wide">
+      <label>Photos <span className="adm-hint">— first one is the cover shown in the app</span></label>
+      <div
+        className={`adm-photos ${over ? 'is-over' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); if (!blocked) setOver(true) }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); if (!blocked) upload(e.dataTransfer.files) }}
+      >
+        {photos.map((url, i) => (
+          <figure key={url} className="adm-photo">
+            <img src={url} alt="" loading="lazy" />
+            {i === 0 && <span className="adm-cover">Cover</span>}
+            <figcaption>
+              {i > 0 && <button type="button" onClick={() => move(i, 0)}>Make cover</button>}
+              <button type="button" aria-label="Move left" disabled={i === 0} onClick={() => move(i, i - 1)}>←</button>
+              <button type="button" aria-label="Move right" disabled={i === photos.length - 1} onClick={() => move(i, i + 1)}>→</button>
+              <button type="button" className="is-danger" onClick={() => onChange(photos.filter((_, j) => j !== i))}>Remove</button>
+            </figcaption>
+          </figure>
+        ))}
+        <button type="button" className="adm-photo-add" disabled={blocked} onClick={() => input.current?.click()}>
+          {busy || (dirty ? 'Save photo changes first' : '+ Add photos\nor drop them here')}
+        </button>
+        <input
+          ref={input} type="file" multiple hidden
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          onChange={(e) => { upload(e.target.files); e.target.value = '' }}
+        />
+      </div>
+      {err && <p className="adm-hint is-err">{err}</p>}
     </div>
   )
 }

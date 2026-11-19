@@ -36,3 +36,20 @@ export const adminConfig = () => call('GET', '/config')
 export const adminList = (kind) => call('GET', `/${kind}`)
 export const adminCreate = (kind, values) => call('POST', `/${kind}`, values)
 export const adminUpdate = (kind, id, values) => call('PATCH', `/${kind}/${id}`, values)
+
+// Raw file body (not base64): phone photos are several MB. macOS sometimes
+// reports HEIC files with an empty type, so infer it from the extension.
+export async function adminUploadPhoto(kind, id, file) {
+  const { data } = await getSession()
+  const token = data.session?.access_token
+  if (!token) throw new AdminError('Not signed in', 401)
+  const type = file.type || (/\.hei[cf]$/i.test(file.name) ? 'image/heic' : 'application/octet-stream')
+  const res = await fetch(`${API_BASE}/api/admin/${kind}/${id}/photo`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': type },
+    body: file,
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new AdminError(json.error || `Upload failed (${res.status})`, res.status)
+  return json
+}

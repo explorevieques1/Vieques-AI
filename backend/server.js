@@ -46,6 +46,7 @@ import { mountItineraries } from './itineraries.js'
 import { mountAiConversations, persistTurn } from './aiConversations.js'
 import { mountAccount } from './account.js'
 import { mountAdmin } from './admin.js'
+import { mountCards } from './cards.js'
 import { topListings } from './featured.js'
 
 // ----------------------------------------------------------------------------
@@ -1610,6 +1611,8 @@ app.delete('/api/favorites/:placeId', requireAuth, rateLimit({ max: 60 }), async
 mountItineraries(app, pool)
 mountAiConversations(app, pool)
 mountAccount(app, pool)
+// Vieques Cards — collectibles, riddles, achievements (backend/cards.js, 0055)
+mountCards(app, pool)
 // Owner data-entry tool — LOCAL ONLY (localhost:5174/admin). Not mounted when
 // NODE_ENV=production; also loopback-only and gated by ADMIN_USER_IDS.
 mountAdmin(app, pool)
