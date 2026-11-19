@@ -7,10 +7,10 @@ import {
   fetchKayakZones,
   fetchSnorkelZones,
   type AiPin,
+  type Card,
   type CardPosition,
   type DirectionsResult,
   type Suggestion,
-  fetchCardsSmoke,
 } from '../lib/api'
 import {
   isMappable,
@@ -21,10 +21,19 @@ import {
   type Place,
 } from '../lib/place'
 import { milesBetween } from '../lib/geo'
-import { makeMarkerEl, makeUserDotEl } from '../lib/markerIcon'
+import {
+  cardPinLabel,
+  disposeCardMarkerEl,
+  makeCardMarkerEl,
+  makeMarkerEl,
+  makeUserDotEl,
+  setCardPinArt,
+  type CardPinState,
+} from '../lib/markerIcon'
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
+import { CARD_RING_RANGE_M, drawCardRing, hasCardRing, removeCardRing } from '../lib/cardLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import { CameraDirector, pointShot } from '../lib/camera'
 import type { ShellMode } from '../lib/shell'
@@ -34,6 +43,7 @@ import type { Favorites } from '../hooks/useFavorites'
 import type { Itineraries } from '../hooks/useItineraries'
 import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useCardPins } from '../hooks/useCardPins'
 import { useCardRadar } from '../hooks/useCardRadar'
 import { useSafeArea } from '../hooks/useSafeArea'
 import { daypart, useSuggestion } from '../hooks/useSuggestion'
@@ -73,6 +83,15 @@ const RadarPill = lazy(() => import('./cards/RadarPill'))
 import { ResponsivePanel } from './ui/ResponsivePanel'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
+
+const METRES_PER_MILE = 1609.344
+
+/** Which face a card pin shows (S-3). Owned wins; a revealed card this pass
+ *  can't collect shows the lock. */
+function cardPinState(c: Card): CardPinState {
+  if (c.owned) return 'owned'
+  return c.lockedByTier ? 'locked' : 'revealed'
+}
 
 /**
  * The kind-specific block for the detail panel, if that kind has one.
@@ -237,6 +256,14 @@ function MapView({
    *  tap that unlocks sound (I-1). Phone layout only until step 10 (S-10). */
   const [radarOn, setRadarOn] = useState(false)
   const cardRadar = useCardRadar({ on: radarOn && isMobile, fix: userFix, locationBlocked })
+  /** Revealed + owned cards to pin while the radar is on (S-3, P-2, P-5). */
+  const cardPins = useCardPins({ on: radarOn && isMobile, revealed: cardRadar.revealed })
+  /**
+   * The card whose detail is open. Card detail (S-7) arrives in step 8; until
+   * then a tap only marks the pin selected (marker-lift + pulse), and a second
+   * tap on the same pin clears it.
+   */
+  const [openCardSlug, setOpenCardSlug] = useState<string | null>(null)
   // Desktop: the results panel is folded to an edge tab. The category and its
   // results survive — this is "get out of my way", not "close".
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
@@ -549,27 +576,143 @@ function MapView({
     // MapLibre queues them onto the canvas itself, not onto a style layer.
   }, [userLoc])
 
-  // TEMP smoke test (Card UI step 0): a plain pin for every card the server
-  // gives a location for (revealed or owned). Delete before step 1.
+  // ---------------------------------------------------------------------------
+  //  Vieques Cards — card pins + collect ring (S-3, P-1…P-5)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Card pins, keyed by slug, with the look they were built with so an update
+   * rebuilds only the pins that changed. Their own ref (P-1): clearMarkers()
+   * never touches them, and nothing here hides or gates category or AI pins.
+   */
+  const cardMarkersRef = useRef(new Map<string, { marker: maplibregl.Marker; look: string }>())
+  /** Slugs that already had their one "revealed just now" pulse. */
+  const cardPulsedRef = useRef(new Set<string>())
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const pins: maplibregl.Marker[] = []
-    fetchCardsSmoke()
-      .then((cards) => {
-        for (const c of cards) {
-          if (!c.location) continue
-          pins.push(
-            new maplibregl.Marker({ color: '#a855f7' })
-              .setLngLat(c.location.center)
-              .setPopup(new maplibregl.Popup({ offset: 24 }).setText(`${c.name} · ${c.rarity}`))
-              .addTo(map),
-          )
-        }
+    const live = cardMarkersRef.current
+    const wanted = new Set(cardPins.cards.map((c) => c.slug))
+
+    const drop = (slug: string) => {
+      const entry = live.get(slug)
+      if (!entry) return
+      disposeCardMarkerEl(entry.marker.getElement())
+      entry.marker.remove()
+      live.delete(slug)
+    }
+    for (const slug of [...live.keys()]) if (!wanted.has(slug)) drop(slug)
+    // Radar off (P-2): the next switch-on may pulse a fresh reveal again.
+    if (cardPins.cards.length === 0) cardPulsedRef.current.clear()
+
+    for (const c of cardPins.cards) {
+      if (!c.location) continue // P-5: only cards the server located for us
+      const state = cardPinState(c)
+      const selected = c.slug === openCardSlug
+      const look = `${state}|${c.rarity}|${selected}|${c.serialNo}|${c.location.center.join(',')}`
+      if (live.get(c.slug)?.look === look) continue
+      drop(c.slug)
+
+      // "Revealed just now": one marker-pulse, never a camera move (M-1).
+      const fresh = cardPins.fresh.has(c.slug) && !cardPulsedRef.current.has(c.slug)
+      if (fresh) cardPulsedRef.current.add(c.slug)
+
+      const el = makeCardMarkerEl({
+        rarity: c.rarity,
+        state,
+        label: cardPinLabel(c.rarity, c.name),
+        selected,
+        fresh,
       })
-      .catch((e) => console.warn('[cards smoke]', e))
-    return () => pins.forEach((p) => p.remove())
+      el.addEventListener('click', (e) => {
+        e.stopPropagation() // P-3: a card tap never reaches the map
+        setOpenCardSlug((cur) => (cur === c.slug ? null : c.slug))
+      })
+      if (state === 'owned' && c.name) {
+        // Art crop of the generated face (S-11). Dynamic import keeps the
+        // face generator out of the map's first load (C-3).
+        const face = { ...c, name: c.name }
+        void import('../lib/cardFace')
+          .then((m) => m.cardFrontUrl(face))
+          .then((url) => setCardPinArt(el, url))
+          .catch(() => undefined) // the rim-coloured card stays
+      }
+      live.set(c.slug, {
+        marker: new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat(c.location.center)
+          .addTo(map),
+        look,
+      })
+    }
+  }, [cardPins, openCardSlug])
+
+  // Unmount (P-2): take every card pin with the map.
+  useEffect(() => {
+    const live = cardMarkersRef.current
+    return () => {
+      live.forEach(({ marker }) => {
+        disposeCardMarkerEl(marker.getElement())
+        marker.remove()
+      })
+      live.clear()
+    }
   }, [])
+
+  /**
+   * The one card that gets a collect ring (S-3, P-4): the nearest revealed
+   * card you could collect, within reveal range of your fix. Owned, locked
+   * and sold-out cards have nothing to collect, so no ring. Distance from
+   * your own fix to a card the server already located for you (P-5).
+   */
+  const ringSlug = useMemo(() => {
+    if (!userFix) return null
+    let best: string | null = null
+    let bestM = Infinity
+    for (const c of cardPins.cards) {
+      if (!c.location || c.owned || c.lockedByTier || c.soldOut) continue
+      const m = milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE
+      if (m <= CARD_RING_RANGE_M && m < bestM) {
+        best = c.slug
+        bestM = m
+      }
+    }
+    return best
+  }, [cardPins.cards, userFix])
+  // Keyed by slug so a GPS tick that doesn't change the answer doesn't redraw.
+  const ringCard = useMemo(
+    () => cardPins.cards.find((c) => c.slug === ringSlug) ?? null,
+    [cardPins.cards, ringSlug],
+  )
+
+  // Collect ring GL layers, redrawn when the basemap changes (trails pattern,
+  // P-4) and removed with the radar. No camera move, ever (M-1).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const location = ringCard?.location
+    if (!ringCard || !location) {
+      removeCardRing(map)
+      return
+    }
+    const ring = { rarity: ringCard.rarity, radiusM: location.radiusM, center: location.center }
+    // setStyle drops our layers, and right after it the OLD style can still
+    // report loaded; the new one's last `styledata` can also arrive before
+    // its sprite has, while isStyleLoaded() is still false. So draw now if we
+    // can, then re-add on `styledata` / `idle` whenever the style is loaded
+    // and the ring is gone. Only re-adds — an update here would fire
+    // styledata again. The check is one getSource() lookup.
+    const ensure = () => {
+      if (map.isStyleLoaded() && !hasCardRing(map)) drawCardRing(map, ring)
+    }
+    if (map.isStyleLoaded()) drawCardRing(map, ring)
+    map.on('styledata', ensure)
+    map.on('idle', ensure)
+    return () => {
+      map.off('styledata', ensure)
+      map.off('idle', ensure)
+    }
+  }, [ringCard, styleId])
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
@@ -1664,7 +1807,15 @@ function MapView({
           <LocateFixed size={19} />
         </GlassButton>
         {/* Vieques Cards radar (S-1): last in the stack, below recentre. */}
-        {isMobile && <RadarButton on={radarOn} onToggle={setRadarOn} />}
+        {isMobile && (
+          <RadarButton
+            on={radarOn}
+            onToggle={(next) => {
+              setRadarOn(next)
+              if (!next) setOpenCardSlug(null) // pins go with the radar (P-2)
+            }}
+          />
+        )}
       </div>
 
       {/* Vieques Cards radar pill (S-2): left side, riding the sheet edge (L-3).

@@ -249,14 +249,6 @@ export type ZoneFeatureCollection = {
   }>
 }
 
-/** TEMP smoke test (Card UI step 0) — replaced by the real fetchCards in step 1. */
-export type SmokeCard = { slug: string; name: string | null; rarity: string; location: { center: [number, number] } | null }
-export async function fetchCardsSmoke(): Promise<SmokeCard[]> {
-  const res = await apiFetch(`/api/cards`)
-  if (!res.ok) throw new Error(`Cards failed: ${res.status}`)
-  return (await res.json()).cards
-}
-
 export async function fetchSnorkelSpots(): Promise<SnorkelSpot[]> {
   const res = await apiFetch(`/api/snorkel-spots`)
   if (!res.ok) throw new Error(`Snorkel spots failed: ${res.status}`)
