@@ -9,6 +9,7 @@ import {
   type AiPin,
   type DirectionsResult,
   type Suggestion,
+  fetchCardsSmoke,
 } from '../lib/api'
 import {
   isMappable,
@@ -519,6 +520,28 @@ function MapView({
     // run by the time this one does. Markers may be added before 'load' —
     // MapLibre queues them onto the canvas itself, not onto a style layer.
   }, [userLoc])
+
+  // TEMP smoke test (Card UI step 0): a plain pin for every card the server
+  // gives a location for (revealed or owned). Delete before step 1.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const pins: maplibregl.Marker[] = []
+    fetchCardsSmoke()
+      .then((cards) => {
+        for (const c of cards) {
+          if (!c.location) continue
+          pins.push(
+            new maplibregl.Marker({ color: '#a855f7' })
+              .setLngLat(c.location.center)
+              .setPopup(new maplibregl.Popup({ offset: 24 }).setText(`${c.name} · ${c.rarity}`))
+              .addTo(map),
+          )
+        }
+      })
+      .catch((e) => console.warn('[cards smoke]', e))
+    return () => pins.forEach((p) => p.remove())
+  }, [])
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
