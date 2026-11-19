@@ -1,4 +1,5 @@
 import { getSession } from './supabase'
+import type { Rarity } from './rarity'
 
 // Talks to the backend API.
 // Priority: explicit env override -> same host the page loaded from -> localhost.
@@ -45,6 +46,9 @@ export class ApiError extends Error {
   code?: string
   feature?: string
   remaining?: number
+  /** The full error body, for routes that send more than the fields above
+   *  (Cards: `distanceM`, `warmth`, `hint`, `minTier` — see cardErrorDetail). */
+  body: Record<string, unknown>
 
   constructor(status: number, body: Record<string, unknown>, fallback: string) {
     super((body.error as string) || fallback)
@@ -53,6 +57,7 @@ export class ApiError extends Error {
     this.code = body.code as string | undefined
     this.feature = body.feature as string | undefined
     this.remaining = body.remaining as number | undefined
+    this.body = body
   }
 
   /** True when upgrading the user's plan would fix this. */
@@ -1024,4 +1029,191 @@ export function formatDateRange(t: Pick<Trip, 'startDate' | 'endDate'>): string 
   return a.getUTCMonth() === b.getUTCMonth()
     ? `${mon(a)} ${day(a)}–${day(b)}`
     : `${mon(a)} ${day(a)} – ${mon(b)} ${day(b)}`
+}
+
+// ---------------------------------------------------------------------------
+//  Vieques Cards — backend/cards.js (shapes mirror toCard() and the routes)
+// ---------------------------------------------------------------------------
+
+/** Hot/cold word the server sends instead of a distance to a hidden card. */
+export type CardWarmth = 'cold' | 'warm' | 'hot' | 'burning'
+
+/** Radar count, bucketed by the server so it leaks less than a number. */
+export type RadarBucket = '0' | '1' | '2-3' | '4+'
+
+export type CardChallenge = {
+  kind: 'locate' | 'on_site'
+  prompt: string
+  solved: boolean
+  /** The riddle's own hint, only after a few misses. */
+  hint: string | null
+}
+
+/**
+ * One card as this user may see it. An unrevealed card is a silhouette:
+ * `name`, `lore`, `image`, `location` and `placeId` are null until it has been
+ * revealed or collected, and `region`/`hint` are null while a locate riddle is
+ * unsolved (CARD_UI_SPEC P-5).
+ */
+export type Card = {
+  slug: string
+  name: string | null
+  lore: string | null
+  image: string | null
+  rarity: Rarity
+  tags: string[]
+  region: string | null
+  hint: string | null
+  revealed: boolean
+  discoveredAt: string | null
+  /** `center` is [lng, lat]. */
+  location: { center: [number, number]; radiusM: number } | null
+  placeId: string | null
+  /** Puerto Rico hours [from, to) when the card can be collected. */
+  activeHours: [number, number] | null
+  soldOut: boolean
+  totalClaims: number
+  maxClaims: number | null
+  minTier: Tier
+  lockedByTier: boolean
+  owned: boolean
+  serialNo: number | null
+  claimedAt: string | null
+  challenge: CardChallenge | null
+}
+
+/** Per-region "found / total"; `region: null` is the riddle-locked Mystery group. */
+export type CardRegionTally = { region: string | null; found: number; total: number }
+
+export type CardsCatalog = {
+  tier: Tier
+  cards: Card[]
+  regions: CardRegionTally[]
+  owned: number
+  total: number
+}
+
+export type CardPosition = { lat: number; lng: number; accuracy: number }
+
+export type CardsNearby = {
+  radar: { count: RadarBucket; warmth: CardWarmth | null }
+  /** Cards that entered reveal range on this ping, in the GET /api/cards shape. */
+  revealed: Card[]
+  /** The phone's fix was too coarse to scan with. */
+  lowAccuracy?: boolean
+}
+
+export type AchievementSummary = {
+  slug: string
+  name: string
+  description: string | null
+  badge: string | null
+  points: number
+}
+
+export type Achievement = AchievementSummary & {
+  earnedAt: string | null
+  progress: { have: number; need: number }
+}
+
+export type CardClaim = {
+  claimed: true
+  alreadyOwned: boolean
+  /** Missing only when a double-tap lost the race; refetch the catalog. */
+  serialNo?: number
+  maxClaims?: number | null
+  newAchievements: AchievementSummary[]
+}
+
+export type RiddleSolved = { solved: true; region: string }
+
+/** Every `code` the Cards routes send with an error. */
+export type CardErrorCode =
+  | 'UPGRADE_REQUIRED'
+  | 'TOO_FAR'
+  | 'TOO_FAST'
+  | 'ANSWER_REQUIRED'
+  | 'WRONG_ANSWER'
+  | 'LOW_ACCURACY'
+  | 'NOT_ON_ISLAND'
+  | 'RIDDLE_UNSOLVED'
+  | 'NOT_NOW'
+  | 'SOLD_OUT'
+  | 'TOO_MANY_GUESSES'
+  | 'NOT_FOUND'
+  | 'NO_LOCATION'
+  | 'NO_CHALLENGE'
+  | 'ON_SITE'
+
+/** The extra fields a Cards error may carry, read off ApiError.body. */
+export type CardErrorDetail = {
+  code: CardErrorCode | undefined
+  /** TOO_FAR on a revealed card: metres left to walk. */
+  distanceM: number | null
+  /** TOO_FAR on a card you haven't revealed: hot/cold only. */
+  warmth: CardWarmth | null
+  /** WRONG_ANSWER after a few misses. */
+  hint: string | null
+  /** UPGRADE_REQUIRED: the pass that unlocks this rarity. */
+  minTier: Tier | null
+}
+
+export function cardErrorDetail(e: ApiError): CardErrorDetail {
+  const b = e.body
+  return {
+    code: e.code as CardErrorCode | undefined,
+    distanceM: typeof b.distanceM === 'number' ? b.distanceM : null,
+    warmth: typeof b.warmth === 'string' ? (b.warmth as CardWarmth) : null,
+    hint: typeof b.hint === 'string' ? b.hint : null,
+    minTier: typeof b.minTier === 'string' ? (b.minTier as Tier) : null,
+  }
+}
+
+export async function fetchCards(): Promise<CardsCatalog> {
+  const res = await apiFetch('/api/cards')
+  if (!res.ok) await raise(res, 'Cards failed')
+  return res.json()
+}
+
+/** The radar ping. Call only while the radar is on (R-1 throttling is the caller's). */
+export async function cardsNearby(pos: CardPosition): Promise<CardsNearby> {
+  const res = await apiFetch('/api/cards/nearby', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pos),
+  })
+  if (!res.ok) await raise(res, 'Card radar failed')
+  return res.json()
+}
+
+/** Collect a card. `answer` is the on-site question's answer, when it has one. */
+export async function claimCard(
+  slug: string,
+  pos: CardPosition,
+  answer?: string,
+): Promise<CardClaim> {
+  const res = await apiFetch(`/api/cards/${encodeURIComponent(slug)}/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(answer == null ? pos : { ...pos, answer }),
+  })
+  if (!res.ok) await raise(res, 'Collect failed')
+  return res.json()
+}
+
+/** Answer a locate riddle. Solving reveals the region to search, not the spot. */
+export async function solveRiddle(slug: string, answer: string): Promise<RiddleSolved> {
+  const res = await apiFetch(`/api/cards/${encodeURIComponent(slug)}/solve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answer }),
+  })
+  if (!res.ok) await raise(res, 'Riddle failed')
+  return res.json()
+}
+
+export async function fetchAchievements(): Promise<Achievement[]> {
+  const res = await apiFetch('/api/achievements')
+  if (!res.ok) await raise(res, 'Achievements failed')
+  return (await res.json()).achievements
 }

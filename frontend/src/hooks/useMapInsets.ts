@@ -72,6 +72,16 @@ export const BOTTOM_NAV_H = 56
 export const BOTTOM_NAV_GAP = 12
 
 /**
+ * Vieques Cards radar pill (CARD_UI_SPEC S-2, X-2): a 40px GlassSurface capsule
+ * floating above the sheet edge. The nearby banner's height is measured live,
+ * not fixed, and feeds the bottom inset when it shows (M-2).
+ */
+export const RADAR_PILL_H = 40
+export const RADAR_PILL_RADIUS = 20
+/** Gap between the sheet's live top edge (--controls-y) and a floating Cards surface (L-3). */
+export const CARDS_FLOAT_GAP = 8
+
+/**
  * Total mobile top inset, for whatever chrome is currently on screen.
  *
  * `safeTop` comes from useSafeArea rather than being baked in: env() is only
