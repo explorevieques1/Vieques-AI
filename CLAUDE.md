@@ -27,7 +27,7 @@ Tailwind, **MapLibre GL**. Backend is Node/Express (ESM) + `pg` + Stripe. AI cha
 Gemini (cheap), not Anthropic (that key is paid-for but currently unused — see TODO
 below).
 
-## Current real status (as of 2026-11-12 — see the vault for the living version)
+## Current real status (as of 2026-11-12 — see the vault for the living version; active build since 2026-11-19: **Vieques Cards**, section below)
 
 Deployed and working end-to-end again. The backend was silently down from ~mid-August
 to now, which killed all sales during that window — there was no uptime monitoring, so
@@ -193,6 +193,66 @@ below before changing anything visual.
 - **Geometry that moves together** (the map camera pads by it): `TOP_BENTO_H`,
   `BOTTOM_NAV_H` + `--nav-clear` + `BOTTOM_NAV_GAP`, `SHEET_HIDDEN`, the nav's 27px
   inset. Measure in the browser after any change — borders add pixels.
+
+## Vieques Cards (in progress, started 2026-11-19)
+
+The feature (an idea from the owner and Will) is collectible cards pinned to real island spots, a mix of Pokémon GO and geocaching. A card is claimed by standing inside its radius. Cards are **hidden until you're close**, in four stages:
+1. **Region** tally in the Collection.
+2. **Radar**, about 1 km away: a count bucketed `0` / `1` / `2-3` / `4+`, plus hot/cold.
+3. **Reveal**, about 200 m away.
+4. **Collect**: hold to collect.
+
+**Rarity gates by pass tier:**
+- common: any account
+- basic: Day Trip and up
+- rare: Vacation and up
+- legendary: Exploration only
+
+It also has riddles (*locate* and *on-site*), set achievements (Beach Bum, Not Afraid of Heights…) and a Top Traveler leaderboard. Later phases add partner coupon cards (single use, staff PIN) and free-pass reward cards.
+
+**Done so far:**
+- **Database:** `db/migrations/0055_collectible_cards.sql` is **applied to production** (2026-11-19, after a rolled-back dry run).
+  - 8 tables: `collectible_cards`, `card_challenges`, `challenge_progress`, `card_discoveries`, `card_claims`, `achievements`, `user_achievements`, `traveler_profiles`.
+  - RLS is on everywhere. The catalog, challenges and achievements tables are backend-only (REVOKE from anon/authenticated).
+- **Backend** (`backend/cards.js`, mounted in `server.js`):
+  - `GET /api/cards`: unrevealed cards come back with no name, lore, image or coordinates.
+  - `POST /api/cards/nearby`: the radar.
+  - `POST /api/cards/:slug/solve`
+  - `POST /api/cards/:slug/claim`
+  - `GET /api/achievements`
+
+  All checks happen on the server: PostGIS distance, accuracy ≤50 m, island bounding box, a 120 km/h speed check, an on-site answer, and an atomic serial number. **Written but NOT committed or deployed yet.**
+- **Admin:** the admin tool (`backend/admin.js` + `landing/src/pages/Admin.jsx`) has Cards and Achievements tabs. **Uncommitted, and mixed with the owner's own unfinished admin work** (there's a `TODO(human)` in `missingFields`). Those two files ship together or not at all, so ask the owner first.
+- **Privacy:** the rewrite is ready behind `CARDS_LIVE = false` in `landing/src/lib/legal.js`. **Launch day, in ONE commit:** set it to `true` and bump `TERMS_VERSION` and `LAST_UPDATED`. This is the first feature that sends location to the server, so it can't launch without the policy.
+- **UI design:** fully specified in `docs/CARD_UI_SPEC.md`, which is the source of truth. Rule IDs: C, L, G, P, M, W, I, R, T, X, and surfaces S-1…S-11. The vault's *Card UI Mapping.pdf* is its visual twin.
+  - Only **free** React Bits, all dependency-free. HoloCard is the opened card, TiltedCard the grid, ReflectiveCard an optional legendary reveal.
+  - Anything that needs `motion`, three or gsap is off-limits, and so is anything Pro.
+- **No map-app UI code exists yet.**
+
+**How to build the UI:** follow the vault's `04 - Features & Ideas/Card UI Build Order.md` (steps 0–11, with checkboxes). For each step:
+1. The owner says "Build Card UI step N".
+2. `cards-builder` builds it.
+3. `cards-ui-guard` checks it (add `vieques-diff-reviewer` for claim, tier or backend steps).
+4. `deployer` ships it.
+5. Tick the step's boxes and progress table with `vault-log`.
+
+Step 0 = ship the backend `cards.js` and the `server.js` mount, after resolving the `admin.js` / `Admin.jsx` question above.
+
+Still open:
+- curl tests with a real JWT.
+- The Phase 2 leaderboard endpoint (Top Traveler, step 9, depends on it).
+- 12 launch cards with real coordinates.
+- Card art.
+- Point weights.
+
+The plan file is `~/.claude/plans/last-night-will-and-drifting-music.md`. The feature note and roadmap are in the vault: `04 - Features & Ideas/Vieques Cards.md`.
+
+Gotchas learned building it:
+- Lock the card row with `FOR NO KEY UPDATE`, not `FOR UPDATE`. Otherwise it self-deadlocks against the FK check.
+- Use `IS DISTINCT FROM` in radar filters. Plain `NOT (a AND b)` drops rows where a value is NULL.
+- In CHECK constraints, guard casts with `CASE`, because Postgres doesn't guarantee the order `AND` is evaluated in.
+- End a SQL string that later gets appended to with a `/* */` comment, never `--`, which would comment out whatever comes after it.
+- To test DDL on production safely, put it in one transaction that ends with `RAISE EXCEPTION`. The exception rolls everything back and carries the results out in its message.
 
 ## Cross-origin session hand-off (landing ↔ map app) — don't regress this
 
