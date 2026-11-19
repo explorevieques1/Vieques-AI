@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { fetchCards, type Card } from '../lib/api'
 
@@ -12,6 +12,9 @@ import { fetchCards, type Card } from '../lib/api'
  *   - Every card the radar reveals (`revealed` from useCardRadar) is merged in
  *     straight away, without a reload, and marked `fresh` for its one pulse.
  * Off forgets everything (P-2: no pins while the radar is off).
+ *
+ * After a claim (step 5), `markOwned` flips the pin to its owned look at once
+ * and `reload` refetches the catalog so the server's own state wins.
  */
 
 export type CardPins = {
@@ -19,6 +22,10 @@ export type CardPins = {
   cards: Card[]
   /** Slugs the radar revealed during this session (one marker-pulse each). */
   fresh: ReadonlySet<string>
+  /** Optimistic: the card was just collected with this serial. */
+  markOwned: (slug: string, serialNo: number | null) => void
+  /** Refetch GET /api/cards (after a claim) while the radar is on. */
+  reload: () => void
 }
 
 type Args = {
@@ -39,6 +46,8 @@ function withLocations(into: Map<string, Card>, cards: Card[]): Map<string, Card
 export function useCardPins({ on, revealed }: Args): CardPins {
   const [bySlug, setBySlug] = useState<Map<string, Card>>(() => new Map())
   const [fresh, setFresh] = useState<ReadonlySet<string>>(EMPTY_SET)
+  /** Bumped by reload() to re-run the catalog fetch. */
+  const [reloads, setReloads] = useState(0)
 
   // Adjust state on prop change, during render (as useCardRadar does):
   // radar off → forget; a new radar reply → merge its reveals.
@@ -72,8 +81,19 @@ export function useCardPins({ on, revealed }: Args): CardPins {
     return () => {
       cancelled = true
     }
-  }, [on])
+  }, [on, reloads])
+
+  const markOwned = useCallback((slug: string, serialNo: number | null) => {
+    setBySlug((prev) => {
+      const card = prev.get(slug)
+      if (!card || card.owned) return prev
+      const next = new Map(prev)
+      next.set(slug, { ...card, owned: true, serialNo: serialNo ?? card.serialNo })
+      return next
+    })
+  }, [])
+  const reload = useCallback(() => setReloads((n) => n + 1), [])
 
   const cards = useMemo(() => [...bySlug.values()], [bySlug])
-  return { cards: on ? cards : NO_CARDS, fresh: on ? fresh : EMPTY_SET }
+  return { cards: on ? cards : NO_CARDS, fresh: on ? fresh : EMPTY_SET, markOwned, reload }
 }

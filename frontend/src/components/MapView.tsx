@@ -8,6 +8,7 @@ import {
   fetchSnorkelZones,
   type AiPin,
   type Card,
+  type CardClaim,
   type CardPosition,
   type DirectionsResult,
   type Suggestion,
@@ -51,6 +52,7 @@ import {
   mobileTopInset,
   safeInsets,
   useMapInsets,
+  CARDS_FLOAT_GAP,
   CHROME_TOP_PAD,
   DETAIL_PANEL_W,
   RESULTS_PANEL_W,
@@ -80,6 +82,13 @@ import RadarButton from './cards/RadarButton'
 
 /** The radar pill carries the WebGL Radar — kept out of the map's first load (C-3). */
 const RadarPill = lazy(() => import('./cards/RadarPill'))
+/** The nearby banner carries HoldButton / PixelCard / ClickSpark — lazy too (C-3). */
+const NearbyBanner = lazy(() => import('./cards/NearbyBanner'))
+/** Interim "Collected" line in the banner after a claim, until the step-6
+ *  claim reveal (S-5) takes that moment over. */
+const CLAIM_INTERIM_MS = 2600
+/** Banner leaves only 20 m past the 200 m edge (GPS-jitter hysteresis). */
+const BANNER_EXIT_SLACK_M = 20
 import { ResponsivePanel } from './ui/ResponsivePanel'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
@@ -264,6 +273,16 @@ function MapView({
    * tap on the same pin clears it.
    */
   const [openCardSlug, setOpenCardSlug] = useState<string | null>(null)
+  /** Measured nearby-banner height, 0 when it isn't showing (M-2, L-3). */
+  const [cardsBannerH, setCardsBannerH] = useState(0)
+  /**
+   * The card just collected + the server's answer. Step 6 (S-5 claim reveal)
+   * mounts its full-screen overlay from this; until then the banner shows a
+   * short "Collected" line.
+   */
+  const [claimMoment, setClaimMoment] = useState<{ card: Card; claim: CardClaim } | null>(null)
+  /** Cards skipped via "See other cards nearby" (SOLD_OUT), this session. */
+  const [skippedCards, setSkippedCards] = useState<ReadonlySet<string>>(() => new Set())
   // Desktop: the results panel is folded to an edge tab. The category and its
   // results survive — this is "get out of my way", not "close".
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
@@ -428,6 +447,7 @@ function MapView({
     sheetHeight,
     topInset,
     safeBottom: safeArea.bottom,
+    cardsBanner: cardsBannerH,
   })
 
   /** Clamp the inset box to the current canvas before handing it to MapLibre. */
@@ -713,6 +733,70 @@ function MapView({
       map.off('idle', ensure)
     }
   }, [ringCard, styleId])
+
+  /**
+   * The card the nearby banner is about (S-4): the nearest revealed card you
+   * don't own yet, within reveal range of your fix. Unlike the ring, locked
+   * and sold-out cards count — the banner explains them (④ / SOLD_OUT). A
+   * card just collected stays on screen for its interim "Collected" line.
+   */
+  // Hysteresis: a card already in the banner stays until you're 20 m past the
+  // 200 m edge, so GPS jitter at the boundary doesn't flicker the banner (and
+  // nudge the camera padding, M-2) on and off.
+  const [stickyBannerSlug, setStickyBannerSlug] = useState<string | null>(null)
+  const bannerCard = useMemo(() => {
+    if (claimMoment) return claimMoment.card
+    if (!userFix) return null
+    const here: [number, number] = [userFix.lng, userFix.lat]
+    const sticky = stickyBannerSlug
+      ? cardPins.cards.find((c) => c.slug === stickyBannerSlug)
+      : undefined
+    if (
+      sticky?.location && !sticky.owned && !skippedCards.has(sticky.slug) &&
+      milesBetween(here, sticky.location.center) * METRES_PER_MILE <= CARD_RING_RANGE_M + BANNER_EXIT_SLACK_M
+    ) return sticky
+    let best: Card | null = null
+    let bestM = Infinity
+    for (const c of cardPins.cards) {
+      if (!c.location || c.owned || skippedCards.has(c.slug)) continue
+      const m = milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE
+      if (m <= CARD_RING_RANGE_M && m < bestM) {
+        best = c
+        bestM = m
+      }
+    }
+    return best
+  }, [cardPins.cards, userFix, skippedCards, claimMoment, stickyBannerSlug])
+  const bannerSlug = bannerCard?.slug ?? null
+  if (bannerSlug !== stickyBannerSlug) setStickyBannerSlug(bannerSlug)
+
+  const { markOwned: markCardOwned, reload: reloadCardPins } = cardPins
+  /**
+   * A claim succeeded (or was already yours — same serial). The pin switches
+   * to its owned look at once and the catalog is refetched so the server's
+   * state wins. Step 6 hooks in here: mount the claim reveal (S-5) from
+   * `claimMoment`. No camera move (M-1).
+   */
+  const handleCardClaimed = useCallback(
+    (card: Card, claim: CardClaim) => {
+      markCardOwned(card.slug, claim.serialNo ?? null)
+      reloadCardPins()
+      setClaimMoment({ card, claim })
+    },
+    [markCardOwned, reloadCardPins],
+  )
+  useEffect(() => {
+    if (!claimMoment) return
+    const t = window.setTimeout(() => setClaimMoment(null), CLAIM_INTERIM_MS)
+    return () => window.clearTimeout(t)
+  }, [claimMoment])
+  const skipCard = useCallback(
+    (slug: string) => setSkippedCards((prev) => new Set([...prev, slug])),
+    [],
+  )
+  /** The banner only reports a height while it's mounted and visible. */
+  const bannerShown = isMobile && radarOn && bannerCard != null
+  const bannerLift = bannerShown && cardsBannerH > 0 ? cardsBannerH + CARDS_FLOAT_GAP : 0
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
@@ -1742,7 +1826,9 @@ function MapView({
           isMobile
             ? {
                 top: 'var(--controls-y, calc(100dvh - 176px))',
-                transform: 'translateY(calc(-100% - 0.75rem))',
+                // L-3: rides above the Cards nearby banner when it shows
+                // (it's full width on the sheet edge). Static, not animated.
+                transform: `translateY(calc(-100% - 0.75rem - ${bannerLift}px))`,
                 right: '1.25rem',
               }
             : {
@@ -1812,7 +1898,10 @@ function MapView({
             on={radarOn}
             onToggle={(next) => {
               setRadarOn(next)
-              if (!next) setOpenCardSlug(null) // pins go with the radar (P-2)
+              if (!next) {
+                setOpenCardSlug(null) // pins go with the radar (P-2)
+                setClaimMoment(null)
+              }
             }}
           />
         )}
@@ -1823,7 +1912,32 @@ function MapView({
           overlay (L-4, W-2); unmounted with the radar. */}
       {isMobile && radarOn && (
         <Suspense fallback={null}>
-          <RadarPill radar={cardRadar} hidden={snap === SHEET_FULL || addToTripFor != null} />
+          <RadarPill
+            radar={cardRadar}
+            hidden={snap === SHEET_FULL || addToTripFor != null}
+            lift={bannerLift}
+          />
+        </Suspense>
+      )}
+
+      {/* Vieques Cards nearby banner (S-4): directly on the sheet edge (L-3),
+          pill and controls above it. Hidden at full / under a z-70 overlay,
+          one slim line while a place is open (L-4). */}
+      {bannerShown && bannerCard && (
+        <Suspense fallback={null}>
+          <NearbyBanner
+            card={bannerCard}
+            fix={userFix}
+            claimed={claimMoment?.card.slug === bannerCard.slug ? claimMoment.claim : null}
+            slim={selected != null}
+            hidden={snap === SHEET_FULL || addToTripFor != null}
+            onClaimed={handleCardClaimed}
+            // Riddle sheet (S-8) arrives in step 8; until then this selects
+            // the card's pin, like a pin tap.
+            onSolveRiddle={(c) => setOpenCardSlug(c.slug)}
+            onDismiss={skipCard}
+            onHeight={setCardsBannerH}
+          />
         </Suspense>
       )}
 

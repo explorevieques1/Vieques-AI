@@ -587,3 +587,65 @@ html[data-nav-hidden] .vq-bottom-nav {
   /* Hide only after the fade has had time to finish. */
   transition: visibility 0s linear 160ms;
 }
+
+/* ---- Vieques Cards nearby banner (CARD_UI_SPEC S-4, G-1) ----
+   Taller than 64px, so NOT GlassSurface: the same frosted recipe as
+   .vq-map-sheet (fill, blur, rim + sheen), so it reads as a piece of the sheet
+   it sits on. No GlassSurface lives inside it, so fading this element is fine. */
+.vq-cards-banner {
+  position: relative;
+  isolation: isolate;
+  background: oklch(0.17 0.028 258 / 0.7);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  border: 1px solid oklch(1 0 0 / 0.16);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.3),
+    inset 0 0 12px 3px hsl(0 0% 100% / 0.06),
+    0 -8px 30px rgb(0 0 0 / 0.35);
+}
+.vq-cards-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(
+    160deg,
+    hsl(0 0% 100% / 0.1) 0%,
+    transparent 22%,
+    transparent 80%,
+    hsl(0 0% 100% / 0.04) 100%
+  );
+}
+
+/* HoldButton call-site tuning (S-4, T-4): its fill is the teal→sky CTA
+   gradient, which the vendored focus ring (`outline: var(--hb-fill)`) can't
+   use as a colour — so the ring is restated here, outside the vendored file. */
+.vq-hold.hold-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+/* On-site question, wrong answer (S-4 ③): a 240ms shake; reduced motion gets
+   a border flash instead (M-3). */
+@keyframes vq-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes vq-flash {
+  0%, 100% { border-color: oklch(1 0 0 / 0.16); }
+  40% { border-color: var(--destructive); }
+}
+.vq-shake {
+  animation: vq-shake 240ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vq-shake {
+    animation: vq-flash 240ms ease-out;
+  }
+}

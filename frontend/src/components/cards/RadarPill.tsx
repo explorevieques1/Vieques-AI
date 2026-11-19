@@ -45,8 +45,12 @@ function statusCopy(radar: CardRadarState): { text: string; warmth: string | nul
 export default function RadarPill({
   radar,
   hidden,
+  lift = 0,
 }: {
   radar: CardRadarState
+  /** L-3: px to rise by so the pill sits above the nearby banner (its
+   *  measured height + gap), 0 when no banner shows. */
+  lift?: number
   /** L-4: sheet at full or a z-70 overlay open. The pill stays mounted (so
    *  the WebGL context isn't rebuilt on every drag) but the Radar pauses (W-2). */
   hidden: boolean
@@ -77,7 +81,7 @@ export default function RadarPill({
         // Never under the 48px control stack on the right (320px phones):
         // both 1.25rem gutters + the button + an 8px gap.
         maxWidth: 'calc(100vw - 2.5rem - 56px)',
-        bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP}px)`,
+        bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP + lift}px)`,
         visibility: hidden ? 'hidden' : 'visible',
       }}
       aria-hidden={hidden || undefined}

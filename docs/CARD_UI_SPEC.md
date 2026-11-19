@@ -203,6 +203,21 @@ the open" (auto-retry) · `NOT_NOW` "This card appears <hours>" · `SOLD_OUT` "E
 has been collected" · `TOO_FAST` "Whoa, that was fast. Try again in a few minutes" ·
 `TOO_MANY_GUESSES` "Try again in an hour" · `RIDDLE_UNSOLVED` "Solve the riddle first"
 → opens S-8.
+**Owner rule (2026-11-19): only LEGENDARY cards have a riddle**, either a locate riddle or an on-site question. Common, basic and rare cards are walk up + hold. State ③ and S-8 therefore only ever appear for legendaries. Not enforced in code yet; authoring rule for the admin tool.
+*Step 5 additions (owner-accepted defaults, 2026-11-19):*
+- **Layout:** the right control stack lifts above the banner by the same rule as the pill (L-3). The 40×56 thumbnail is the PixelCard/thumb size.
+- **More errors:**
+  - `NOT_ON_ISLAND` → "Cards live on Vieques".
+  - `NOT_FOUND` / `NO_LOCATION` → the server's sentence.
+  - Network failure → "No connection — hold to try again".
+  - `NOT_NOW` without hours → the server's sentence.
+- **Cooldowns** (the server sends no retry time): `TOO_FAST` 3 min, `TOO_MANY_GUESSES` 60 min, with hold disabled and "Try again in m:ss".
+- **`SOLD_OUT`:** adds a "See other cards nearby" button, which skips that card for the session.
+- **④ locked:** shows anywhere within 200 m, not only in the collect radius.
+- **Slim one-line mode** (when a place is open): "Card nearby · <name>", not tappable.
+- **Placeholders until later steps:**
+  - Until S-5 ships, a 2.6 s interim line: "Collected · #N", plus a check. S-5 replaces it.
+  - Until S-8 ships, `RIDDLE_UNSOLVED` selects the card's pin.
 
 **S-5 Claim reveal.** L-2 overlay. t0 ClickSpark (teal, 8) + overlay fade 180ms ·
 t120 HoloCard (~300 wide, rarity preset) · t600 ShinyText rarity (rare+,

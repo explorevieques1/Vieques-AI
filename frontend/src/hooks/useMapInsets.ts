@@ -80,6 +80,9 @@ export const RADAR_PILL_H = 40
 export const RADAR_PILL_RADIUS = 20
 /** Gap between the sheet's live top edge (--controls-y) and a floating Cards surface (L-3). */
 export const CARDS_FLOAT_GAP = 8
+/** Nearby banner (S-4): full width minus these side gutters. Its height is
+ *  measured live (it changes with its state) and reported to MapView. */
+export const NEARBY_BANNER_GUTTER = 10
 
 /**
  * Total mobile top inset, for whatever chrome is currently on screen.
@@ -145,6 +148,10 @@ type Args = {
   topInset?: number
   /** Mobile: the home-indicator inset, so the nav's real height is known. */
   safeBottom?: number
+  /** Mobile: measured height of the Cards nearby banner, 0 when it isn't
+   *  showing (CARD_UI_SPEC M-2). It floats on the sheet edge, so it adds to
+   *  the sheet's inset together with its CARDS_FLOAT_GAP. */
+  cardsBanner?: number
 }
 
 export function useMapInsets({
@@ -153,6 +160,7 @@ export function useMapInsets({
   sheetHeight,
   topInset,
   safeBottom = 0,
+  cardsBanner = 0,
 }: Args): MapInsets {
   const isMobile = useIsMobile()
 
@@ -166,10 +174,11 @@ export function useMapInsets({
       // so even at the smallest snap that strip of map is not really visible.
       // Without the floor the camera would happily centre a pin behind it.
       const navH = BOTTOM_NAV_H + Math.max(BOTTOM_NAV_GAP, safeBottom)
+      const banner = cardsBanner > 0 ? cardsBanner + CARDS_FLOAT_GAP : 0
       return {
         top: topInset ?? TOP_BAR_H_MOBILE,
         right: 16,
-        bottom: Math.min(Math.max(sheetHeight, navH), maxBottom),
+        bottom: Math.min(Math.max(sheetHeight, navH) + banner, maxBottom),
         left: 16,
       }
     }
@@ -180,7 +189,7 @@ export function useMapInsets({
       bottom: PANEL_GAP,
       left: resultsOpen ? RESULTS_PANEL_W + PANEL_GAP * 2 : PANEL_GAP,
     }
-  }, [isMobile, resultsOpen, detailOpen, sheetHeight, topInset, safeBottom])
+  }, [isMobile, resultsOpen, detailOpen, sheetHeight, topInset, safeBottom, cardsBanner])
 }
 
 /**
