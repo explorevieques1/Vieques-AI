@@ -23,10 +23,13 @@ const CONTROL_GLASS = { ...LIQUID_GLASS, backgroundOpacity: 0.65 }
 export function GlassButton({
   label,
   onClick,
+  pressed,
   children,
 }: {
   label: string
   onClick: () => void
+  /** Toggle controls (the Cards radar, S-1): sets aria-pressed. */
+  pressed?: boolean
   children: ReactNode
 }) {
   return (
@@ -40,6 +43,7 @@ export function GlassButton({
       <button
         onClick={onClick}
         aria-label={label}
+        aria-pressed={pressed}
         title={label}
         className="grid h-full w-full place-items-center rounded-full text-foreground transition-colors hover:bg-white/8 active:bg-white/12"
       >

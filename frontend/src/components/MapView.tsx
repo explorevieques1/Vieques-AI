@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import { Globe, LocateFixed, Minus, PanelLeftOpen, Plus } from 'lucide-react'
 
@@ -7,6 +7,7 @@ import {
   fetchKayakZones,
   fetchSnorkelZones,
   type AiPin,
+  type CardPosition,
   type DirectionsResult,
   type Suggestion,
   fetchCardsSmoke,
@@ -33,6 +34,7 @@ import type { Favorites } from '../hooks/useFavorites'
 import type { Itineraries } from '../hooks/useItineraries'
 import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useCardRadar } from '../hooks/useCardRadar'
 import { useSafeArea } from '../hooks/useSafeArea'
 import { daypart, useSuggestion } from '../hooks/useSuggestion'
 import {
@@ -64,6 +66,10 @@ import SavedBody from './SavedBody'
 import TripadvisorBlock, { hasTripadvisor } from './TripadvisorBlock'
 import ResultsList, { type SortKey } from './ResultsList'
 import UpsellOverlay from './UpsellOverlay'
+import RadarButton from './cards/RadarButton'
+
+/** The radar pill carries the WebGL Radar — kept out of the map's first load (C-3). */
+const RadarPill = lazy(() => import('./cards/RadarPill'))
 import { ResponsivePanel } from './ui/ResponsivePanel'
 
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
@@ -219,7 +225,18 @@ function MapView({
   const [zoneLegend, setZoneLegend] = useState<
     { label: string | null; color: string | null; description: string | null }[]
   >([])
-  const [userLoc, setUserLoc] = useState<[number, number] | null>(null)
+  /** The latest fix from the location watch below, accuracy included (Cards radar). */
+  const [userFix, setUserFix] = useState<CardPosition | null>(null)
+  /** The watch failed with PERMISSION_DENIED — the radar pill says so (S-2). */
+  const [locationBlocked, setLocationBlocked] = useState(false)
+  const userLoc = useMemo<[number, number] | null>(
+    () => (userFix ? [userFix.lng, userFix.lat] : null),
+    [userFix],
+  )
+  /** Vieques Cards radar (S-1/S-2). Off on every load: switching it on is the
+   *  tap that unlocks sound (I-1). Phone layout only until step 10 (S-10). */
+  const [radarOn, setRadarOn] = useState(false)
+  const cardRadar = useCardRadar({ on: radarOn && isMobile, fix: userFix, locationBlocked })
   // Desktop: the results panel is folded to an edge tab. The category and its
   // results survive — this is "get out of my way", not "close".
   const [resultsCollapsed, setResultsCollapsed] = useState(false)
@@ -489,8 +506,19 @@ function MapView({
   useEffect(() => {
     if (!navigator.geolocation) return
     const id = navigator.geolocation.watchPosition(
-      (pos) => setUserLoc([pos.coords.longitude, pos.coords.latitude]),
-      () => {},
+      (pos) => {
+        setLocationBlocked(false)
+        setUserFix({
+          lng: pos.coords.longitude,
+          lat: pos.coords.latitude,
+          accuracy: pos.coords.accuracy,
+        })
+      },
+      // Only a denial is worth telling anyone about (the Cards radar pill);
+      // timeouts and "unavailable" just keep waiting for the next fix.
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setLocationBlocked(true)
+      },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 10_000 },
     )
     return () => navigator.geolocation.clearWatch(id)
@@ -1635,7 +1663,18 @@ function MapView({
         >
           <LocateFixed size={19} />
         </GlassButton>
+        {/* Vieques Cards radar (S-1): last in the stack, below recentre. */}
+        {isMobile && <RadarButton on={radarOn} onToggle={setRadarOn} />}
       </div>
+
+      {/* Vieques Cards radar pill (S-2): left side, riding the sheet edge (L-3).
+          Hidden — and its Radar paused — at the full stop or under a z-70
+          overlay (L-4, W-2); unmounted with the radar. */}
+      {isMobile && radarOn && (
+        <Suspense fallback={null}>
+          <RadarPill radar={cardRadar} hidden={snap === SHEET_FULL || addToTripFor != null} />
+        </Suspense>
+      )}
 
       {/* Scale / attribution strip. */}
       <div
