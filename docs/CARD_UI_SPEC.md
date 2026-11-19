@@ -180,7 +180,8 @@ left side, above the banner/sheet (L-3), `z-30`. Content: 28px Radar (teal,
 `mode="sweep"`, `ringCount 3`, `spokeCount 0`, `mouseInteraction={false}`,
 `intro={false}`, `grain 0`) · text · mute (lucide `Volume2`/`VolumeX`).
 Copy: `Scanning…` · `No cards nearby · explore` · `1 nearby` / `2–3 nearby` /
-`4+ nearby` + `· cold|warm|warmer|hot` · `Weak GPS · step outside` ·
+`4+ nearby` + `· cold|warm|hot|burning` (the server's `warmth()` words, shown
+verbatim — owner's call 2026-11-19) · `Weak GPS · step outside` ·
 `Cards live on Vieques` · `Turn on location to hunt cards`. SoundPing once per warmth
 step up. Steps aside when the banner shows a revealed card.
 
@@ -205,7 +206,7 @@ has been collected" · `TOO_FAST` "Whoa, that was fast. Try again in a few minut
 
 **S-5 Claim reveal.** L-2 overlay. t0 ClickSpark (teal, 8) + overlay fade 180ms ·
 t120 HoloCard (~300 wide, rarity preset) · t600 ShinyText rarity (rare+,
-`trigger="once"`) · t700 Counter serial (`duration .7`) · legendary: ElectricBorder +
+`trigger="view"` — plays once on first sight; upstream has no "once") · t700 Counter serial (`duration .7`) · legendary: ElectricBorder +
 SoundTreasure (optional ReflectiveCard) · otherwise SoundCoin · t1500 achievement:
 StickerPeel → BounceCards. Rest: Share (`navigator.share` with the face image) · Done
 (also tap outside / swipe down). Android `vibrate(30)`. Radar paused while open.

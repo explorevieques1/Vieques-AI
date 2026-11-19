@@ -1,0 +1,16 @@
+/* Vendored from React Bits (Radar, JS-CSS variant), verbatim.
+   Source: https://reactbits.dev/r/Radar-JS-CSS.json (fetched 2026-11-19). Tune at the call site, not here. */
+.radar-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.radar-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
