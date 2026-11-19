@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronRight, Lock } from 'lucide-react'
+import { ChevronRight, Lock } from 'lucide-react'
 
 import {
   ApiError,
@@ -36,7 +36,7 @@ import PixelCard from '../reactbits/PixelCard'
  * client island fence — testers skip it on the server.
  *
  * The success moment (S-5) is NOT here: a successful claim calls `onClaimed`,
- * and MapView owns what happens next (step 6 mounts the full-screen reveal).
+ * and MapView opens the full-screen claim reveal (ClaimReveal).
  */
 
 /** S-4 ②: hold for one second; it drains back on early release. */
@@ -104,9 +104,6 @@ export type NearbyBannerProps = {
   card: Card
   /** Latest fix from MapView's location watch. */
   fix: CardPosition | null
-  /** Set right after a successful claim, until MapView clears it (interim
-   *  until the step-6 reveal takes over). */
-  claimed: CardClaim | null
   /** L-4: a place is open → one slim line. */
   slim: boolean
   /** L-4: sheet at full / z-70 overlay open. */
@@ -124,7 +121,6 @@ export type NearbyBannerProps = {
 export default function NearbyBanner({
   card,
   fix,
-  claimed,
   slim,
   hidden,
   onClaimed,
@@ -175,7 +171,6 @@ export default function NearbyBanner({
             key={card.slug}
             card={card}
             fix={fix}
-            claimed={claimed}
             onClaimed={onClaimed}
             onSolveRiddle={onSolveRiddle}
             onDismiss={onDismiss}
@@ -205,10 +200,10 @@ function SlimLine({ card }: { card: Card }) {
 
 type BodyProps = Pick<
   NearbyBannerProps,
-  'card' | 'fix' | 'claimed' | 'onClaimed' | 'onSolveRiddle' | 'onDismiss'
+  'card' | 'fix' | 'onClaimed' | 'onSolveRiddle' | 'onDismiss'
 >
 
-function BannerBody({ card, fix, claimed, onClaimed, onSolveRiddle, onDismiss }: BodyProps) {
+function BannerBody({ card, fix, onClaimed, onSolveRiddle, onDismiss }: BodyProps) {
   const style = RARITY[card.rarity]
   const [answer, setAnswer] = useState('')
   const [needsAnswer, setNeedsAnswer] = useState(card.challenge?.kind === 'on_site')
@@ -386,28 +381,6 @@ function BannerBody({ card, fix, claimed, onClaimed, onSolveRiddle, onDismiss }:
   }
 
   // --- Views -----------------------------------------------------------------
-
-  if (claimed) {
-    // Interim success until step 6's full-screen reveal (S-5) owns this moment.
-    return (
-      <div className="flex items-center gap-3 p-3">
-        <Thumb url={frontUrl} card={card} />
-        <div className="min-w-0 flex-1">
-          <MicroLabel card={card} suffix={claimed.alreadyOwned ? 'In your collection' : 'Collected'} />
-          <p className="truncate font-display text-[20px] leading-tight text-foreground">{card.name}</p>
-          {claimed.serialNo != null && (
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              #{String(claimed.serialNo).padStart(3, '0')}
-              {claimed.maxClaims != null && ` / ${String(claimed.maxClaims).padStart(3, '0')}`}
-            </p>
-          )}
-        </div>
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/15 text-primary">
-          <Check size={18} aria-hidden="true" />
-        </span>
-      </div>
-    )
-  }
 
   if (lockedTier) {
     // ④ ResultsList-style inline upsell.

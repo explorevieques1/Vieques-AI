@@ -649,3 +649,49 @@ html[data-nav-hidden] .vq-bottom-nav {
     animation: vq-flash 240ms ease-out;
   }
 }
+
+/* ---- Vieques Cards claim reveal (CARD_UI_SPEC S-5, L-2, M-3) ----
+   Full-screen moment, z-70. The scrim is a deep frosted navy with a soft glow
+   in the card's rarity colour behind it (token via --vq-reveal-glow, T-1).
+   Overlay fades in over 180ms; each beat rises in; reduced motion = fades only. */
+.vq-reveal {
+  animation: vq-fade 180ms ease-out both;
+}
+.vq-reveal--out {
+  opacity: 0;
+  transition: opacity 180ms ease-in;
+}
+.vq-reveal__scrim {
+  background:
+    radial-gradient(
+      ellipse 70% 46% at 50% 36%,
+      color-mix(in oklch, var(--vq-reveal-glow) 22%, transparent),
+      transparent 70%
+    ),
+    oklch(0.13 0.025 258 / 0.86);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+@keyframes vq-reveal-rise {
+  from { opacity: 0; transform: translateY(26px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+.vq-reveal-in {
+  animation: vq-reveal-rise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.vq-reveal-fade {
+  animation: vq-fade 180ms ease-out both;
+}
+/* The card eases to its smaller size when an achievement joins it
+   (HoloCard reads --hc-w; tuned here, not in the vendored file). */
+.vq-reveal-holo.holo-card {
+  transition: width 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* BounceCards set fan: portrait card faces instead of its square tiles. */
+.vq-reveal-fan .bounce-cards__card {
+  aspect-ratio: 63 / 88;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vq-reveal-in { animation: vq-fade 180ms ease-out both; }
+  .vq-reveal-holo.holo-card { transition: none; }
+}

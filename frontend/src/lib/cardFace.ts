@@ -17,7 +17,7 @@
 import { createElement, type ComponentType } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
-import { Landmark, Moon, Mountain, Tag, TreePalm, Waves, type LucideProps } from 'lucide-react'
+import { Award, Landmark, Moon, Mountain, Tag, TreePalm, Waves, type LucideProps } from 'lucide-react'
 
 import { RARITY, type Rarity } from './rarity'
 
@@ -96,6 +96,18 @@ export function cardBackUrl(card: CardBackInput): Promise<string> {
 /** The one shared "not yet found" back, for every undiscovered card. */
 export function unfoundBackUrl(): Promise<string> {
   return cached('unfound', drawUnfound)
+}
+
+/**
+ * Stand-in sticker for an achievement that has no badge art yet (badge
+ * artwork is still open): a die-cut disc in the teal→sky CTA colours with a
+ * lucide Award glyph, after Card UI Mapping p.8. One per app, so it's cached
+ * once. Transparent outside the disc so StickerPeel can cut its outline.
+ */
+export const BADGE_STICKER_SIZE = 360
+
+export function badgeStickerUrl(): Promise<string> {
+  return cached('badge-sticker', drawBadgeSticker)
 }
 
 // --- Fonts -------------------------------------------------------------------
@@ -483,6 +495,37 @@ async function drawUnfound(): Promise<string> {
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = p.sea
   ctx.fillText('EXPLORE VIEQUES', cx, CARD_FACE_H - 64)
+
+  return toBlobUrl(canvas)
+}
+
+async function drawBadgeSticker(): Promise<string> {
+  const p = palette()
+  const ink = getComputedStyle(document.documentElement).getPropertyValue('--primary-foreground').trim()
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = BADGE_STICKER_SIZE
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('cardFace: no 2d context')
+  const c = BADGE_STICKER_SIZE / 2
+
+  // Die-cut edge: a light rim like a real vinyl sticker.
+  ctx.beginPath()
+  ctx.arc(c, c, c - 4, 0, Math.PI * 2)
+  ctx.fillStyle = p.fg
+  ctx.fill()
+
+  // Disc: the primary CTA's teal → sky.
+  const g = ctx.createLinearGradient(0, 0, BADGE_STICKER_SIZE, BADGE_STICKER_SIZE)
+  g.addColorStop(0, p.sea)
+  g.addColorStop(1, p.sky)
+  ctx.beginPath()
+  ctx.arc(c, c, c - 22, 0, Math.PI * 2)
+  ctx.fillStyle = g
+  ctx.fill()
+
+  const glyph = 168
+  const icon = await lucideImage(Award, ink, glyph).catch(() => null)
+  if (icon) ctx.drawImage(icon, c - glyph / 2, c - glyph / 2 + 4, glyph, glyph)
 
   return toBlobUrl(canvas)
 }

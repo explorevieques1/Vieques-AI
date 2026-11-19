@@ -84,9 +84,8 @@ import RadarButton from './cards/RadarButton'
 const RadarPill = lazy(() => import('./cards/RadarPill'))
 /** The nearby banner carries HoldButton / PixelCard / ClickSpark — lazy too (C-3). */
 const NearbyBanner = lazy(() => import('./cards/NearbyBanner'))
-/** Interim "Collected" line in the banner after a claim, until the step-6
- *  claim reveal (S-5) takes that moment over. */
-const CLAIM_INTERIM_MS = 2600
+/** The full-screen claim reveal (S-5): HoloCard, ElectricBorder, StickerPeel… (C-3). */
+const ClaimReveal = lazy(() => import('./cards/ClaimReveal'))
 /** Banner leaves only 20 m past the 200 m edge (GPS-jitter hysteresis). */
 const BANNER_EXIT_SLACK_M = 20
 import { ResponsivePanel } from './ui/ResponsivePanel'
@@ -276,9 +275,8 @@ function MapView({
   /** Measured nearby-banner height, 0 when it isn't showing (M-2, L-3). */
   const [cardsBannerH, setCardsBannerH] = useState(0)
   /**
-   * The card just collected + the server's answer. Step 6 (S-5 claim reveal)
-   * mounts its full-screen overlay from this; until then the banner shows a
-   * short "Collected" line.
+   * The card just collected + the server's answer. While set, the full-screen
+   * claim reveal (S-5) is open; it clears when the reveal closes.
    */
   const [claimMoment, setClaimMoment] = useState<{ card: Card; claim: CardClaim } | null>(null)
   /** Cards skipped via "See other cards nearby" (SOLD_OUT), this session. */
@@ -738,14 +736,13 @@ function MapView({
    * The card the nearby banner is about (S-4): the nearest revealed card you
    * don't own yet, within reveal range of your fix. Unlike the ring, locked
    * and sold-out cards count — the banner explains them (④ / SOLD_OUT). A
-   * card just collected stays on screen for its interim "Collected" line.
+   * card just collected is owned, so it leaves; the reveal (S-5) has the moment.
    */
   // Hysteresis: a card already in the banner stays until you're 20 m past the
   // 200 m edge, so GPS jitter at the boundary doesn't flicker the banner (and
   // nudge the camera padding, M-2) on and off.
   const [stickyBannerSlug, setStickyBannerSlug] = useState<string | null>(null)
   const bannerCard = useMemo(() => {
-    if (claimMoment) return claimMoment.card
     if (!userFix) return null
     const here: [number, number] = [userFix.lng, userFix.lat]
     const sticky = stickyBannerSlug
@@ -766,7 +763,7 @@ function MapView({
       }
     }
     return best
-  }, [cardPins.cards, userFix, skippedCards, claimMoment, stickyBannerSlug])
+  }, [cardPins.cards, userFix, skippedCards, stickyBannerSlug])
   const bannerSlug = bannerCard?.slug ?? null
   if (bannerSlug !== stickyBannerSlug) setStickyBannerSlug(bannerSlug)
 
@@ -774,8 +771,8 @@ function MapView({
   /**
    * A claim succeeded (or was already yours — same serial). The pin switches
    * to its owned look at once and the catalog is refetched so the server's
-   * state wins. Step 6 hooks in here: mount the claim reveal (S-5) from
-   * `claimMoment`. No camera move (M-1).
+   * state wins, and the claim reveal (S-5) opens from `claimMoment`. No
+   * camera move (M-1).
    */
   const handleCardClaimed = useCallback(
     (card: Card, claim: CardClaim) => {
@@ -785,11 +782,12 @@ function MapView({
     },
     [markCardOwned, reloadCardPins],
   )
-  useEffect(() => {
-    if (!claimMoment) return
-    const t = window.setTimeout(() => setClaimMoment(null), CLAIM_INTERIM_MS)
-    return () => window.clearTimeout(t)
-  }, [claimMoment])
+  /** The reveal shows the catalog's copy once the refetch lands (a lost
+   *  double-tap race sends no serial; the catalog has it). */
+  const revealCard = claimMoment
+    ? (cardPins.cards.find((c) => c.slug === claimMoment.card.slug) ?? claimMoment.card)
+    : null
+  const closeClaimReveal = useCallback(() => setClaimMoment(null), [])
   const skipCard = useCallback(
     (slug: string) => setSkippedCards((prev) => new Set([...prev, slug])),
     [],
@@ -1914,7 +1912,7 @@ function MapView({
         <Suspense fallback={null}>
           <RadarPill
             radar={cardRadar}
-            hidden={snap === SHEET_FULL || addToTripFor != null}
+            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null}
             lift={bannerLift}
           />
         </Suspense>
@@ -1928,9 +1926,8 @@ function MapView({
           <NearbyBanner
             card={bannerCard}
             fix={userFix}
-            claimed={claimMoment?.card.slug === bannerCard.slug ? claimMoment.claim : null}
             slim={selected != null}
-            hidden={snap === SHEET_FULL || addToTripFor != null}
+            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null}
             onClaimed={handleCardClaimed}
             // Riddle sheet (S-8) arrives in step 8; until then this selects
             // the card's pin, like a pin tap.
@@ -1948,6 +1945,21 @@ function MapView({
       >
         © Explore Vieques · MapTiler · OpenStreetMap
       </div>
+
+      {/* Vieques Cards claim reveal (S-5): full screen, z-70 (L-2). The radar
+          pill pauses and the banner steps aside while it's open (W-2, L-4);
+          closing unmounts every WebGL context it used. */}
+      {claimMoment && revealCard && (
+        <Suspense fallback={null}>
+          <ClaimReveal
+            key={claimMoment.card.slug}
+            card={revealCard}
+            claim={claimMoment.claim}
+            collection={cardPins.cards}
+            onClose={closeClaimReveal}
+          />
+        </Suspense>
+      )}
 
       {addToTripFor && (
         <AddToTripSheet

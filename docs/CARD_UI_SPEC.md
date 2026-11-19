@@ -226,6 +226,15 @@ SoundTreasure (optional ReflectiveCard) · otherwise SoundCoin · t1500 achievem
 StickerPeel → BounceCards. Rest: Share (`navigator.share` with the face image) · Done
 (also tap outside / swipe down). Android `vibrate(30)`. Radar paused while open.
 The claim result is saved regardless of the animation.
+*Step 6 additions (owner-accepted defaults, 2026-11-19):*
+- **Real text under the card:** rarity · region, name, serial "#007 of 050", plus a micro-label "New card" (or "In your collection" when the claim comes back alreadyOwned).
+- **BounceCards set:** the collected card plus the owned cards that share a tag with it. That's exact for tag rules and approximate for `a + b` rules, until the backend sends each badge's slugs.
+- **Badge with no art:** a generated teal→sky disc with the lucide `Award` icon (`badgeStickerUrl`).
+- **Layout:** the achievement stacks under a smaller card, and short screens scroll.
+- **Several badges in one claim:** the first gets the sticker, the rest show as "Also: …".
+- **Share:** the text is "<name> · <Rarity> · #NNN · Explore Vieques"; the button is hidden without `navigator.share`.
+- **Legendary + achievement:** the ElectricBorder hands off to StickerPeel at t1500, to stay within W-1.
+- **Taps in the first 450 ms are ignored.** Escape also closes the reveal.
 
 **S-6 Collection pane.** Title "Collection" (`font-display`) + ⌄. Segments: Cards ·
 Badges · Top Traveler (T-5).
