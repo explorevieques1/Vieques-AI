@@ -592,7 +592,8 @@ html[data-nav-hidden] .vq-bottom-nav {
    Taller than 64px, so NOT GlassSurface: the same frosted recipe as
    .vq-map-sheet (fill, blur, rim + sheen), so it reads as a piece of the sheet
    it sits on. No GlassSurface lives inside it, so fading this element is fine. */
-.vq-cards-banner {
+.vq-cards-banner,
+.vq-cards-sheet {
   position: relative;
   isolation: isolate;
   background: oklch(0.17 0.028 258 / 0.7);
@@ -604,7 +605,8 @@ html[data-nav-hidden] .vq-bottom-nav {
     inset 0 0 12px 3px hsl(0 0% 100% / 0.06),
     0 -8px 30px rgb(0 0 0 / 0.35);
 }
-.vq-cards-banner::before {
+.vq-cards-banner::before,
+.vq-cards-sheet::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -694,4 +696,23 @@ html[data-nav-hidden] .vq-bottom-nav {
 @media (prefers-reduced-motion: reduce) {
   .vq-reveal-in { animation: vq-fade 180ms ease-out both; }
   .vq-reveal-holo.holo-card { transition: none; }
+}
+
+/* ---- Vieques Cards riddle sheet (CARD_UI_SPEC S-8, L-2, G-1, M-3) ----
+   The banner's frosted recipe (above), rising from the bottom over 220ms.
+   Reduced motion: the component swaps these for plain fades. */
+@keyframes vq-riddle-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.vq-riddle--in {
+  animation: vq-riddle-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.vq-riddle--out {
+  transform: translateY(100%);
+  transition: transform 220ms ease-in;
+}
+.vq-riddle--fade-out {
+  opacity: 0;
+  transition: opacity 180ms ease-in;
 }

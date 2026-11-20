@@ -333,6 +333,8 @@ export default function ClaimReveal({ card, claim, collection, onClose }: ClaimR
       width={cardW}
       radius={cardRadius}
       hoverScale={1.02}
+      // M-4: no idle foil drift — the radar sweep is the only loop.
+      idle={false}
       className="vq-reveal-holo"
     />
   )

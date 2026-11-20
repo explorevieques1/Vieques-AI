@@ -256,15 +256,31 @@ Badges · Top Traveler (T-5).
 - Load failure: "Couldn't load your cards." / "Couldn't load your badges." + "Try again".
   Loading placeholders are static blocks (no pulse — M-4).
 
-**S-7 Card detail.** L-2 overlay, one live HoloCard; tap flips (`backImage`: island
-outline + find-spot dot, date/time, badges it counts toward). Lore; "Show on map"
-(M-1); Share. Unfound → silhouette (rarity, region unless riddle-locked, hint; no
-name/art). Locked rarity → inline upsell. Close: ✕, swipe down, back.
+**S-7 Card detail.** L-2 overlay, one live HoloCard (`idle={false}`, M-4); tap flips
+(`backImage`: island outline + find-spot dot, date (S-11), badges it counts toward — empty
+until the API sends achievement rules). "Tap to flip" hint row (lucide `RotateCw`). Lore;
+"Show on map" (M-1; neutral bordered secondary button, not T-4) + Share (48px icon button).
+- Owned: everything above. Share only here (same text/file as S-5; hidden without
+  `navigator.share`).
+- Revealed, not owned: HoloCard front, no flip, no serial; Show on map yes, Share no.
+- Unfound → silhouette (static shared back in a rarity rim; rarity, region unless
+  riddle-locked → "Mystery", hint; no name/art). Title "Not found yet". Riddle-locked →
+  "Solve the riddle" (T-4, lucide `KeyRound`), which closes S-7 and opens S-8 (one z-70
+  overlay at a time).
+- Locked rarity → silhouette dimmed + "A <pass> pass unlocks <rarity> cards." + "See passes".
+- Close: lucide `X`, tap outside, swipe down, Back, Escape. Desktop centring is S-10's.
 
 **S-8 Riddle sheet.** L-2 overlay from the bottom, keyboard-safe (`visualViewport`),
 Enter submits. `font-display` prompt; input; "Check answer" (T-4); "N guesses so far ·
 hint after 3"; shake 240ms (M-3 flash); cooldown copy. Solved → "The card is somewhere
 in <region>." + "Start hunting" (turns radar on). On-site questions are NOT here (S-4 ③).
+- Guess count is client-side per card for the session (the API sends none); a server hint
+  replaces "· hint after 3" with "Hint · …". Wrong: "Not quite · N guesses so far".
+- Cooldown (TOO_MANY_GUESSES): 60 min client guess, "Try again in an hour", button counts
+  down m:ss. Network failure: "No connection — try again"; other codes show the server's
+  sentence.
+- Solved with no region: "The card is somewhere on Vieques." Row "Start hunting and your
+  radar will find it" (lucide `Radar`); footnote "Solving shows the region, not the spot".
 
 **S-9 Entry points.** Menu: first Row of the first Group, lucide `GalleryVerticalEnd`,
 "Collection", count right (L-6). Profile: "Your collection" section — count + rarest

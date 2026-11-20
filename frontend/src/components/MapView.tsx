@@ -46,6 +46,7 @@ import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useCardPins } from '../hooks/useCardPins'
 import { useCardRadar } from '../hooks/useCardRadar'
+import { useBackToClose } from '../hooks/useBackToClose'
 import { useSafeArea } from '../hooks/useSafeArea'
 import { daypart, useSuggestion } from '../hooks/useSuggestion'
 import {
@@ -88,6 +89,10 @@ const NearbyBanner = lazy(() => import('./cards/NearbyBanner'))
 const ClaimReveal = lazy(() => import('./cards/ClaimReveal'))
 /** The Collection pane (S-6): TiltedCard grid + face generator — lazy (C-3). */
 const CollectionBody = lazy(() => import('./cards/CollectionBody'))
+/** Card detail (S-7): one live HoloCard — lazy (C-3). */
+const CardDetail = lazy(() => import('./cards/CardDetail'))
+/** Riddle sheet (S-8) — lazy (C-3). */
+const RiddleSheet = lazy(() => import('./cards/RiddleSheet'))
 /** Banner leaves only 20 m past the 200 m edge (GPS-jitter hysteresis). */
 const BANNER_EXIT_SLACK_M = 20
 import { ResponsivePanel } from './ui/ResponsivePanel'
@@ -269,11 +274,19 @@ function MapView({
   /** Revealed + owned cards to pin while the radar is on (S-3, P-2, P-5). */
   const cardPins = useCardPins({ on: radarOn && isMobile, revealed: cardRadar.revealed })
   /**
-   * The card whose detail is open. Card detail (S-7) arrives in step 8; until
-   * then a tap only marks the pin selected (marker-lift + pulse), and a second
-   * tap on the same pin clears it.
+   * The selected card pin (S-3: marker-lift + pulse). Set by a pin tap (which
+   * also opens the card's detail) and by "Show on map"; cleared when the
+   * detail closes any other way, and with the radar.
    */
   const [openCardSlug, setOpenCardSlug] = useState<string | null>(null)
+  /** Card detail (S-7), opened from a pin (P-3) or a Collection grid tap (S-6). */
+  const [detailCard, setDetailCard] = useState<Card | null>(null)
+  /** Riddle sheet (S-8): from an unfound card's detail or the banner's RIDDLE_UNSOLVED. */
+  const [riddleCard, setRiddleCard] = useState<Card | null>(null)
+  /** Bumped when a riddle is solved, so the Collection refetches (region, tallies). */
+  const [collectionKey, setCollectionKey] = useState(0)
+  /** A z-70 Cards overlay is open: radar pill paused, banner aside (W-2, L-4). */
+  const cardOverlayOpen = detailCard != null || riddleCard != null
   /** Measured nearby-banner height, 0 when it isn't showing (M-2, L-3). */
   const [cardsBannerH, setCardsBannerH] = useState(0)
   /**
@@ -655,7 +668,8 @@ function MapView({
       })
       el.addEventListener('click', (e) => {
         e.stopPropagation() // P-3: a card tap never reaches the map
-        setOpenCardSlug((cur) => (cur === c.slug ? null : c.slug))
+        setOpenCardSlug(c.slug)
+        setDetailCard(c) // S-7
       })
       if (state === 'owned' && c.name) {
         // Art crop of the generated face (S-11). Dynamic import keeps the
@@ -1055,6 +1069,62 @@ function MapView({
     },
     [mode, onModeChange, category],
   )
+
+  // ---------------------------------------------------------------------------
+  //  Vieques Cards — card detail (S-7) + riddle sheet (S-8)
+  // ---------------------------------------------------------------------------
+
+  /** ✕ / swipe / Escape / tap outside on the detail. */
+  const closeCardDetail = useCallback(() => {
+    setDetailCard(null)
+    setOpenCardSlug(null)
+  }, [])
+  /** Back gesture (S-7): closes whichever Cards overlay is up. */
+  useBackToClose(cardOverlayOpen, () => {
+    setDetailCard(null)
+    setRiddleCard(null)
+    setOpenCardSlug(null)
+  })
+  /**
+   * "Show on map" (S-7, M-1): the one explicit camera move a card gets. Back to
+   * the map (the Collection is a sheet mode), the pin selected, and the
+   * director flies with the live padding — it re-aims if the sheet is still
+   * settling. Only offered for cards the server located for you (P-5).
+   */
+  const showCardOnMap = useCallback(
+    (card: Card) => {
+      const center = card.location?.center
+      setDetailCard(null)
+      if (!center) return
+      setOpenCardSlug(card.slug)
+      if (mode !== 'explore') changeMode('explore')
+      else if (isMobile && snap === SHEET_FULL) setSnap(SHEET_HIDDEN)
+      const map = mapRef.current
+      if (!map) return
+      directorRef.current?.fly(
+        pointShot(center, { zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() }),
+        padding(),
+      )
+    },
+    [mode, changeMode, isMobile, snap, padding],
+  )
+  /** Detail of an unfound card → its riddle (one z-70 overlay at a time). */
+  const openRiddle = useCallback((card: Card) => {
+    setDetailCard(null)
+    setRiddleCard(card)
+  }, [])
+  /** Solved: the region shows in the Collection, the card joins the radar. */
+  const handleRiddleSolved = useCallback(() => {
+    setCollectionKey((n) => n + 1)
+    reloadCardPins()
+  }, [reloadCardPins])
+  /** "Start hunting" (S-8): radar on (armed inside the tap) and back to the map. */
+  const startHunting = useCallback(() => {
+    setRiddleCard(null)
+    toggleRadar(true)
+    if (mode !== 'explore') changeMode('explore')
+    setSnap(SHEET_HIDDEN)
+  }, [toggleRadar, mode, changeMode])
 
   // ---------------------------------------------------------------------------
   //  Markers — one effect for every category
@@ -1614,8 +1684,10 @@ function MapView({
     // Vieques Cards inventory (S-6, L-5): full stop, the sheet's ⌄ collapses.
     <Suspense fallback={null}>
       <CollectionBody
+        key={collectionKey}
         navPad
         radarOn={radarOn}
+        onOpenCard={setDetailCard}
         onRadarChange={toggleRadar}
         onTurnOnRadar={() => {
           toggleRadar(true)
@@ -1790,7 +1862,11 @@ function MapView({
               desktopWidth="sm:w-[344px]"
             >
               <Suspense fallback={null}>
-                <CollectionBody onClose={() => onModeChange('explore')} />
+                <CollectionBody
+                  key={collectionKey}
+                  onClose={() => onModeChange('explore')}
+                  onOpenCard={setDetailCard}
+                />
               </Suspense>
             </ResponsivePanel>
           )}
@@ -1951,7 +2027,7 @@ function MapView({
         <Suspense fallback={null}>
           <RadarPill
             radar={cardRadar}
-            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null}
+            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null || cardOverlayOpen}
             lift={bannerLift}
           />
         </Suspense>
@@ -1966,11 +2042,10 @@ function MapView({
             card={bannerCard}
             fix={userFix}
             slim={selected != null}
-            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null}
+            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null || cardOverlayOpen}
             onClaimed={handleCardClaimed}
-            // Riddle sheet (S-8) arrives in step 8; until then this selects
-            // the card's pin, like a pin tap.
-            onSolveRiddle={(c) => setOpenCardSlug(c.slug)}
+            // S-4 RIDDLE_UNSOLVED → the riddle sheet (S-8).
+            onSolveRiddle={setRiddleCard}
             onDismiss={skipCard}
             onHeight={setCardsBannerH}
           />
@@ -1996,6 +2071,32 @@ function MapView({
             claim={claimMoment.claim}
             collection={cardPins.cards}
             onClose={closeClaimReveal}
+          />
+        </Suspense>
+      )}
+
+      {/* Vieques Cards card detail (S-7) and riddle sheet (S-8): z-70 (L-2),
+          one at a time. The radar pill pauses and the banner steps aside
+          while either is open (W-2, L-4); Back closes them (useBackToClose). */}
+      {detailCard && (
+        <Suspense fallback={null}>
+          <CardDetail
+            key={detailCard.slug}
+            card={detailCard}
+            onClose={closeCardDetail}
+            onShowOnMap={showCardOnMap}
+            onSolveRiddle={openRiddle}
+          />
+        </Suspense>
+      )}
+      {riddleCard && (
+        <Suspense fallback={null}>
+          <RiddleSheet
+            key={riddleCard.slug}
+            card={riddleCard}
+            onClose={() => setRiddleCard(null)}
+            onSolved={handleRiddleSolved}
+            onStartHunting={startHunting}
           />
         </Suspense>
       )}
