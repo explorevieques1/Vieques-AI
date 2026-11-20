@@ -25,6 +25,9 @@ const LINE = 'cards-ring-line'
  */
 export const CARD_RING_RANGE_M = 200
 
+/** The radar's reach (backend RADAR_RANGE_M): a pin this close counts as "on the map" in the pill. */
+export const CARD_RADAR_RANGE_M = 1000
+
 const METRES_PER_DEG_LAT = 111_320
 const STEPS = 64
 

@@ -180,7 +180,7 @@ stack below recentre; lucide `Radar`. Off = muted; on = `text-primary` + 6px dot
 left side, above the banner/sheet (L-3), `z-30`. Content: 28px Radar (teal,
 `mode="sweep"`, `ringCount 3`, `spokeCount 0`, `mouseInteraction={false}`,
 `intro={false}`, `grain 0`) · text · mute (lucide `Volume2`/`VolumeX`).
-Copy: `Scanning…` · `No cards nearby · explore` · `1 nearby` / `2–3 nearby` /
+Copy: `Scanning…` · `No cards nearby · explore` (or `N on the map · go collect` when the radar's hidden count is 0 but N revealed, collectable pins — not owned, tier-locked or sold out — are within radar range, 1000 m; a fine pointer drops "· go collect", S-10) · `1 nearby` / `2–3 nearby` /
 `4+ nearby` + `· cold|warm|hot|burning` (the server's `warmth()` words, shown
 verbatim — owner's call 2026-11-19) · `Weak GPS · step outside` ·
 `Cards live on Vieques` · `Turn on location to hunt cards`. SoundPing once per warmth
@@ -245,7 +245,9 @@ Badges · Top Traveler (T-5).
   names — owner, 2026-11-20). Found = face; unfound = shared back; locked rarity =
   dimmed. Tap → S-7; long-press → flip to back. Settings row: Sound · Card radar.
 - Badges: earned (static sticker image) first; in progress = dashed outline + progress
-  bar "Beach Bum 3/5". With none earned, show only the 3 nearest-to-done in progress.
+  bar "Beach Bum 3/5". Every badge still to earn is listed ("To earn · N", nearest-to-done
+  first), each with its requirement (description, else "Collect N cards") and "+N pts"
+  (owner, 2026-11-20).
 - Top Traveler: This week / All-time; SplitFlapText "#07" (`loop={false}`, `padTo 3`,
   numeric); top 20 rows (rank / `Medal` 1–3, initials avatar, name = display name or
   first name + last initial, "N cards · N badges", points in Geist Mono via Counter);

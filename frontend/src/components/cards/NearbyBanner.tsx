@@ -18,6 +18,7 @@ import { milesBetween } from '../../lib/geo'
 import { RARITY, rarityColor } from '../../lib/rarity'
 import { playSound } from '../../lib/sound'
 import { useKeyboardInset } from '../../hooks/useKeyboardInset'
+import { useOutsideSheetFocus } from '../../hooks/useOutsideSheetFocus'
 import { CARDS_FLOAT_GAP, NEARBY_BANNER_GUTTER } from '../../hooks/useMapInsets'
 import ClickSpark, { type ClickSparkHandle } from '../reactbits/ClickSpark'
 import HoldButton from '../reactbits/HoldButton'
@@ -148,6 +149,8 @@ export default function NearbyBanner({
   // A tablet answering an on-site question in the band-placed banner: ride on
   // top of the on-screen keyboard (iOS doesn't shrink the layout viewport).
   const keyboard = useKeyboardInset(desktopAt != null && canCollect)
+  // The on-site answer field sits outside the (secretly modal) map sheet.
+  useOutsideSheetFocus(boxRef)
 
   // M-2: report the live height (it changes with the state) for the camera
   // inset, the radar pill and the control stack (L-3).
@@ -550,7 +553,7 @@ function BannerBody({ card, fix, canCollect, onClaimed, onSolveRiddle, onDismiss
           autoComplete="off"
           autoCapitalize="none"
           enterKeyHint="done"
-          className={`mt-2.5 h-11 w-full rounded-xl border bg-white/6 px-3.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none ${
+          className={`mt-2.5 h-11 w-full rounded-xl border bg-white/6 px-3.5 text-[16px] text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none ${
             failure?.code === 'WRONG_ANSWER' ? 'border-destructive/70' : 'border-white/12'
           }`}
         />

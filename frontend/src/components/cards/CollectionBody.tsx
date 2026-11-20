@@ -45,8 +45,6 @@ import TopTravelerTab from './TopTravelerTab'
 const LONG_PRESS_MS = 450
 /** Finger travel that turns a press into a scroll (no flip, no tap). */
 const LONG_PRESS_SLOP_PX = 8
-/** Badges tab with nothing earned: the nearest-to-done shown under the copy (Card UI Mapping p.9). */
-const NEAREST_BADGES = 3
 
 /** The face generator draws a 44px radius on 630px (S-11); the thumbnail keeps the ratio. */
 const FACE_RADIUS_RATIO = 44 / 630
@@ -506,6 +504,11 @@ function GridCard({
           // W-3: finger tilt only — no gyroscope; M-3: no tilt at all when reduced.
           gyroscope={false}
           rotateAmplitude={reduced ? 0 : 10}
+          // The image IS the whole card (rim, corners, serial), not art inside a
+          // frame. Parallax over-sizes it by ~6px a side to hide its edges while
+          // shifting, which crops the rarity rim and rounded corners off — the
+          // grid then shows flat squares. No parallax = the full face, uncut.
+          parallax={0}
           scaleOnHover={reduced ? 1 : 1.04}
           // M-4: the pane's entrance is the sheet rising; no per-card intro.
           intro={false}
@@ -603,8 +606,9 @@ function BadgesTab({
   const progressing = achievements
     .filter((a) => !a.earnedAt && a.progress.need > 0)
     .sort((a, b) => ratio(b) - ratio(a))
-  // Nothing earned yet: the copy, then the few nearest to done (p.9).
-  const inProgress = earned.length === 0 ? progressing.slice(0, NEAREST_BADGES) : progressing
+  // Every badge still to earn, nearest-to-done first (owner, 2026-11-20: show
+  // them all, with what each needs and what it's worth).
+  const inProgress = progressing
 
   return (
     <>
@@ -635,7 +639,7 @@ function BadgesTab({
 
       {inProgress.length > 0 && (
         <section>
-          <h3 className={`mb-2 px-1 ${microLabel}`}>In progress</h3>
+          <h3 className={`mb-2 px-1 ${microLabel}`}>To earn · {inProgress.length}</h3>
           <Group>
             {inProgress.map((a) => {
               const pct = Math.round(ratio(a) * 100)
@@ -652,6 +656,11 @@ function BadgesTab({
                         {a.progress.have}/{a.progress.need}
                       </span>
                     </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {a.description ?? `Collect ${a.progress.need} card${a.progress.need === 1 ? '' : 's'}`}
+                      {' · '}
+                      <span className="font-mono text-primary">+{a.points} pts</span>
+                    </p>
                     <div
                       className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/8"
                       role="progressbar"

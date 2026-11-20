@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Radar, X } from 'lucide-react'
 
 import { useKeyboardInset } from '../../hooks/useKeyboardInset'
+import { useOutsideSheetFocus } from '../../hooks/useOutsideSheetFocus'
 import { armCardRadar } from '../../hooks/useCardRadar'
 import { ApiError, cardErrorDetail, solveRiddle, type Card } from '../../lib/api'
 import { RARITY } from '../../lib/rarity'
@@ -109,6 +110,7 @@ export default function RiddleSheet({ card, onClose, onSolved, onStartHunting }:
   }, [close])
 
   const dialogRef = useRef<HTMLDivElement>(null)
+  useOutsideSheetFocus(dialogRef) // the riddle input sits outside the map sheet too
   useEffect(() => {
     dialogRef.current?.focus({ preventScroll: true })
   }, [])

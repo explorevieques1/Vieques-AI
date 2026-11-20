@@ -34,7 +34,7 @@ import {
 import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
-import { CARD_RING_RANGE_M, drawCardRing, hasCardRing, removeCardRing } from '../lib/cardLayers'
+import { CARD_RADAR_RANGE_M, CARD_RING_RANGE_M, drawCardRing, hasCardRing, removeCardRing } from '../lib/cardLayers'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import { CameraDirector, pointShot } from '../lib/camera'
 import type { ShellMode } from '../lib/shell'
@@ -742,6 +742,20 @@ function MapView({
     }
     return best
   }, [cardPins.cards, userFix])
+  // Revealed cards you can still collect within radar range. The radar's own
+  // count leaves these out (they're pins now), so the pill uses this to avoid
+  // saying "No cards nearby" beside an uncollected pin.
+  const cardsOnMap = useMemo(() => {
+    if (!userFix) return 0
+    return cardPins.cards.filter(
+      (c) =>
+        c.location &&
+        !c.owned &&
+        !c.lockedByTier &&
+        !c.soldOut &&
+        milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE <= CARD_RADAR_RANGE_M,
+    ).length
+  }, [cardPins.cards, userFix])
   // Keyed by slug so a GPS tick that doesn't change the answer doesn't redraw.
   const ringCard = useMemo(
     () => cardPins.cards.find((c) => c.slug === ringSlug) ?? null,
@@ -797,13 +811,10 @@ function MapView({
       sticky?.location && !sticky.owned && !skippedCards.has(sticky.slug) &&
       milesBetween(here, sticky.location.center) * METRES_PER_MILE <= CARD_RING_RANGE_M + BANNER_EXIT_SLACK_M
     ) return sticky
-    // TEMP (owner, low on tokens): the on-site text input isn't typeable
-    // yet, so skip cards needing a typed answer — pick the nearest plain
-    // walk-up-and-hold card instead. Remove once the input is fixed.
     let best: Card | null = null
     let bestM = Infinity
     for (const c of cardPins.cards) {
-      if (!c.location || c.owned || skippedCards.has(c.slug) || c.challenge?.kind === 'on_site') continue
+      if (!c.location || c.owned || skippedCards.has(c.slug)) continue
       const m = milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE
       if (m <= CARD_RING_RANGE_M && m < bestM) {
         best = c
@@ -2094,6 +2105,8 @@ function MapView({
             }
             lift={bannerLift}
             desktopAt={desktopPillAt}
+            onMap={cardsOnMap}
+            canCollect={canCollect}
           />
         </Suspense>
       )}

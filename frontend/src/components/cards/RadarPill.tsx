@@ -25,11 +25,15 @@ const PILL_GLASS = { ...LIQUID_GLASS, backgroundOpacity: 0.65 }
 const TARGETS: Record<RadarBucket, number> = { '0': 0, '1': 1, '2-3': 3, '4+': 4 }
 const COUNT_LABEL: Record<RadarBucket, string> = { '0': '0', '1': '1', '2-3': '2–3', '4+': '4+' }
 
-function statusCopy(radar: CardRadarState): { text: string; warmth: string | null } {
+function statusCopy(radar: CardRadarState, onMap: number, canCollect: boolean): { text: string; warmth: string | null } {
   switch (radar.status) {
     case 'scanning':
       return { text: 'Scanning…', warmth: null }
     case 'none':
+      // The radar counts only cards still hidden; ones already revealed are
+      // pins. "No cards nearby" next to an uncollected pin reads as broken.
+      // A laptop can't collect (S-10), so it isn't told to go and collect.
+      if (onMap > 0) return { text: `${onMap} on the map${canCollect ? ' · go collect' : ''}`, warmth: null }
       return { text: 'No cards nearby · explore', warmth: null }
     case 'signal':
       return { text: `${COUNT_LABEL[radar.count]} nearby`, warmth: radar.warmth }
@@ -51,8 +55,14 @@ export default function RadarPill({
   hidden,
   lift = 0,
   desktopAt,
+  onMap = 0,
+  canCollect = true,
 }: {
   radar: CardRadarState
+  /** Revealed, collectable cards within radar range (already pins on the map). */
+  onMap?: number
+  /** Fine pointer (laptop) can't collect, so the pill drops "go collect" (S-10). */
+  canCollect?: boolean
   /** Set on desktop (S-10); omitted on a phone, where the pill rides the sheet (L-3). */
   desktopAt?: RadarPillDesktop
   /** L-3: px to rise by so the pill sits above the nearby banner (its
@@ -70,7 +80,7 @@ export default function RadarPill({
     [],
   )
 
-  const { text, warmth } = statusCopy(radar)
+  const { text, warmth } = statusCopy(radar, onMap, canCollect)
   const { status } = radar
   // Card UI Mapping p.5: weak GPS / off the island = paused; blocked = no radar.
   const showRadar = status !== 'blocked'
