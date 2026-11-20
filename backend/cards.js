@@ -8,6 +8,9 @@
  *   POST /api/cards/:slug/solve     answer a locate riddle   { answer }
  *   POST /api/cards/:slug/claim     collect a card    { lat, lng, accuracy, answer? }
  *   GET  /api/achievements          every achievement + this user's progress
+ *   GET  /api/leaderboard?range=week|all   Top Traveler: top 20 + your row
+ *   GET  /api/traveler-profile      your leaderboard name + opt-out
+ *   PUT  /api/traveler-profile      save them  { displayName?, optOut? }
  *
  * HIDDEN UNTIL YOU'RE CLOSE. The map never shows a card the user hasn't been
  * near. A card's coordinates are sent to a user only once a card_discoveries
@@ -63,6 +66,18 @@ const testerIds = new Set(
   (process.env.CARD_TESTER_IDS || '').split(',').map((s) => s.trim()).filter(Boolean),
 )
 const isTester = (userId) => testerIds.has(userId)
+// Tester ids as uuids for SQL (a malformed env entry is dropped, never cast).
+const testerUuids = [...testerIds].filter((id) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id),
+)
+
+/**
+ * Top Traveler shows other travellers' names, which the privacy policy only
+ * discloses once landing's CARDS_LIVE is true. Until then the board is
+ * testers-only. LAUNCH DAY: flip this in the same commit as CARDS_LIVE.
+ */
+const LEADERBOARD_LIVE = false
+const leaderboardOpen = (userId) => LEADERBOARD_LIVE || isTester(userId)
 
 // --- Helpers ----------------------------------------------------------------
 
@@ -183,6 +198,167 @@ function regionTallies(rows) {
     by.set(key, t)
   }
   return [...by.values()].sort((a, b) => (a.region ?? '~').localeCompare(b.region ?? '~'))
+}
+
+// --- Top Traveler -----------------------------------------------------------
+
+const LEADERBOARD_SIZE = 20
+/** Same bounds as traveler_profiles.display_name's CHECK (0055), in code points. */
+const NAME_MIN = 2
+const NAME_MAX = 24
+
+/**
+ * Score = rarity points of every claimed card + points of every earned badge,
+ * computed live (no stored score). 'week' counts only what was earned since
+ * Monday 00:00 Puerto Rico time — cards by claimed_at, badges by earned_at.
+ * test_only cards and badges never count for customers; a tester's board
+ * includes them, the same rule every other Cards route follows (0056).
+ * Opted-out travellers are left out of `visible` (and so of everyone's ranks).
+ *
+ * One statement, three kinds of row:
+ *   top   the first LEADERBOARD_SIZE visible rows, with the name inputs
+ *   me    the caller's own total + rank (rank as if visible when opted out)
+ *   pass  the nearest visible traveller with more points than the caller
+ *
+ * $1 range ('week'|'all') · $2 caller id · $3 tester · $4 RARITY_POINTS json
+ * $5 board size · $6 time zone. No user id or email leaves this query.
+ */
+const LEADERBOARD_SQL = `
+  WITH bounds AS (
+    SELECT CASE WHEN $1::text = 'week'
+                THEN date_trunc('week', now() AT TIME ZONE $6::text) AT TIME ZONE $6::text
+                ELSE '-infinity'::timestamptz END AS since
+  ),
+  card_pts AS (
+    SELECT cl.user_id, count(*)::int AS cards,
+           sum(($4::jsonb ->> c.rarity)::int)::int AS points
+      FROM public.card_claims cl
+      JOIN public.collectible_cards c ON c.id = cl.card_id
+     WHERE cl.claimed_at >= (SELECT since FROM bounds)
+       AND (NOT c.test_only OR $3::boolean)
+     GROUP BY cl.user_id
+  ),
+  badge_pts AS (
+    SELECT ua.user_id, count(*)::int AS badges, sum(a.points)::int AS points
+      FROM public.user_achievements ua
+      JOIN public.achievements a ON a.id = ua.achievement_id
+     WHERE ua.earned_at >= (SELECT since FROM bounds)
+       AND (NOT a.test_only OR $3::boolean)
+     GROUP BY ua.user_id
+  ),
+  totals AS (
+    SELECT COALESCE(cp.user_id, bp.user_id) AS user_id,
+           COALESCE(cp.cards, 0) AS cards,
+           COALESCE(bp.badges, 0) AS badges,
+           COALESCE(cp.points, 0) + COALESCE(bp.points, 0) AS points
+      FROM card_pts cp
+      FULL JOIN badge_pts bp ON bp.user_id = cp.user_id
+  ),
+  visible AS (
+    SELECT t.*,
+           rank() OVER (ORDER BY t.points DESC)::int AS rank,
+           row_number() OVER (ORDER BY t.points DESC, t.cards DESC, t.badges DESC, t.user_id)::int AS pos
+      FROM totals t
+      LEFT JOIN public.traveler_profiles tp ON tp.user_id = t.user_id
+     WHERE t.points > 0
+       /* IS DISTINCT FROM: no profile row (NULL) means "not opted out". */
+       AND tp.leaderboard_opt_out IS DISTINCT FROM true
+       /* Testers play off-island; keep them off customers' boards. */
+       AND ($3::boolean OR NOT (t.user_id = ANY($7::uuid[])))
+  ),
+  me AS (
+    SELECT t.* FROM totals t WHERE t.user_id = $2::uuid AND t.points > 0
+  )
+  SELECT 'top' AS kind, v.pos, v.rank, v.points, v.cards, v.badges,
+         (v.user_id = $2::uuid) AS is_you, tp.display_name, p.full_name
+    FROM visible v
+    LEFT JOIN public.traveler_profiles tp ON tp.user_id = v.user_id
+    LEFT JOIN public.profiles p ON p.id = v.user_id
+   WHERE v.pos <= $5::int
+  UNION ALL
+  SELECT 'me', NULL,
+         (SELECT count(*) FROM visible v WHERE v.points > m.points AND v.user_id <> m.user_id)::int + 1,
+         m.points, m.cards, m.badges, true, NULL, NULL
+    FROM me m
+  UNION ALL
+  (SELECT 'pass', v.pos, v.rank, v.points, v.cards, v.badges, false, NULL, NULL
+     FROM visible v, me m
+    WHERE v.user_id <> m.user_id AND v.points > m.points
+    ORDER BY v.points ASC, v.pos DESC
+    LIMIT 1)
+  ORDER BY 1, 2 /* top rows in board order */
+`
+
+/** Is this text an email address (or close enough that we won't publish it)? */
+const looksLikeEmail = (s) => s.includes('@')
+
+/**
+ * The name other travellers see: the chosen display name, else first name +
+ * last initial from the account's full name ("Maria Lopez" → "Maria L.").
+ * Never an email — a full_name that holds one is ignored.
+ */
+export function leaderboardName(displayName, fullName) {
+  if (displayName) return displayName
+  // Same Cc/Cf strip as cleanDisplayName: no bidi overrides or zero-width
+  // characters reach other travellers' boards.
+  const raw = typeof fullName === 'string' ? fullName.normalize('NFC').replace(/[\p{Cc}\p{Cf}]/gu, '') : ''
+  const full = !looksLikeEmail(raw) ? raw : ''
+  const parts = full.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return 'Traveler'
+  const chars = [...parts[0]].slice(0, NAME_MAX - 3)
+  const first = chars[0].toLocaleUpperCase() + chars.slice(1).join('')
+  if (parts.length === 1) return first
+  const lastInitial = [...parts[parts.length - 1]][0].toLocaleUpperCase()
+  return `${first} ${lastInitial}.`
+}
+
+/** Two-letter avatar initials ("Maria L." → "ML", "Sam" → "S"). */
+export function nameInitials(name) {
+  const words = String(name).split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w))
+  return words
+    .slice(0, 2)
+    .map((w) => [...w.replace(/[^\p{L}\p{N}]/gu, '')][0] ?? '')
+    .join('')
+    .toLocaleUpperCase()
+}
+
+/**
+ * Validate a display name from the client. `null` clears it (back to first
+ * name + last initial). Whitespace is collapsed and trimmed; the result must
+ * be NAME_MIN–NAME_MAX characters with no control/format characters and no
+ * email address (it's shown to other users).
+ *
+ * @returns {{ ok: true, value: string | null } | { ok: false, error: string }}
+ */
+export function cleanDisplayName(input) {
+  if (input === null) return { ok: true, value: null }
+  if (typeof input !== 'string') return { ok: false, error: 'Display name must be text.' }
+  const s = input.normalize('NFC').replace(/\s+/g, ' ').trim()
+  const length = [...s].length
+  if (length < NAME_MIN || length > NAME_MAX) {
+    return { ok: false, error: `Use ${NAME_MIN}–${NAME_MAX} characters.` }
+  }
+  if (/[\p{Cc}\p{Cf}]/u.test(s)) return { ok: false, error: 'That name has characters we can’t show.' }
+  if (looksLikeEmail(s)) return { ok: false, error: 'Use a name, not an email address.' }
+  return { ok: true, value: s }
+}
+
+/** The caller's own leaderboard identity (name shown + opt-out). */
+async function travelerProfile(db, userId) {
+  const { rows } = await db.query(
+    `SELECT tp.display_name, COALESCE(tp.leaderboard_opt_out, false) AS opt_out, p.full_name
+       FROM (SELECT $1::uuid AS user_id) u
+       LEFT JOIN public.traveler_profiles tp ON tp.user_id = u.user_id
+       LEFT JOIN public.profiles p ON p.id = u.user_id`,
+    [userId],
+  )
+  const r = rows[0] ?? {}
+  return {
+    displayName: r.display_name ?? null,
+    optOut: Boolean(r.opt_out),
+    defaultName: leaderboardName(null, r.full_name),
+    name: leaderboardName(r.display_name, r.full_name),
+  }
 }
 
 // Everything the user may see about each card. $1 = user id. Not ordered, so
@@ -307,6 +483,7 @@ export function mountCards(app, pool) {
         regions: regionTallies(rows),
         owned: cards.filter((c) => c.owned).length,
         total: cards.length,
+        leaderboard: leaderboardOpen(req.user.id),
       })
     } catch (e) {
       fail(res, 'GET /api/cards', e)
@@ -412,6 +589,104 @@ export function mountCards(app, pool) {
       })
     } catch (e) {
       fail(res, 'GET /api/achievements', e)
+    }
+  })
+
+  // Top Traveler. Names only — never another user's id or email. Opted-out
+  // travellers are absent; the caller always gets their own row back.
+  app.get('/api/leaderboard', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
+    const range = req.query.range ?? 'week'
+    if (range !== 'week' && range !== 'all') {
+      return res.status(400).json({ error: 'range must be week or all.', code: 'BAD_RANGE' })
+    }
+    const userId = req.user.id
+    if (!leaderboardOpen(userId)) {
+      return res.status(404).json({ error: 'Top Traveler is not open yet.', code: 'NOT_LIVE' })
+    }
+    try {
+      const [{ rows }, profile] = await Promise.all([
+        pool.query(LEADERBOARD_SQL, [
+          range, userId, isTester(userId), JSON.stringify(RARITY_POINTS), LEADERBOARD_SIZE, PR_TZ,
+          testerUuids,
+        ]),
+        travelerProfile(pool, userId),
+      ])
+      const entries = rows
+        .filter((r) => r.kind === 'top')
+        .map((r) => {
+          const name = r.is_you ? profile.name : leaderboardName(r.display_name, r.full_name)
+          return {
+            rank: r.rank,
+            name,
+            initials: nameInitials(name),
+            cards: r.cards,
+            badges: r.badges,
+            points: r.points,
+            you: r.is_you,
+          }
+        })
+      const me = rows.find((r) => r.kind === 'me')
+      const pass = rows.find((r) => r.kind === 'pass')
+      res.json({
+        range,
+        entries,
+        you: {
+          rank: me ? me.rank : null,
+          points: me?.points ?? 0,
+          cards: me?.cards ?? 0,
+          badges: me?.badges ?? 0,
+          name: profile.name,
+          initials: nameInitials(profile.name),
+          hidden: profile.optOut,
+          inTop: entries.some((e) => e.you),
+        },
+        // "N pts to pass #k": a strict lead is needed, so a tie still needs 1.
+        pass: me && pass ? { rank: pass.rank, points: pass.points - me.points + 1 } : null,
+      })
+    } catch (e) {
+      fail(res, 'GET /api/leaderboard', e)
+    }
+  })
+
+  // Your leaderboard identity (Profile → "Leaderboard name" + "Show me on Top Traveler").
+  app.get('/api/traveler-profile', requireAuth, rateLimit({ max: 60 }), async (req, res) => {
+    try {
+      res.json(await travelerProfile(pool, req.user.id))
+    } catch (e) {
+      fail(res, 'GET /api/traveler-profile', e)
+    }
+  })
+
+  // { displayName?: string | null, optOut?: boolean } — either or both.
+  app.put('/api/traveler-profile', requireAuth, rateLimit({ max: 20 }), async (req, res) => {
+    const body = req.body ?? {}
+    const hasName = Object.prototype.hasOwnProperty.call(body, 'displayName')
+    const hasOptOut = Object.prototype.hasOwnProperty.call(body, 'optOut')
+    if (!hasName && !hasOptOut) {
+      return res.status(400).json({ error: 'Nothing to save.', code: 'EMPTY' })
+    }
+    if (hasOptOut && typeof body.optOut !== 'boolean') {
+      return res.status(400).json({ error: 'optOut must be true or false.', code: 'BAD_OPT_OUT' })
+    }
+    let displayName = null
+    if (hasName) {
+      const cleaned = cleanDisplayName(body.displayName)
+      if (!cleaned.ok) return res.status(400).json({ error: cleaned.error, code: 'BAD_NAME' })
+      displayName = cleaned.value
+    }
+    try {
+      await pool.query(
+        `INSERT INTO public.traveler_profiles AS tp (user_id, display_name, leaderboard_opt_out, updated_at)
+         VALUES ($1::uuid, $2::text, COALESCE($3::boolean, false), now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           display_name = CASE WHEN $4::boolean THEN EXCLUDED.display_name ELSE tp.display_name END,
+           leaderboard_opt_out = COALESCE($3::boolean, tp.leaderboard_opt_out),
+           updated_at = now()`,
+        [req.user.id, displayName, hasOptOut ? body.optOut : null, hasName],
+      )
+      res.json(await travelerProfile(pool, req.user.id))
+    } catch (e) {
+      fail(res, 'PUT /api/traveler-profile', e)
     }
   })
 

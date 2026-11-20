@@ -11,8 +11,8 @@ export const TERMS_VERSION = '2026-11-16'
  *  privacy policy must disclose — but only once it's true. Keep false until
  *  the Cards UI ships; on launch day, in ONE commit: set true, bump
  *  TERMS_VERSION and LAST_UPDATED to that date. Legal.jsx swaps the location
- *  wording on this flag. (Leaderboard names are not covered yet — add them
- *  to PRIVACY when Top Traveler ships.) */
+ *  wording on this flag, including the Top Traveler leaderboard names (the
+ *  chosen display name or first name + last initial, and the opt-out). */
 export const CARDS_LIVE = false
 
 /** Shown at the top of every legal page. */

@@ -156,7 +156,7 @@ Scratch Card (Pro).
 - **T-3** Titles `font-display`; micro-labels mono 10px uppercase `tracking-[0.14em]`;
   body Geist.
 - **T-4** Primary actions use the existing teal→sky gradient CTA; HoldButton fill matches.
-- **T-5** Segmented control = `SavedBody` `tab()` styles; chip rows = `PillSlider` (never
+- **T-5** Segmented control = `SavedBody` `tab()` styles (labels never wrap: `whitespace-nowrap`); chip rows = `PillSlider` (never
   hand-roll a chip row); list rows = `MenuBody` `Group`/`Row`.
 
 ## X · Geometry
@@ -248,7 +248,23 @@ Badges · Top Traveler (T-5).
   numeric); top 20 rows (rank / `Medal` 1–3, initials avatar, name = display name or
   first name + last initial, "N cards · N badges", points in Geist Mono via Counter);
   your row pinned (or highlighted in place if top 20); "N pts to pass #k". Opt-out
-  users absent. Tab hidden until the leaderboard endpoint exists.
+  users absent. Tab shown only when `/api/cards` returns `leaderboard: true` (testers until
+  launch day; backend `LEADERBOARD_LIVE` flips with `CARDS_LIVE`, because the board shows
+  other travellers' names).
+  - This week = since Mon 00:00 America/Puerto_Rico; all-time = lifetime. Refetched on tab
+    open and range switch (no polling, no pull-to-refresh: it fights the sheet drag, X-1).
+    PDF "· nearest card: <area>" is not built (no data source).
+  - Ties share a rank; board order points → cards → badges → stable id. On the board only
+    with > 0 points in range. Testers never appear on customers' boards.
+  - Your row: labelled "You" with your real initials; highlighted in place if top 20, else
+    pinned (`sticky bottom-[var(--sab)]`). Header: micro-label "TO PASS #k" over "N pts"
+    (aria-label "N pts to pass #k"); nobody above → "POINTS" / "N pts"; zero points → header
+    hidden and the pinned row reads "Collect a card to join the board" + Turn on radar (T-4).
+  - Opted out: you still see the rank you'd hold, no medal, "Hidden from others · change in
+    Profile". Your points roll (Counter) only when changed since your last view
+    (localStorage, per range).
+  - Copy: all-time empty "Be the first Top Traveler."; failure "Couldn't load the
+    leaderboard." + Try again.
 - Empty: "Turn on the radar and explore — your first card is closer than you think." +
   Turn on radar · "Collect a set to earn a badge." · "No legendary cards yet — they hide
   in the hardest places." · "Be the first Top Traveler this week." · Filter on a
@@ -285,7 +301,15 @@ in <region>." + "Start hunting" (turns radar on). On-site questions are NOT here
 **S-9 Entry points.** Menu: first Row of the first Group, lucide `GalleryVerticalEnd`,
 "Collection", count right (L-6). Profile: "Your collection" section — count + rarest
 (opens Collection), leaderboard name, "Show me on Top Traveler" switch. Name + switch
-hidden until the traveler-profile endpoint exists (build step 9).
+shown when `leaderboard: true` (as the Top Traveler tab).
+- Leaderboard name: inline edit (input, maxLength 24, placeholder = default name; lucide
+  `Check` / `X`; Enter saves, Escape cancels; empty → back to default). Helper "Shown on
+  Top Traveler. Leave empty to use your first name and last initial."; a 400 shows the
+  server's sentence; other failures "Couldn't save — try again." (`text-destructive`).
+  Server rules: 2–24 chars, whitespace collapsed, no control/format chars, no "@"; default
+  = first name + last initial, else "Traveler".
+- "Show me on Top Traveler": optimistic switch, disabled while saving, reverts silently
+  on failure.
 
 **S-10 Desktop / tablet.** Collection = floating panel (344px, Saved's slot); radar pill
 top-left under `MapTopBar`; banner bottom-left of the map; overlays centred with scrim.

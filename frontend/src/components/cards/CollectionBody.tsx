@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { PointerEvent as ReactPointerEvent, SyntheticEvent } from 'react'
-import { MapPin, Radar, RotateCw, Volume2, X } from 'lucide-react'
+import { MapPin, Radar, Volume2, X } from 'lucide-react'
 
 import { useCardsCatalog } from '../../hooks/useCardsCatalog'
 import { armCardRadar } from '../../hooks/useCardRadar'
@@ -12,6 +12,9 @@ import { isSoundMuted, setSoundMuted, subscribeSoundMuted } from '../../lib/soun
 import { Group, Row } from '../MenuBody'
 import PillSlider from '../PillSlider'
 import TiltedCard from '../reactbits/TiltedCard'
+import CardSwitch from './CardSwitch'
+import LoadFailed from './LoadFailed'
+import TopTravelerTab from './TopTravelerTab'
 
 /**
  * Vieques Cards — the Collection pane (docs/CARD_UI_SPEC.md S-6, L-5, T-3,
@@ -29,11 +32,14 @@ import TiltedCard from '../reactbits/TiltedCard'
  *            flips an owned card to its back.
  *  Badges  earned first (static sticker), then in progress (dashed outline +
  *          bar, "Beach Bum 3/5").
- *  Top Traveler is hidden until the leaderboard endpoint exists (step 9).
+ *  Top Traveler  This week / All-time board (TopTravelerTab, step 9).
  */
 
-/** S-6: "Tab hidden until the leaderboard endpoint exists." Step 9 flips it. */
-const TOP_TRAVELER_LIVE = false
+/** S-6: "Tab hidden until the leaderboard endpoint exists." Live since step 9
+ *  (GET /api/leaderboard). Set false to hide the tab again without a deploy of
+ *  the backend. */
+// Top Traveler shows when the server opens it to this caller (`catalog.leaderboard`):
+// testers only until launch day, when backend LEADERBOARD_LIVE flips with CARDS_LIVE.
 
 /** How long a press must hold still to flip a grid card. */
 const LONG_PRESS_MS = 450
@@ -112,7 +118,7 @@ export default function CollectionBody({
       key={id}
       onClick={() => setSegment(id)}
       aria-pressed={segment === id}
-      className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+      className={`flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
         segment === id
           ? 'bg-white/10 text-foreground'
           : 'text-muted-foreground hover:text-foreground'
@@ -143,7 +149,7 @@ export default function CollectionBody({
         <div className="flex flex-1 gap-1 rounded-xl bg-white/[0.04] p-1">
           {tab('cards', 'Cards')}
           {tab('badges', 'Badges')}
-          {TOP_TRAVELER_LIVE && tab('top', 'Top Traveler')}
+          {catalog?.leaderboard && tab('top', 'Top Traveler')}
         </div>
       </div>
 
@@ -152,7 +158,9 @@ export default function CollectionBody({
           navPad ? 'pb-[calc(1rem+var(--nav-clear))]' : 'pb-4'
         }`}
       >
-        {segment === 'cards' ? (
+        {segment === 'top' ? (
+          <TopTravelerTab radarOn={radarOn} onTurnOnRadar={onTurnOnRadar} />
+        ) : segment === 'cards' ? (
           <CardsTab
             cards={catalog?.cards ?? null}
             owned={catalog?.owned ?? 0}
@@ -535,14 +543,14 @@ function SettingsRows({
         <Row
           icon={<Volume2 size={16} />}
           label="Sound"
-          detail={<Switch label="Sound" checked={!muted} onChange={(on) => setSoundMuted(!on)} />}
+          detail={<CardSwitch label="Sound" checked={!muted} onChange={(on) => setSoundMuted(!on)} />}
         />
         {onRadarChange && (
           <Row
             icon={<Radar size={16} />}
             label="Card radar"
             detail={
-              <Switch
+              <CardSwitch
                 label="Card radar"
                 checked={Boolean(radarOn)}
                 onChange={(on) => {
@@ -555,34 +563,6 @@ function SettingsRows({
         )}
       </Group>
     </section>
-  )
-}
-
-function Switch({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (next: boolean) => void
-}) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-[30px] w-[50px] shrink-0 rounded-full transition-colors ${
-        checked ? 'bg-primary' : 'bg-white/20'
-      }`}
-    >
-      <span
-        className={`absolute left-0 top-[3px] h-6 w-6 rounded-full bg-foreground transition-transform ${
-          checked ? 'translate-x-[23px]' : 'translate-x-[3px]'
-        }`}
-      />
-    </button>
   )
 }
 
@@ -707,20 +687,5 @@ function BadgeSticker({ src, fallback }: { src: string | null; fallback: string 
     />
   ) : (
     <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-full bg-white/8" />
-  )
-}
-
-function LoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
-  return (
-    <div className="px-2 py-10 text-center">
-      <p className="text-sm text-muted-foreground">Couldn't load {what}.</p>
-      <button
-        onClick={onRetry}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm text-primary hover:bg-white/5"
-      >
-        <RotateCw size={14} />
-        Try again
-      </button>
-    </div>
   )
 }

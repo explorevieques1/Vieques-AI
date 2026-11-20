@@ -1083,6 +1083,8 @@ export type CardsCatalog = {
   regions: CardRegionTally[]
   owned: number
   total: number
+  /** Top Traveler open to this caller (testers only until launch day). */
+  leaderboard?: boolean
 }
 
 export type CardPosition = { lat: number; lng: number; accuracy: number }
@@ -1208,4 +1210,76 @@ export async function fetchAchievements(): Promise<Achievement[]> {
   const res = await apiFetch('/api/achievements')
   if (!res.ok) await raise(res, 'Achievements failed')
   return (await res.json()).achievements
+}
+
+// --- Top Traveler (GET /api/leaderboard, /api/traveler-profile) -------------
+
+export type LeaderboardRange = 'week' | 'all'
+
+/** One visible traveller. Names only — the API never sends ids or emails. */
+export type LeaderboardEntry = {
+  rank: number
+  name: string
+  initials: string
+  cards: number
+  badges: number
+  points: number
+  you: boolean
+}
+
+export type Leaderboard = {
+  range: LeaderboardRange
+  /** Top 20, opted-out travellers absent. Ties share a rank. */
+  entries: LeaderboardEntry[]
+  you: {
+    /** null with no points in this range. When `hidden`, the rank you'd hold. */
+    rank: number | null
+    points: number
+    cards: number
+    badges: number
+    name: string
+    initials: string
+    /** Opted out of Top Traveler (others don't see you). */
+    hidden: boolean
+    /** Your row is already in `entries`. */
+    inTop: boolean
+  }
+  /** "N pts to pass #k" — null when you're first or have no points. */
+  pass: { rank: number; points: number } | null
+}
+
+export async function fetchLeaderboard(range: LeaderboardRange): Promise<Leaderboard> {
+  const res = await apiFetch(`/api/leaderboard?range=${range}`)
+  if (!res.ok) await raise(res, 'Leaderboard failed')
+  return res.json()
+}
+
+export type TravelerProfile = {
+  /** The name you chose, or null (then `defaultName` shows). */
+  displayName: string | null
+  optOut: boolean
+  /** First name + last initial from your account. */
+  defaultName: string
+  /** What others see: displayName ?? defaultName. */
+  name: string
+}
+
+export async function fetchTravelerProfile(): Promise<TravelerProfile> {
+  const res = await apiFetch('/api/traveler-profile')
+  if (!res.ok) await raise(res, 'Traveler profile failed')
+  return res.json()
+}
+
+/** Save either or both. `displayName: null` clears it (back to the default). */
+export async function saveTravelerProfile(patch: {
+  displayName?: string | null
+  optOut?: boolean
+}): Promise<TravelerProfile> {
+  const res = await apiFetch('/api/traveler-profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) await raise(res, 'Save failed')
+  return res.json()
 }

@@ -194,7 +194,9 @@ const PRIVACY = {
         'Places you save and trips you plan in the app.',
         ...(CARDS_LIVE
           ? ['Vieques Cards: the cards you find and collect and when, and how many guesses you have made ' +
-              'at a card’s riddle. See “Your location” below.']
+              'at a card’s riddle. See “Your location” below.',
+            'Top Traveler: the leaderboard name you choose, if you choose one, and whether you have hidden ' +
+              'yourself from the leaderboard. See “How we use it” below.']
           : []),
         'Anything you send us when you email us.',
       ],
@@ -220,6 +222,13 @@ const PRIVACY = {
         'To create and run your account and let you sign in.',
         'To process payments and give you the pass you bought.',
         'To answer your Ask AI questions.',
+        ...(CARDS_LIVE
+          ? ['To show the Top Traveler leaderboard. Other signed-in users of the map app can see your ' +
+              'leaderboard name — the name you choose, or else your first name and the initial of your ' +
+              'last name — with your rank, points and how many cards and badges you have. Never your ' +
+              'email address. You can hide yourself from it at any time with “Show me on Top Traveler” ' +
+              'in your profile in the map app.']
+          : []),
         'To send emails your account needs: sign-up confirmation, password resets, and receipts. We do ' +
           'not currently send marketing email; if we ever do, you will be able to unsubscribe from it.',
         'To keep the Services secure, prevent fraud and abuse, and fix problems.',
@@ -314,6 +323,10 @@ const PRIVACY = {
         `Ask for a copy of your data, or for anything else in this notice, by emailing ${CONTACT}. ` +
           'We respond within 30 days.',
         'Withdraw consent you have given us, for example by turning off location in your browser.',
+        ...(CARDS_LIVE
+          ? ['Change your Top Traveler name, or hide yourself from the leaderboard, from your profile in ' +
+              'the map app.']
+          : []),
       ],
       after: [
         'To protect your account, we may need to confirm that a request comes from you — normally by ' +

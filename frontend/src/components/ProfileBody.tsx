@@ -16,7 +16,7 @@
 //  the results list.
 // ============================================================================
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { rarestOwned, useCardsCatalog } from '../hooks/useCardsCatalog'
 import { getSession, signOut } from '../lib/supabase'
@@ -29,6 +29,9 @@ import {
   FEATURE_LABELS,
   FEATURE_MIN_TIER,
 } from '../lib/entitlement'
+
+/** S-9 leaderboard name + opt-out — Cards code, so its own lazy chunk (C-3). */
+const TravelerProfileRows = lazy(() => import('./cards/TravelerProfileRows'))
 
 type Props = {
   /** Desktop only — mobile leaves via the bottom nav. */
@@ -147,9 +150,8 @@ export default function ProfileBody({ onClose, navPad = false, onOpenCollection 
           </div>
         </section>
 
-        {/* ---- Vieques Cards (S-9): count + rarest, opens Collection.
-                Leaderboard name + "Show me on Top Traveler" arrive with the
-                Phase 2 traveler_profiles endpoint (build-order step 9). ---- */}
+        {/* ---- Vieques Cards (S-9): count + rarest (opens Collection),
+                leaderboard name, "Show me on Top Traveler". ---- */}
         {catalog && (
           <section>
             <h3 className={sectionLabel}>Your collection</h3>
@@ -171,6 +173,11 @@ export default function ProfileBody({ onClose, navPad = false, onOpenCollection 
                 }
                 onClick={onOpenCollection}
               />
+              {catalog.leaderboard && (
+                <Suspense fallback={null}>
+                  <TravelerProfileRows />
+                </Suspense>
+              )}
             </Group>
           </section>
         )}
