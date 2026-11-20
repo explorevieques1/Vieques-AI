@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { fetchCards, type Card } from '../lib/api'
+import { fetchCards, type Card, type CardFace } from '../lib/api'
+import { withFace } from '../lib/cardRange'
 
 /**
  * The cards that get a pin on the map (docs/CARD_UI_SPEC.md S-3, P-2, P-5).
@@ -22,8 +23,9 @@ export type CardPins = {
   cards: Card[]
   /** Slugs the radar revealed during this session (one marker-pulse each). */
   fresh: ReadonlySet<string>
-  /** Optimistic: the card was just collected with this serial. */
-  markOwned: (slug: string, serialNo: number | null) => void
+  /** Optimistic: the card was just collected with this serial (and the
+   *  claim's face, P-6 — the catalog withheld it until now). */
+  markOwned: (slug: string, serialNo: number | null, face?: CardFace) => void
   /** Refetch GET /api/cards (after a claim) while the radar is on. */
   reload: () => void
 }
@@ -83,12 +85,12 @@ export function useCardPins({ on, revealed }: Args): CardPins {
     }
   }, [on, reloads])
 
-  const markOwned = useCallback((slug: string, serialNo: number | null) => {
+  const markOwned = useCallback((slug: string, serialNo: number | null, face?: CardFace) => {
     setBySlug((prev) => {
       const card = prev.get(slug)
       if (!card || card.owned) return prev
       const next = new Map(prev)
-      next.set(slug, { ...card, owned: true, serialNo: serialNo ?? card.serialNo })
+      next.set(slug, { ...withFace(card, face), owned: true, serialNo: serialNo ?? card.serialNo })
       return next
     })
   }, [])

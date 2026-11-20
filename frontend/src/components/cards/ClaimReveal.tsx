@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Share } from 'lucide-react'
 
 import type { AchievementSummary, Card, CardClaim } from '../../lib/api'
-import { RARITY, rarityColor } from '../../lib/rarity'
+import { RARITY, rarityColor, silhouetteTitle } from '../../lib/rarity'
 import { playSound } from '../../lib/sound'
 import BounceCards from '../reactbits/BounceCards'
 import ClickSpark, { type ClickSparkHandle } from '../reactbits/ClickSpark'
@@ -108,7 +108,9 @@ export type ClaimRevealProps = {
 export default function ClaimReveal({ card, claim, collection, onClose }: ClaimRevealProps) {
   const style = RARITY[card.rarity]
   const [reduced] = useState(prefersReducedMotion)
-  const name = card.name ?? 'Card'
+  // P-6: MapView hands over the card with the claim's face merged in; a lost
+  // double-tap race has none until the catalog refetch lands.
+  const name = card.name ?? silhouetteTitle(card.rarity)
   const serialNo = claim.serialNo ?? card.serialNo
   const maxClaims = claim.maxClaims ?? card.maxClaims
   const achievements = claim.newAchievements

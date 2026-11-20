@@ -1117,7 +1117,13 @@ export type CardClaim = {
   serialNo?: number
   maxClaims?: number | null
   newAchievements: AchievementSummary[]
+  /** The card's face (P-6: sent only once it's yours) for the reveal (S-5).
+   *  Missing on a lost double-tap race — the catalog refetch has it. */
+  face?: CardFace
 }
+
+/** Name, lore and art: what the catalog withholds until a card is collected (P-6). */
+export type CardFace = { name: string | null; lore: string | null; image: string | null }
 
 export type RiddleSolved = { solved: true; region: string }
 

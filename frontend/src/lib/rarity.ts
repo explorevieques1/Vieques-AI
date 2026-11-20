@@ -110,3 +110,9 @@ export const CARD_PIN_SELECTED_W = 34
 export const CARD_PIN_SELECTED_H = 47
 export const CARD_PIN_RADIUS = 5
 export const CARD_PIN_RIM = 1.5
+
+/** P-6: a card you haven't collected has no name, only its rarity — "A rare card". */
+export function silhouetteTitle(r: Rarity): string {
+  const label = RARITY[r].label.toLowerCase()
+  return `${/^[aeiou]/.test(label) ? 'An' : 'A'} ${label} card`
+}

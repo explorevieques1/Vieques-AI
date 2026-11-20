@@ -4,7 +4,7 @@ import { KeyRound, MapPin, RotateCw, Share, X } from 'lucide-react'
 
 import { LANDING_URL, type Card } from '../../lib/api'
 import { TIER_LABELS } from '../../lib/entitlement'
-import { RARITY, rarityColor } from '../../lib/rarity'
+import { RARITY, rarityColor, silhouetteTitle } from '../../lib/rarity'
 import HoloCard from '../reactbits/HoloCard'
 
 /**
@@ -17,8 +17,11 @@ import HoloCard from '../reactbits/HoloCard'
  *   owned       one live HoloCard (rarity preset), tap flips to the back
  *               (island outline + find spot, date, badges); serial, lore,
  *               "Show on map", Share.
- *   revealed    the face (name + art, no serial yet) and lore; "Show on map".
- *               No back — nothing has been found yet to put on it.
+ *   revealed    (pinned, not collected) still a silhouette — P-6: the face
+ *               (name, lore, art) is first seen in the claim reveal (S-5).
+ *               "Not collected yet", rarity, region, "Show on map"; in
+ *               collect range "Collect" (picks it for the banner), else
+ *               "Walk within N m to collect".
  *   unfound     a silhouette: the shared back, rarity, region (unless a locate
  *               riddle hides it), hint. No name or art (P-5). With an unsolved
  *               locate riddle: "Solve the riddle" → S-8.
@@ -58,13 +61,34 @@ export type CardDetailProps = {
   onShowOnMap: (card: Card) => void
   /** Unfound card with an unsolved locate riddle → the riddle sheet (S-8). */
   onSolveRiddle: (card: Card) => void
+  /** Revealed, not collected: inside its collect radius right now. */
+  inRange?: boolean
+  /** Touch device (S-10): a laptop says where cards are collected instead. */
+  canCollect?: boolean
+  /** "Collect" (S-7): close and pick the card for the banner (S-4). */
+  onCollect?: (card: Card) => void
 }
 
-export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }: CardDetailProps) {
+/** S-10: desktop has no GPS worth hunting with. */
+const DESKTOP_COPY = 'Cards are collected on your phone, on the island.'
+
+export default function CardDetail({
+  card,
+  onClose,
+  onShowOnMap,
+  onSolveRiddle,
+  inRange = false,
+  canCollect = false,
+  onCollect,
+}: CardDetailProps) {
   const style = RARITY[card.rarity]
   const owned = card.owned
-  const revealed = owned || card.revealed
-  const name = revealed ? (card.name ?? 'Card') : null
+  /** Located for you (pinned) — owned or not. */
+  const located = owned || card.revealed
+  /** P-6: the face (name, art, lore) only once collected. */
+  const revealed = owned
+  const pinnedOnly = located && !owned
+  const name = owned ? (card.name ?? silhouetteTitle(card.rarity)) : null
   const lockedTier = card.lockedByTier && !owned ? card.minTier : null
   const riddle =
     !owned && card.challenge?.kind === 'locate' && !card.challenge.solved ? card.challenge : null
@@ -201,8 +225,11 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
 
   // --- Render -----------------------------------------------------------------
   const pass = lockedTier ? (TIER_LABELS[lockedTier] ?? lockedTier) : null
-  const canShowOnMap = revealed && card.location != null
-  const title = name ?? 'Not found yet'
+  const canShowOnMap = located && card.location != null
+  const title = name ?? (pinnedOnly ? silhouetteTitle(card.rarity) : 'Not found yet')
+  /** S-7 revealed, not owned: collect here (T-4) or how close to get. */
+  const collectable = pinnedOnly && !lockedTier && !card.soldOut
+  const showCollect = collectable && canCollect && inRange && onCollect != null
 
   return (
     <div
@@ -266,12 +293,18 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
           }}
         >
           <div ref={setAboveEl} className="flex w-full flex-col items-center text-center">
+            {pinnedOnly && (
+              // It must never read as owned (S-7).
+              <p className="mb-1 rounded-full border border-white/12 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-foreground uppercase">
+                Not collected yet
+              </p>
+            )}
             <p className="font-mono text-[10px] tracking-[0.14em] uppercase">
               <span className={style.textClass}>{style.label}</span>
               {card.region ? (
                 <span className="text-muted-foreground"> · {card.region}</span>
               ) : (
-                !revealed && <span className="text-muted-foreground"> · Mystery</span>
+                !located && <span className="text-muted-foreground"> · Mystery</span>
               )}
             </p>
             <h2
@@ -344,7 +377,7 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
             {revealed && card.lore && (
               <p className="mt-2 max-w-[34ch] text-[14px] leading-relaxed text-foreground/90">{card.lore}</p>
             )}
-            {!revealed && card.hint && (
+            {!located && card.hint && (
               <p className="mt-1 max-w-[34ch] text-[14px] leading-relaxed text-foreground/90">
                 <span className="font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
                   Hint
@@ -367,12 +400,32 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
                 </a>
               </div>
             )}
+
+            {/* Revealed, not collected (S-7): how to get it. */}
+            {pinnedOnly && card.soldOut && (
+              <p className="mt-2 text-[14px] text-muted-foreground">Every copy has been collected</p>
+            )}
+            {collectable && !canCollect && <p className="mt-2 text-[14px] text-muted-foreground">{DESKTOP_COPY}</p>}
+            {collectable && canCollect && !inRange && card.location && (
+              <p className="mt-2 text-[14px] text-foreground">
+                Walk within {Math.round(card.location.radiusM)} m to collect
+              </p>
+            )}
           </div>
         </div>
 
         {/* Actions. */}
-        {(canShowOnMap || canShare || riddle) && (
+        {(canShowOnMap || canShare || riddle || showCollect) && (
           <div className="pointer-events-auto mt-4 flex w-full shrink-0 gap-2.5">
+            {showCollect && (
+              <button
+                type="button"
+                onClick={() => onCollect?.(card)}
+                className="h-12 flex-1 rounded-2xl bg-gradient-to-br from-primary to-accent-sky font-semibold text-primary-foreground"
+              >
+                Collect
+              </button>
+            )}
             {riddle && (
               <button
                 type="button"

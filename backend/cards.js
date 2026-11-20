@@ -154,10 +154,14 @@ function toCard(row, tier) {
   const locked = riddleLocked(row)
   return {
     slug: row.slug,
-    // An unrevealed card is a silhouette: rarity + region, nothing that locates it.
-    name: revealed ? row.name : null,
-    lore: revealed ? row.lore : null,
-    image: revealed ? row.image_path : null,
+    // The face (name, lore, art) is the reward: it's only ever sent once the
+    // card is collected (owner, 2026-11-20). Before that — even revealed and
+    // pinned on the map — it's a silhouette: rarity + region (+ its location
+    // once revealed, so you can walk to it). The claim response carries the
+    // face for the reveal.
+    name: owned ? row.name : null,
+    lore: owned ? row.lore : null,
+    image: owned ? row.image_path : null,
     rarity: row.rarity,
     tags: row.tags ?? [],
     region: locked ? null : row.region,
@@ -165,7 +169,7 @@ function toCard(row, tier) {
     revealed,
     discoveredAt: row.discovered_at,
     location: revealed ? { center: [row.longitude, row.latitude], radiusM: row.radius_m } : null,
-    placeId: revealed ? row.place_id : null,
+    placeId: owned ? row.place_id : null, // a place link would name the card
     activeHours: row.active_hours ? [row.active_hours_lo, row.active_hours_hi] : null,
     soldOut: row.max_claims != null && row.claim_count >= row.max_claims && !owned,
     totalClaims: row.claim_count,
@@ -751,7 +755,7 @@ export function mountCards(app, pool) {
       // a *different* connection, and that FK check takes KEY SHARE on this
       // row. FOR UPDATE would block it — a self-deadlock that hangs forever.
       const { rows } = await client.query(
-        `SELECT c.id, c.slug, c.name, c.rarity, c.radius_m,
+        `SELECT c.id, c.slug, c.name, c.lore, c.image_path, c.rarity, c.radius_m,
                 c.max_claims, c.claim_count, c.place_id, c.test_only,
                 (c.active_hours IS NULL OR
                    extract(hour FROM now() AT TIME ZONE '${PR_TZ}')::int <@ c.active_hours) AS in_hours,
@@ -785,7 +789,7 @@ export function mountCards(app, pool) {
       )
       if (mine.rows[0]) {
         await client.query('ROLLBACK')
-        return res.json({ claimed: true, alreadyOwned: true, serialNo: mine.rows[0].serial_no, newAchievements: [] })
+        return res.json({ claimed: true, alreadyOwned: true, serialNo: mine.rows[0].serial_no, face: { name: card.name, lore: card.lore, image: card.image_path }, newAchievements: [] })
       }
       if (!card.live) return reject(404, notFound)
 
@@ -910,6 +914,8 @@ export function mountCards(app, pool) {
         alreadyOwned: false,
         serialNo,
         maxClaims: card.max_claims,
+        // The first time this card's face leaves the server for this user.
+        face: { name: card.name, lore: card.lore, image: card.image_path },
         newAchievements: earned.map((a) => ({
           slug: a.slug, name: a.name, description: a.description, badge: a.badge_path, points: a.points,
         })),

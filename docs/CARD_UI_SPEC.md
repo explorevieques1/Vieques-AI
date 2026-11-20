@@ -81,7 +81,7 @@ Scratch Card (Pro).
 - **L-4** Pill + banner hidden when the sheet is at full (`--sheet-full > .5`), the
   radar is off, a z-70 overlay is open, or (≥641px) the map band between panels is
   under `DESKTOP_CARDS_MIN_BAND` (240px). With a place open (PlaceDetailPanel), the
-  banner collapses to a slim one-line "card nearby".
+  banner collapses to a slim one-line "Card nearby · <rarity>" (P-6: never the name).
 - **L-5** Collection is a sheet pane: a `sheetBody` branch, opens at `SHEET_FULL`, has
   `onCollapse` (⌄). Desktop: `ResponsivePanel variant="floating"` in Saved's slot.
 - **L-6** The Collection entry is added to `MenuBody` **and** the `MapTopBar` desktop
@@ -109,6 +109,11 @@ Scratch Card (Pro).
   removed with the radar.
 - **P-5** The client never holds or draws an unrevealed card's coordinates; only
   revealed/owned cards from the API are drawn.
+- **P-6** **A card's face — name, lore, art, place link — is only ever sent and shown
+  once it's collected** (owner, 2026-11-20). Before that, everywhere (pin, banner, S-4a,
+  S-7, Collection) it's a silhouette: rarity + region (+ location once revealed). The
+  server withholds the fields (`toCard`: owned only); the claim response's `face`
+  carries them for the S-5 reveal, which is the first time the card is seen.
 
 ## M · Camera & motion
 
@@ -193,9 +198,10 @@ crop of the face) · legendary owned (gold glow) · locked (lucide `Lock`). Sele
 
 **S-4 Nearby banner.** Frosted (G-1), full width minus 10px gutters, on the sheet edge.
 States: ① PixelCard "Something's here… · within 200 m · walk closer" (SoundReveal) ·
-② in range: rarity label, name, full-width HoldButton "Hold to collect" (1 s, drains on
-release) → ClickSpark → claim · ③ on-site question: `font-display` prompt + input, hold
-disabled until text; wrong → shake, "Not quite — look around", hint after 3 ·
+② in range: rarity label, "A <rarity> card" (never the name, P-6), full-width HoldButton "Hold to collect" (1 s, drains on
+release) → ClickSpark → claim · ③ on-site question: the banner shows the prompt and an
+"Answer to collect" button (T-4) — **no input in the banner** (owner, 2026-11-20: the
+keyboard covered it on iPhone). The button opens the **S-4a answer sheet** ·
 ④ locked: ResultsList-style upsell "A <pass> unlocks <rarity> cards…" + "See passes" →
 `${LANDING_URL}/pricing`.
 Errors: `TOO_FAR` (revealed) "Get a little closer · N m to go" · `TOO_FAR` (warmth)
@@ -204,6 +210,30 @@ the open" (auto-retry) · `NOT_NOW` "This card appears <hours>" · `SOLD_OUT` "E
 has been collected" · `TOO_FAST` "Whoa, that was fast. Try again in a few minutes" ·
 `TOO_MANY_GUESSES` "Try again in an hour" · `RIDDLE_UNSOLVED` "Solve the riddle first"
 → opens S-8.
+**S-4a Answer sheet** (owner, 2026-11-20). Same shell as S-8: L-2 overlay from the bottom,
+keyboard-safe (`useKeyboardInset`), outside-sheet focus guard (`useOutsideSheetFocus`), 16px
+input, Enter submits. Rarity label (no name, P-6), `font-display` prompt, input, "Collect" (T-4).
+Submitting IS the claim (`POST /claim` with the answer — the answer replaces the hold;
+the server still checks distance, accuracy and speed). Wrong → shake (M-3 flash), "Not
+quite — look around", hint after 3; every S-4 error shows here. Success → closes and opens
+S-5. Close: lucide `X`, Escape, Back, swipe down. No guess counter (the hint line says
+"hint after 3"). In the sheet: network → "No connection — try again"; UPGRADE_REQUIRED →
+the ④ upsell; SOLD_OUT → "Every copy has been collected" + "See other cards nearby"
+(skips the card, closes the sheet); RIDDLE_UNSOLVED → "Solve the riddle first ›", whose tap
+closes the sheet and opens S-8 (same arrow convention as the banner). No prompt
+from the catalog → the server's sentence as the title.
+**Choosing a card** (owner, 2026-11-20). The banner's card is the one you picked, else the
+nearest collectable card in range (no "stick to the first one").
+- Tapping a pin of a revealed, uncollected card **in collect range** picks it for the banner
+  (no detail overlay); the banner's thumbnail opens S-7 for it.
+- With 2+ collectable cards in range the banner shows "‹ 1 of 3 ›" (lucide
+  `ChevronLeft`/`ChevronRight`, 44px targets) to switch; order = nearest first.
+- A pick is dropped when that card is collected, leaves range, or sells out.
+- "In collect range" = card radius + min(accuracy, 25 m), the server's rule. Picking and the
+  switcher are coarse-pointer only; on a laptop every pin opens S-7. The picked card gets
+  no marker-lift (the banner is the feedback); the collect ring stays on the nearest.
+- S-7 on a fine pointer shows the S-10 desktop sentence where Collect would be; sold out
+  shows "Every copy has been collected" and no Collect.
 **Owner rule (2026-11-19): only LEGENDARY cards have a riddle**, either a locate riddle or an on-site question. Common, basic and rare cards are walk up + hold. State ③ and S-8 therefore only ever appear for legendaries. Not enforced in code yet; authoring rule for the admin tool.
 *Step 5 additions (owner-accepted defaults, 2026-11-19):*
 - **Layout:** the right control stack lifts above the banner by the same rule as the pill (L-3). The 40×56 thumbnail is the PixelCard/thumb size.
@@ -215,7 +245,7 @@ has been collected" · `TOO_FAST` "Whoa, that was fast. Try again in a few minut
 - **Cooldowns** (the server sends no retry time): `TOO_FAST` 3 min, `TOO_MANY_GUESSES` 60 min, with hold disabled and "Try again in m:ss".
 - **`SOLD_OUT`:** adds a "See other cards nearby" button, which skips that card for the session.
 - **④ locked:** shows anywhere within 200 m, not only in the collect radius.
-- **Slim one-line mode** (when a place is open): "Card nearby · <name>", not tappable.
+- **Slim one-line mode** (when a place is open): "Card nearby · <rarity>" (P-6), not tappable.
 - **Placeholders until later steps:**
   - Until S-5 ships, a 2.6 s interim line: "Collected · #N", plus a check. S-5 replaces it.
   - Until S-8 ships, `RIDDLE_UNSOLVED` selects the card's pin.
@@ -282,7 +312,10 @@ until the API sends achievement rules). "Tap to flip" hint row (lucide `RotateCw
 "Show on map" (M-1; neutral bordered secondary button, not T-4) + Share (48px icon button).
 - Owned: everything above. Share only here (same text/file as S-5; hidden without
   `navigator.share`).
-- Revealed, not owned: HoloCard front, no flip, no serial; Show on map yes, Share no.
+- Revealed, not owned: the unfound silhouette (P-6: no face, name, lore or HoloCard), with
+  "Not collected yet", rarity and region; Show on map yes, Share no. In
+  collect range → "Collect" (T-4): closes S-7 and picks the card for the banner; out of
+  range → "Walk within N m to collect" (N = the card's radius).
 - Unfound → silhouette (static shared back in a rarity rim; rarity, region unless
   riddle-locked → "Mystery", hint; no name/art). Title "Not found yet". Riddle-locked →
   "Solve the riddle" (T-4, lucide `KeyRound`), which closes S-7 and opens S-8 (one z-70
@@ -323,19 +356,17 @@ map band, 360px, above the attribution strip; overlays centred with scrim. Inher
 - **Layout is by width; collecting is by touch** (owner, 2026-11-20). ≥641px places the
   pill and banner in the map band. Whether you can collect is `(pointer: coarse)`:
   tablets get the full S-4 body (PixelCard "Something's here…", "within 200 m · walk
-  closer", HoldButton, on-site input).
+  closer", HoldButton, "Answer to collect" → S-4a), the pin-tap pick and the switcher.
   Collecting is never decided by width; a fine-pointer browser under 641px gets the phone
   layout with the desktop sentence. ClaimReveal centres at ≥641px whatever the pointer.
-- Fine pointer (laptop/desktop) banner: thumb, micro-label, name hidden until in range,
+- Fine pointer (laptop/desktop) banner: thumb, micro-label, the silhouette title (P-6),
   and "Cards are collected on your phone, on the island." in place of the collect action.
-  The slim line (L-4, place open) shows "Card nearby · <name>" on every device, as on
-  the phone. Locked → "A <pass> pass unlocks <rarity> cards." + See passes; "Upgrade now
+  The slim line (L-4, place open) shows "Card nearby · <rarity>" on every device (P-6). Locked → "A <pass> pass unlocks <rarity> cards." + See passes; "Upgrade now
   and collect it while you're here." is appended only when you can collect. Sold out
   unchanged on every device.
-- Band layout + coarse pointer (tablet): the banner rises with the keyboard
-  (`visualViewport`, as S-8) so the on-site input stays visible. When the band is under
-  240px (a place or the AI pane open) the banner steps aside (L-4), so a tablet collects
-  after closing that panel.
+- Band layout + coarse pointer (tablet): typing happens in S-4a (keyboard-safe), never in
+  the banner. When the band is under 240px (a place or the AI pane open) the banner steps
+  aside (L-4), so a tablet collects after closing that panel.
 
 **S-11 Card face generator.** Canvas 630×880 drawn after `document.fonts.ready` (not SVG
 in `<img>` — no web fonts there) → `toBlob` → blob URL cached per card + serial. Front:

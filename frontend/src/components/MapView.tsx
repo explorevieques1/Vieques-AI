@@ -35,6 +35,7 @@ import { DEFAULT_MAP_STYLE, styleUrl } from '../lib/mapStyles'
 import { drawZones, removeAllZones } from '../lib/zoneLayers'
 import { drawTrails, removeTrails, TRAIL_CLICK_LAYERS } from '../lib/trailLayers'
 import { CARD_RADAR_RANGE_M, CARD_RING_RANGE_M, drawCardRing, hasCardRing, removeCardRing } from '../lib/cardLayers'
+import { inCollectRange, isCollectable, metresTo, withFace } from '../lib/cardRange'
 import { drawRoute, removeRoute } from '../lib/RouteLayer'
 import { CameraDirector, pointShot } from '../lib/camera'
 import type { ShellMode } from '../lib/shell'
@@ -102,6 +103,8 @@ const CollectionBody = lazy(() => import('./cards/CollectionBody'))
 const CardDetail = lazy(() => import('./cards/CardDetail'))
 /** Riddle sheet (S-8) — lazy (C-3). */
 const RiddleSheet = lazy(() => import('./cards/RiddleSheet'))
+/** On-site answer sheet (S-4a) — lazy (C-3). */
+const AnswerSheet = lazy(() => import('./cards/AnswerSheet'))
 /** Banner leaves only 20 m past the 200 m edge (GPS-jitter hysteresis). */
 const BANNER_EXIT_SLACK_M = 20
 import { ResponsivePanel } from './ui/ResponsivePanel'
@@ -304,10 +307,16 @@ function MapView({
   const [detailCard, setDetailCard] = useState<Card | null>(null)
   /** Riddle sheet (S-8): from an unfound card's detail or the banner's RIDDLE_UNSOLVED. */
   const [riddleCard, setRiddleCard] = useState<Card | null>(null)
+  /** On-site answer sheet (S-4a): from the banner's "Answer to collect". */
+  const [answerCard, setAnswerCard] = useState<Card | null>(null)
+  /** The card you picked for the banner (S-4 "Choosing a card"): a pin tap,
+   *  the banner's ‹ › or the detail's "Collect". Dropped once it's collected,
+   *  out of range or sold out. */
+  const [pickedSlug, setPickedSlug] = useState<string | null>(null)
   /** Bumped when a riddle is solved, so the Collection refetches (region, tallies). */
   const [collectionKey, setCollectionKey] = useState(0)
   /** A z-70 Cards overlay is open: radar pill paused, banner aside (W-2, L-4). */
-  const cardOverlayOpen = detailCard != null || riddleCard != null
+  const cardOverlayOpen = detailCard != null || riddleCard != null || answerCard != null
   /** Measured nearby-banner height, 0 when it isn't showing (M-2, L-3). */
   const [cardsBannerH, setCardsBannerH] = useState(0)
   /**
@@ -647,6 +656,26 @@ function MapView({
    * rebuilds only the pins that changed. Their own ref (P-1): clearMarkers()
    * never touches them, and nothing here hides or gates category or AI pins.
    */
+  /**
+   * A card pin tap (P-3), read through a ref so the markers built above never
+   * hold a stale fix. A revealed card you could collect right where you stand
+   * is picked for the banner (S-4 "Choosing a card") — no detail overlay;
+   * every other pin opens its detail (S-7). Picking is a touch thing (S-10).
+   */
+  const cardTapRef = useRef<(slug: string) => void>(() => undefined)
+  useEffect(() => {
+    cardTapRef.current = (slug) => {
+      const c = cardPins.cards.find((x) => x.slug === slug)
+      if (!c) return
+      if (canCollect && isCollectable(c) && !skippedCards.has(slug) && inCollectRange(c, userFix)) {
+        setPickedSlug(slug)
+        return
+      }
+      setOpenCardSlug(slug)
+      setDetailCard(c) // S-7
+    }
+  })
+
   const cardMarkersRef = useRef(new Map<string, { marker: maplibregl.Marker; look: string }>())
   /** Slugs that already had their one "revealed just now" pulse. */
   const cardPulsedRef = useRef(new Set<string>())
@@ -689,8 +718,7 @@ function MapView({
       })
       el.addEventListener('click', (e) => {
         e.stopPropagation() // P-3: a card tap never reaches the map
-        setOpenCardSlug(c.slug)
-        setDetailCard(c) // S-7
+        cardTapRef.current(c.slug)
       })
       if (state === 'owned' && c.name) {
         // Art crop of the generated face (S-11). Dynamic import keeps the
@@ -792,39 +820,84 @@ function MapView({
   }, [ringCard, styleId])
 
   /**
-   * The card the nearby banner is about (S-4): the nearest revealed card you
-   * don't own yet, within reveal range of your fix. Unlike the ring, locked
-   * and sold-out cards count — the banner explains them (④ / SOLD_OUT). A
-   * card just collected is owned, so it leaves; the reveal (S-5) has the moment.
+   * Collectable cards inside their collect radius right now, nearest first
+   * (S-4 "Choosing a card"): revealed, not owned, not locked, not sold out,
+   * not skipped. With 2+ the banner shows "‹ 1 of N ›".
    */
-  // Hysteresis: a card already in the banner stays until you're 20 m past the
-  // 200 m edge, so GPS jitter at the boundary doesn't flicker the banner (and
-  // nudge the camera padding, M-2) on and off.
+  const cardsInRange = useMemo(() => {
+    if (!userFix) return []
+    return cardPins.cards
+      .filter((c) => isCollectable(c) && !skippedCards.has(c.slug) && inCollectRange(c, userFix))
+      .map((c) => ({ c, m: c.location ? metresTo(userFix, c.location.center) : Infinity }))
+      .sort((a, b) => a.m - b.m)
+      .map(({ c }) => c)
+  }, [cardPins.cards, userFix, skippedCards])
+  // A pick is dropped once that card is collected, leaves range or sells out
+  // (adjusting state while rendering, not in an effect).
+  if (pickedSlug && !cardsInRange.some((c) => c.slug === pickedSlug)) setPickedSlug(null)
+
+  /**
+   * The card the nearby banner is about (S-4): the one you picked, else the
+   * nearest collectable card in range (no "stick to the first one", owner
+   * 2026-11-20). With none in range: the nearest revealed card you don't own
+   * within reveal range — locked and sold-out cards count there, the banner
+   * explains them (④ / SOLD_OUT). A card just collected is owned, so it
+   * leaves; the reveal (S-5) has the moment.
+   */
+  // Hysteresis (walk-up only): a card already in the banner stays until
+  // you're 20 m past the 200 m edge, so GPS jitter at the boundary doesn't
+  // flicker the banner (and nudge the camera padding, M-2) on and off.
   const [stickyBannerSlug, setStickyBannerSlug] = useState<string | null>(null)
   const bannerCard = useMemo(() => {
     if (!userFix) return null
-    const here: [number, number] = [userFix.lng, userFix.lat]
+    if (cardsInRange.length > 0) {
+      return cardsInRange.find((c) => c.slug === pickedSlug) ?? cardsInRange[0]
+    }
     const sticky = stickyBannerSlug
       ? cardPins.cards.find((c) => c.slug === stickyBannerSlug)
       : undefined
     if (
       sticky?.location && !sticky.owned && !skippedCards.has(sticky.slug) &&
-      milesBetween(here, sticky.location.center) * METRES_PER_MILE <= CARD_RING_RANGE_M + BANNER_EXIT_SLACK_M
+      metresTo(userFix, sticky.location.center) <= CARD_RING_RANGE_M + BANNER_EXIT_SLACK_M
     ) return sticky
     let best: Card | null = null
     let bestM = Infinity
     for (const c of cardPins.cards) {
       if (!c.location || c.owned || skippedCards.has(c.slug)) continue
-      const m = milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE
+      const m = metresTo(userFix, c.location.center)
       if (m <= CARD_RING_RANGE_M && m < bestM) {
         best = c
         bestM = m
       }
     }
     return best
-  }, [cardPins.cards, userFix, skippedCards, stickyBannerSlug])
+  }, [cardPins.cards, userFix, skippedCards, stickyBannerSlug, cardsInRange, pickedSlug])
   const bannerSlug = bannerCard?.slug ?? null
   if (bannerSlug !== stickyBannerSlug) setStickyBannerSlug(bannerSlug)
+
+  /** "‹ 1 of N ›" (S-4): cycles the pick through the cards in range. */
+  const bannerIndex = bannerCard ? cardsInRange.findIndex((c) => c.slug === bannerCard.slug) : -1
+  const stepBannerCard = useCallback(
+    (dir: 1 | -1) => {
+      const n = cardsInRange.length
+      if (n < 2) return
+      const i = Math.max(0, cardsInRange.findIndex((c) => c.slug === bannerSlug))
+      setPickedSlug(cardsInRange[(i + dir + n) % n].slug)
+    },
+    [cardsInRange, bannerSlug],
+  )
+  const bannerSwitch = useMemo(
+    () =>
+      bannerIndex >= 0 && cardsInRange.length >= 2
+        ? {
+            index: bannerIndex,
+            count: cardsInRange.length,
+            onPrev: () => stepBannerCard(-1),
+            onNext: () => stepBannerCard(1),
+          }
+        : null,
+    [bannerIndex, cardsInRange.length, stepBannerCard],
+  )
 
   const { markOwned: markCardOwned, reload: reloadCardPins } = cardPins
   /**
@@ -835,16 +908,23 @@ function MapView({
    */
   const handleCardClaimed = useCallback(
     (card: Card, claim: CardClaim) => {
-      markCardOwned(card.slug, claim.serialNo ?? null)
+      // P-6: the face (name, lore, art) arrives with the claim — the catalog
+      // withheld it until now; the refetch then carries it for good.
+      markCardOwned(card.slug, claim.serialNo ?? null, claim.face)
       reloadCardPins()
-      setClaimMoment({ card, claim })
+      setAnswerCard(null) // S-4a closes; the reveal opens (S-5)
+      setPickedSlug(null)
+      setClaimMoment({ card: withFace(card, claim.face), claim })
     },
     [markCardOwned, reloadCardPins],
   )
   /** The reveal shows the catalog's copy once the refetch lands (a lost
    *  double-tap race sends no serial; the catalog has it). */
   const revealCard = claimMoment
-    ? (cardPins.cards.find((c) => c.slug === claimMoment.card.slug) ?? claimMoment.card)
+    ? withFace(
+        cardPins.cards.find((c) => c.slug === claimMoment.card.slug) ?? claimMoment.card,
+        claimMoment.claim.face,
+      )
     : null
   const closeClaimReveal = useCallback(() => setClaimMoment(null), [])
   const skipCard = useCallback(
@@ -1149,6 +1229,7 @@ function MapView({
   useBackToClose(cardOverlayOpen, () => {
     setDetailCard(null)
     setRiddleCard(null)
+    setAnswerCard(null)
     setOpenCardSlug(null)
   })
   /**
@@ -1174,6 +1255,22 @@ function MapView({
     },
     [mode, changeMode, isMobile, snap, padding],
   )
+  /** "Collect" on a revealed card's detail (S-7): close it, pick it for the banner. */
+  const collectFromDetail = useCallback((card: Card) => {
+    setDetailCard(null)
+    setOpenCardSlug(null)
+    setPickedSlug(card.slug)
+  }, [])
+  /** The banner's thumbnail → that card's detail (S-4, S-7). */
+  const openBannerCard = useCallback((card: Card) => {
+    setOpenCardSlug(card.slug)
+    setDetailCard(card)
+  }, [])
+  /** RIDDLE_UNSOLVED from the answer sheet → the riddle (one z-70 overlay at a time). */
+  const answerToRiddle = useCallback((card: Card) => {
+    setAnswerCard(null)
+    setRiddleCard(card)
+  }, [])
   /** Detail of an unfound card → its riddle (one z-70 overlay at a time). */
   const openRiddle = useCallback((card: Card) => {
     setDetailCard(null)
@@ -2132,7 +2229,11 @@ function MapView({
             onClaimed={handleCardClaimed}
             // S-4 RIDDLE_UNSOLVED → the riddle sheet (S-8).
             onSolveRiddle={setRiddleCard}
+            // S-4 ③ → the answer sheet (S-4a).
+            onAnswer={setAnswerCard}
+            onOpenCard={openBannerCard}
             onDismiss={skipCard}
+            switcher={bannerSwitch}
             onHeight={setCardsBannerH}
           />
         </Suspense>
@@ -2168,10 +2269,30 @@ function MapView({
         <Suspense fallback={null}>
           <CardDetail
             key={detailCard.slug}
-            card={detailCard}
+            card={
+              // A SOLD_OUT claim only adds the card to skippedCards; the catalog still
+              // says soldOut:false until it refetches. Show it sold out here too.
+              skippedCards.has(detailCard.slug) ? { ...detailCard, soldOut: true } : detailCard
+            }
             onClose={closeCardDetail}
             onShowOnMap={showCardOnMap}
             onSolveRiddle={openRiddle}
+            inRange={inCollectRange(detailCard, userFix)}
+            canCollect={canCollect}
+            onCollect={collectFromDetail}
+          />
+        </Suspense>
+      )}
+      {answerCard && (
+        <Suspense fallback={null}>
+          <AnswerSheet
+            key={answerCard.slug}
+            card={answerCard}
+            fix={userFix}
+            onClose={() => setAnswerCard(null)}
+            onClaimed={handleCardClaimed}
+            onSolveRiddle={answerToRiddle}
+            onDismiss={skipCard}
           />
         </Suspense>
       )}
