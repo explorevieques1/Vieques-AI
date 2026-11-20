@@ -752,10 +752,13 @@ function MapView({
       sticky?.location && !sticky.owned && !skippedCards.has(sticky.slug) &&
       milesBetween(here, sticky.location.center) * METRES_PER_MILE <= CARD_RING_RANGE_M + BANNER_EXIT_SLACK_M
     ) return sticky
+    // TEMP (owner, low on tokens): the on-site text input isn't typeable
+    // yet, so skip cards needing a typed answer — pick the nearest plain
+    // walk-up-and-hold card instead. Remove once the input is fixed.
     let best: Card | null = null
     let bestM = Infinity
     for (const c of cardPins.cards) {
-      if (!c.location || c.owned || skippedCards.has(c.slug)) continue
+      if (!c.location || c.owned || skippedCards.has(c.slug) || c.challenge?.kind === 'on_site') continue
       const m = milesBetween([userFix.lng, userFix.lat], c.location.center) * METRES_PER_MILE
       if (m <= CARD_RING_RANGE_M && m < bestM) {
         best = c
