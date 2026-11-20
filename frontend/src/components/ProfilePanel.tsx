@@ -15,9 +15,13 @@ import { useEffect } from 'react'
 
 import ProfileBody from './ProfileBody'
 
-type Props = { onClose: () => void }
+type Props = {
+  onClose: () => void
+  /** Vieques Cards: "Your collection" → the Collection panel (S-9). */
+  onOpenCollection?: () => void
+}
 
-export default function ProfilePanel({ onClose }: Props) {
+export default function ProfilePanel({ onClose, onOpenCollection }: Props) {
   // Close on Escape, like the other overlays.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -48,7 +52,7 @@ export default function ProfilePanel({ onClose }: Props) {
         className="glass absolute bottom-5 right-5 top-[5.5rem] z-40 flex w-[400px] flex-col
                    overflow-hidden rounded-3xl shadow-2xl"
       >
-        <ProfileBody onClose={onClose} />
+        <ProfileBody onClose={onClose} onOpenCollection={onOpenCollection} />
       </aside>
     </>
   )

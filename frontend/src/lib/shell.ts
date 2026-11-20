@@ -14,5 +14,9 @@
  * 'menu' is phone-only: the ☰ list (Home, Build Itinerary, Directions, Buy
  * Credits, Log Out) shown in the sheet. Desktop keeps the dropdown in MapTopBar
  * and never enters this mode.
+ *
+ * 'collection' is Vieques Cards' inventory (docs/CARD_UI_SPEC.md S-6, L-5),
+ * reached from Menu / Profile on a phone and the MapTopBar dropdown on desktop.
+ * It has no bottom-nav cell of its own.
  */
-export type ShellMode = 'explore' | 'ai' | 'saved' | 'profile' | 'menu'
+export type ShellMode = 'explore' | 'ai' | 'saved' | 'profile' | 'menu' | 'collection'

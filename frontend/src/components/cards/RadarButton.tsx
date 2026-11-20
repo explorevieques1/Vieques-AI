@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { Radar } from 'lucide-react'
 
-import { preloadSounds, unlockSound } from '../../lib/sound'
+import { armCardRadar } from '../../hooks/useCardRadar'
+import { preloadSounds } from '../../lib/sound'
 import { GlassButton } from '../GlassControl'
 
 /**
@@ -13,10 +14,6 @@ import { GlassButton } from '../GlassControl'
  * its WebGL sweep are the lazy part (C-3).
  */
 
-type MotionPermission = { requestPermission?: () => Promise<'granted' | 'denied'> }
-
-let askedMotion = false
-
 export default function RadarButton({ on, onToggle }: { on: boolean; onToggle: (next: boolean) => void }) {
   // I-1: have the sound engine in memory before the first tap, so that tap
   // can unlock iOS audio synchronously (lib/sound.ts unlockSound()).
@@ -25,19 +22,8 @@ export default function RadarButton({ on, onToggle }: { on: boolean; onToggle: (
   }, [])
 
   const handleTap = () => {
-    if (!on) {
-      // I-1: both only from inside this tap handler.
-      unlockSound()
-      if (!askedMotion) {
-        askedMotion = true
-        // iOS 13+ only; elsewhere the method does not exist and motion is free.
-        const req = (globalThis.DeviceOrientationEvent as unknown as MotionPermission | undefined)
-          ?.requestPermission
-        if (typeof req === 'function') {
-          void req.call(globalThis.DeviceOrientationEvent).catch(() => undefined)
-        }
-      }
-    }
+    // I-1: audio unlock + iOS motion permission, only from inside this tap.
+    if (!on) armCardRadar()
     onToggle(!on)
   }
 

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import {
   CreditCard,
+  GalleryVerticalEnd,
   Heart,
   Home,
   LogOut,
@@ -11,6 +13,7 @@ import {
 
 
 import { LANDING_URL } from '../lib/api'
+import { useCardsCatalog } from '../hooks/useCardsCatalog'
 import { useIsMobile } from '../hooks/useIsMobile'
 import type { CategorySlug } from '../lib/place'
 import { signOut } from '../lib/supabase'
@@ -35,6 +38,9 @@ type Props = {
   onSaved: () => void
   savedOpen: boolean
   onBuildItinerary: () => void
+  /** Vieques Cards inventory (L-6: mirrors MenuBody's first row). */
+  onCollection: () => void
+  collectionOpen: boolean
   /** Mobile hides the pills here — they get their own floating row. */
   showCategories: boolean
 }
@@ -87,14 +93,20 @@ function MapTopBar({
   onSaved,
   savedOpen,
   onBuildItinerary,
+  onCollection,
+  collectionOpen,
   showCategories,
 }: Props) {
   const { tier, hasAccess, credits } = useEntitlement()
   const isMobile = useIsMobile()
+  // The Collection item's "owned/total": fetched when the menu first opens,
+  // not on every map load.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { catalog } = useCardsCatalog(menuOpen && !isMobile)
   const menuItem = 'gap-2.5 rounded-lg px-2.5 py-2 text-sm'
 
   const menu = (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger
         aria-label="Menu"
         className="glass pointer-events-auto grid h-9 w-9 shrink-0 place-items-center rounded-2xl text-foreground transition-colors hover:bg-white/8 data-[state=open]:bg-primary data-[state=open]:text-primary-foreground"
@@ -117,6 +129,21 @@ function MapTopBar({
             : `${credits} AI message${credits === 1 ? '' : 's'} left`}
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-white/8" />
+
+        {/* Vieques Cards (S-9, L-6) — same first place as in MenuBody. */}
+        <DropdownMenuItem
+          onSelect={onCollection}
+          data-active={collectionOpen || undefined}
+          className={`${menuItem} data-active:bg-primary/15 data-active:text-primary`}
+        >
+          <GalleryVerticalEnd size={15} />
+          <span className="flex-1">Collection</span>
+          {catalog && catalog.total > 0 && (
+            <span className="font-mono text-[10px] tracking-[0.08em] text-primary">
+              {catalog.owned}/{catalog.total}
+            </span>
+          )}
+        </DropdownMenuItem>
 
         <DropdownMenuItem asChild className={menuItem}>
           <a href={LANDING_URL}>

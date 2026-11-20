@@ -9,7 +9,7 @@ import {
   type RadarBucket,
 } from '../lib/api'
 import { milesBetween } from '../lib/geo'
-import { playSound } from '../lib/sound'
+import { playSound, unlockSound } from '../lib/sound'
 
 /**
  * Vieques Cards radar (docs/CARD_UI_SPEC.md S-2, R-1, W-2).
@@ -66,6 +66,29 @@ type Args = {
   fix: CardPosition | null
   /** The location watch failed with PERMISSION_DENIED. */
   locationBlocked: boolean
+}
+
+type MotionPermission = { requestPermission?: () => Promise<'granted' | 'denied'> }
+
+let askedMotion = false
+
+/**
+ * I-1: everything switching the radar ON must do inside the user's tap —
+ * unlock iOS audio and ask for iOS motion permission (once). Shared by the
+ * map's radar button (S-1) and the Collection's "Card radar" row / "Turn on
+ * radar" button (S-6), so each of them arms the radar the same way.
+ * Call it synchronously from the tap handler, never after an await.
+ */
+export function armCardRadar(): void {
+  unlockSound()
+  if (askedMotion) return
+  askedMotion = true
+  // iOS 13+ only; elsewhere the method does not exist and motion is free.
+  const req = (globalThis.DeviceOrientationEvent as unknown as MotionPermission | undefined)
+    ?.requestPermission
+  if (typeof req === 'function') {
+    void req.call(globalThis.DeviceOrientationEvent).catch(() => undefined)
+  }
 }
 
 function metresBetween(a: CardPosition, b: CardPosition): number {

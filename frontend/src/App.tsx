@@ -91,7 +91,10 @@ function App() {
               Saved is not here: it needs to select a place on the map, so
               MapView owns it at both widths. */}
           {!isMobile && mode === 'ai' && <AiChatPane onClose={() => changeMode('explore')} />}
-          {!isMobile && mode === 'profile' && <ProfilePanel onClose={() => changeMode('explore')} />}
+          {!isMobile && mode === 'profile' && <ProfilePanel
+              onClose={() => changeMode('explore')}
+              onOpenCollection={() => changeMode('collection')}
+            />}
 
           {dirOpen && (
             <DirectionsPanel

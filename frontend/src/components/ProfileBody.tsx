@@ -18,8 +18,11 @@
 
 import { useEffect, useState } from 'react'
 
+import { rarestOwned, useCardsCatalog } from '../hooks/useCardsCatalog'
 import { getSession, signOut } from '../lib/supabase'
 import { LANDING_URL } from '../lib/api'
+import { rarityColor } from '../lib/rarity'
+import { Group, Row } from './MenuBody'
 import {
   useEntitlement,
   TIER_LABELS,
@@ -32,6 +35,8 @@ type Props = {
   onClose?: () => void
   /** Mobile: clear the bottom nav with the action footer's padding. */
   navPad?: boolean
+  /** Vieques Cards: "Your collection" opens the Collection pane (S-9). */
+  onOpenCollection?: () => void
 }
 
 /** "in 5 days" / "today" / "expired" for a pass expiry. */
@@ -53,8 +58,10 @@ const fmtDate = (iso: string) =>
 const sectionLabel =
   'mb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground'
 
-export default function ProfileBody({ onClose, navPad = false }: Props) {
+export default function ProfileBody({ onClose, navPad = false, onOpenCollection }: Props) {
   const { tier, hasAccess, credits, deviceLimit, features, plans, refresh } = useEntitlement()
+  const { catalog } = useCardsCatalog()
+  const rarest = catalog ? rarestOwned(catalog.cards) : null
   const [email, setEmail] = useState<string | null>(null)
   const [memberSince, setMemberSince] = useState<string | null>(null)
 
@@ -139,6 +146,34 @@ export default function ProfileBody({ onClose, navPad = false }: Props) {
             )}
           </div>
         </section>
+
+        {/* ---- Vieques Cards (S-9): count + rarest, opens Collection.
+                Leaderboard name + "Show me on Top Traveler" arrive with the
+                Phase 2 traveler_profiles endpoint (build-order step 9). ---- */}
+        {catalog && (
+          <section>
+            <h3 className={sectionLabel}>Your collection</h3>
+            <Group>
+              <Row
+                icon={
+                  <span
+                    aria-hidden="true"
+                    className="block h-[22px] w-4 rounded-[3px] border-[1.5px]"
+                    style={{
+                      borderColor: rarest ? rarityColor(rarest.rarity) : 'var(--color-muted-foreground)',
+                    }}
+                  />
+                }
+                label={
+                  rarest
+                    ? `${catalog.owned} card${catalog.owned === 1 ? '' : 's'} · rarest: ${rarest.name ?? ''}`
+                    : `${catalog.owned} cards`
+                }
+                onClick={onOpenCollection}
+              />
+            </Group>
+          </section>
+        )}
 
         {/* ---- At a glance ---- */}
         <section className="grid grid-cols-2 gap-3">

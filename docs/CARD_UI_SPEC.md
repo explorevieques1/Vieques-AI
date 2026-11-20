@@ -243,7 +243,7 @@ Badges · Top Traveler (T-5).
   TiltedCard grid (4 on desktop). Found = face; unfound = shared back; locked rarity =
   dimmed. Tap → S-7; long-press → flip to back. Settings row: Sound · Card radar.
 - Badges: earned (static sticker image) first; in progress = dashed outline + progress
-  bar "Beach Bum 3/5".
+  bar "Beach Bum 3/5". With none earned, show only the 3 nearest-to-done in progress.
 - Top Traveler: This week / All-time; SplitFlapText "#07" (`loop={false}`, `padTo 3`,
   numeric); top 20 rows (rank / `Medal` 1–3, initials avatar, name = display name or
   first name + last initial, "N cards · N badges", points in Geist Mono via Counter);
@@ -251,7 +251,10 @@ Badges · Top Traveler (T-5).
   users absent. Tab hidden until the leaderboard endpoint exists.
 - Empty: "Turn on the radar and explore — your first card is closer than you think." +
   Turn on radar · "Collect a set to earn a badge." · "No legendary cards yet — they hide
-  in the hardest places." · "Be the first Top Traveler this week."
+  in the hardest places." · "Be the first Top Traveler this week." · Filter on a
+  common/basic/rare with none owned: "No <rarity> cards yet."
+- Load failure: "Couldn't load your cards." / "Couldn't load your badges." + "Try again".
+  Loading placeholders are static blocks (no pulse — M-4).
 
 **S-7 Card detail.** L-2 overlay, one live HoloCard; tap flips (`backImage`: island
 outline + find-spot dot, date/time, badges it counts toward). Lore; "Show on map"
@@ -265,7 +268,8 @@ in <region>." + "Start hunting" (turns radar on). On-site questions are NOT here
 
 **S-9 Entry points.** Menu: first Row of the first Group, lucide `GalleryVerticalEnd`,
 "Collection", count right (L-6). Profile: "Your collection" section — count + rarest
-(opens Collection), leaderboard name, "Show me on Top Traveler" switch.
+(opens Collection), leaderboard name, "Show me on Top Traveler" switch. Name + switch
+hidden until the traveler-profile endpoint exists (build step 9).
 
 **S-10 Desktop / tablet.** Collection = floating panel (344px, Saved's slot); radar pill
 top-left under `MapTopBar`; banner bottom-left of the map; overlays centred with scrim.

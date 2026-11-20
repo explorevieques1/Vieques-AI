@@ -86,6 +86,8 @@ const RadarPill = lazy(() => import('./cards/RadarPill'))
 const NearbyBanner = lazy(() => import('./cards/NearbyBanner'))
 /** The full-screen claim reveal (S-5): HoloCard, ElectricBorder, StickerPeel… (C-3). */
 const ClaimReveal = lazy(() => import('./cards/ClaimReveal'))
+/** The Collection pane (S-6): TiltedCard grid + face generator — lazy (C-3). */
+const CollectionBody = lazy(() => import('./cards/CollectionBody'))
 /** Banner leaves only 20 m past the 200 m edge (GPS-jitter hysteresis). */
 const BANNER_EXIT_SLACK_M = 20
 import { ResponsivePanel } from './ui/ResponsivePanel'
@@ -279,6 +281,14 @@ function MapView({
    * claim reveal (S-5) is open; it clears when the reveal closes.
    */
   const [claimMoment, setClaimMoment] = useState<{ card: Card; claim: CardClaim } | null>(null)
+  /** Radar on/off from the map button (S-1) or the Collection's row (S-6). */
+  const toggleRadar = useCallback((next: boolean) => {
+    setRadarOn(next)
+    if (!next) {
+      setOpenCardSlug(null) // pins go with the radar (P-2)
+      setClaimMoment(null)
+    }
+  }, [])
   /** Cards skipped via "See other cards nearby" (SOLD_OUT), this session. */
   const [skippedCards, setSkippedCards] = useState<ReadonlySet<string>>(() => new Set())
   // Desktop: the results panel is folded to an edge tab. The category and its
@@ -393,7 +403,7 @@ function MapView({
   // frames itself underneath the panel on a cold start.
   // Saved takes the same slot at the same width, so it counts too.
   const resultsOpen = !isMobile
-    ? mode === 'saved' || !resultsCollapsed
+    ? mode === 'saved' || mode === 'collection' || !resultsCollapsed
     : category != null && !resultsCollapsed
   const detailOpen = selected != null
 
@@ -1033,7 +1043,8 @@ function MapView({
       setModesOpen(false)
       setSnap(
         // Menu opens full too: at PREVIEW the Log Out row sits under the nav.
-        next === 'ai' || next === 'profile' || next === 'menu'
+        // Collection opens at the full stop (L-5).
+        next === 'ai' || next === 'profile' || next === 'menu' || next === 'collection'
           ? SHEET_FULL
           : next === 'saved'
             ? SHEET_PREVIEW
@@ -1598,10 +1609,25 @@ function MapView({
       onAddToTrip={setAddToTripFor}
     />
   ) : mode === 'profile' ? (
-    <ProfileBody navPad />
+    <ProfileBody navPad onOpenCollection={() => changeMode('collection')} />
+  ) : mode === 'collection' ? (
+    // Vieques Cards inventory (S-6, L-5): full stop, the sheet's ⌄ collapses.
+    <Suspense fallback={null}>
+      <CollectionBody
+        navPad
+        radarOn={radarOn}
+        onRadarChange={toggleRadar}
+        onTurnOnRadar={() => {
+          toggleRadar(true)
+          // Back to the map so the radar pill and pins are visible (L-4).
+          setSnap(SHEET_HIDDEN)
+        }}
+      />
+    </Suspense>
   ) : mode === 'menu' ? (
     <MenuBody
       navPad
+      onCollection={() => changeMode('collection')}
       onBuildItinerary={() => changeMode('saved')}
       onDirections={() => {
         // Back to the map first: Directions is an overlay over Explore, and the
@@ -1642,6 +1668,8 @@ function MapView({
             onSaved={onSaved}
             savedOpen={mode === 'saved'}
             onBuildItinerary={() => onModeChange('saved')}
+            onCollection={() => onModeChange(mode === 'collection' ? 'explore' : 'collection')}
+            collectionOpen={mode === 'collection'}
             showCategories={!isMobile}
           />
         )
@@ -1694,7 +1722,9 @@ function MapView({
                 ? 'Map Modes'
                 : mode === 'menu'
                   ? 'Menu'
-                  : (selected?.name ??
+                  : mode === 'collection'
+                    ? 'Collection'
+                    : (selected?.name ??
                   (category ? categoryMeta(category).label : 'Explore Vieques'))
             }
             snap={snap}
@@ -1750,7 +1780,22 @@ function MapView({
               panel now always exists in Explore and always carries the search
               bar; the results below it are what appear once a category is
               picked. */}
-          {mode !== 'saved' && !resultsCollapsed && (
+          {/* Collection (L-5) takes the same slot as Saved. Desktop polish —
+              the 4-column grid, radar pill placement — is build-order step 10. */}
+          {mode === 'collection' && (
+            <ResponsivePanel
+              variant="floating"
+              side="left"
+              title="Collection"
+              desktopWidth="sm:w-[344px]"
+            >
+              <Suspense fallback={null}>
+                <CollectionBody onClose={() => onModeChange('explore')} />
+              </Suspense>
+            </ResponsivePanel>
+          )}
+
+          {mode !== 'saved' && mode !== 'collection' && !resultsCollapsed && (
             <ResponsivePanel
               variant="floating"
               side="left"
@@ -1895,16 +1940,7 @@ function MapView({
         </GlassButton>
         {/* Vieques Cards radar (S-1): last in the stack, below recentre. */}
         {isMobile && (
-          <RadarButton
-            on={radarOn}
-            onToggle={(next) => {
-              setRadarOn(next)
-              if (!next) {
-                setOpenCardSlug(null) // pins go with the radar (P-2)
-                setClaimMoment(null)
-              }
-            }}
-          />
+          <RadarButton on={radarOn} onToggle={toggleRadar} />
         )}
       </div>
 
