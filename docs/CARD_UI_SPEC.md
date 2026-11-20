@@ -79,7 +79,8 @@ Scratch Card (Pro).
   `bottom: calc(100dvh - var(--controls-y) + 8px)` (banner directly on the sheet, pill
   above the banner). Never a hard-coded bottom offset.
 - **L-4** Pill + banner hidden when the sheet is at full (`--sheet-full > .5`), the
-  radar is off, or a z-70 overlay is open. With a place open (PlaceDetailPanel), the
+  radar is off, a z-70 overlay is open, or (≥641px) the map band between panels is
+  under `DESKTOP_CARDS_MIN_BAND` (240px). With a place open (PlaceDetailPanel), the
   banner collapses to a slim one-line "card nearby".
 - **L-5** Collection is a sheet pane: a `sheetBody` branch, opens at `SHEET_FULL`, has
   `onCollapse` (⌄). Desktop: `ResponsivePanel variant="floating"` in Saved's slot.
@@ -125,8 +126,8 @@ Scratch Card (Pro).
 
 - **W-1** ≤ 4 live WebGL contexts: map + Radar + one opened card (HoloCard /
   ReflectiveCard) + one moment (StickerPeel / ElectricBorder).
-- **W-2** Radar paused (static frame) when `document.hidden`, sheet at full, or a z-70
-  overlay is open. WebGL components unmount when their surface closes.
+- **W-2** Radar paused (static frame) when `document.hidden`, sheet at full, a z-70
+  overlay is open, or the pill is hidden by the narrow-band rule (L-4). WebGL components unmount when their surface closes.
 - **W-3** The grid uses TiltedCard (no WebGL), touch tilt only (no gyro); only one
   opened card at a time.
 
@@ -240,7 +241,8 @@ The claim result is saved regardless of the animation.
 Badges · Top Traveler (T-5).
 - Cards: `9 / 24` + points; progress bar; region tallies (Group/Row, lucide `MapPin`,
   "1 of 4", riddle-locked under "Mystery"); PillSlider rarity filter; 3-column
-  TiltedCard grid (4 on desktop). Found = face; unfound = shared back; locked rarity =
+  TiltedCard grid (3 on desktop too: 4 in the 344px panel gives ~70px cards with unreadable
+  names — owner, 2026-11-20). Found = face; unfound = shared back; locked rarity =
   dimmed. Tap → S-7; long-press → flip to back. Settings row: Sound · Card radar.
 - Badges: earned (static sticker image) first; in progress = dashed outline + progress
   bar "Beach Bum 3/5". With none earned, show only the 3 nearest-to-done in progress.
@@ -311,10 +313,27 @@ shown when `leaderboard: true` (as the Top Traveler tab).
 - "Show me on Top Traveler": optimistic switch, disabled while saving, reverts silently
   on failure.
 
-**S-10 Desktop / tablet.** Collection = floating panel (344px, Saved's slot); radar pill
-top-left under `MapTopBar`; banner bottom-left of the map; overlays centred with scrim.
-Desktop banner copy: "Cards are collected on your phone, on the island." Inherited
+**S-10 Desktop / tablet.** Collection = floating panel (344px, Saved's slot; 3-column
+grid); radar button in the control stack; radar pill top-left of the map band (right of
+the left panel at its top edge, below the edge tab when folded); banner bottom-left of the
+map band, 360px, above the attribution strip; overlays centred with scrim. Inherited
 641–1024px tablet gap (PLATFORM.md §6.5) — don't make it worse.
+- **Layout is by width; collecting is by touch** (owner, 2026-11-20). ≥641px places the
+  pill and banner in the map band. Whether you can collect is `(pointer: coarse)`:
+  tablets get the full S-4 body (PixelCard "Something's here…", "within 200 m · walk
+  closer", HoldButton, on-site input).
+  Collecting is never decided by width; a fine-pointer browser under 641px gets the phone
+  layout with the desktop sentence. ClaimReveal centres at ≥641px whatever the pointer.
+- Fine pointer (laptop/desktop) banner: thumb, micro-label, name hidden until in range,
+  and "Cards are collected on your phone, on the island." in place of the collect action.
+  The slim line (L-4, place open) shows "Card nearby · <name>" on every device, as on
+  the phone. Locked → "A <pass> pass unlocks <rarity> cards." + See passes; "Upgrade now
+  and collect it while you're here." is appended only when you can collect. Sold out
+  unchanged on every device.
+- Band layout + coarse pointer (tablet): the banner rises with the keyboard
+  (`visualViewport`, as S-8) so the on-site input stays visible. When the band is under
+  240px (a place or the AI pane open) the banner steps aside (L-4), so a tablet collects
+  after closing that panel.
 
 **S-11 Card face generator.** Canvas 630×880 drawn after `document.fonts.ready` (not SVG
 in `<img>` — no web fonts there) → `toBlob` → blob URL cached per card + serial. Front:

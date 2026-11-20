@@ -85,6 +85,29 @@ export const CARDS_FLOAT_GAP = 8
 export const NEARBY_BANNER_GUTTER = 10
 
 /**
+ * Vieques Cards on desktop / tablet (CARD_UI_SPEC S-10, X-2). There is no
+ * sheet, so the pill and the banner float in the map band between the
+ * floating panels instead of riding `--controls-y`:
+ *   pill    top-left, at the floating panels' top (`top-[5.75rem]`)
+ *   banner  bottom-left, above the attribution strip (bottom-5, 29px tall, measured)
+ * Where the band is narrower than the surface (the 641–1024px tablet gap with
+ * a right-hand panel open) they step aside rather than cover a panel.
+ */
+export const DESKTOP_CARDS_TOP = 92
+/** Pill top when the results panel is folded to its edge tab (that tab sits at DESKTOP_CARDS_TOP). */
+export const DESKTOP_CARDS_TOP_BELOW_TAB = 92 + 42 + CARDS_FLOAT_GAP
+export const DESKTOP_CARDS_BANNER_W = 360
+export const DESKTOP_CARDS_BANNER_BOTTOM = 20 + 29 + CARDS_FLOAT_GAP
+/** Narrowest map band either surface is shown in. */
+export const DESKTOP_CARDS_MIN_BAND = 240
+/** The right control stack (48px GlassControl) plus its gap, which the banner keeps clear of. */
+export const DESKTOP_CONTROLS_CLEAR = 48 + CARDS_FLOAT_GAP
+/** Right-hand desktop panels the pill and banner keep clear of: Ask AI
+ *  (AiChatPane `w-[400px] right-5`) and Directions (`sm:w-96 right-0`). */
+export const AI_PANE_W = 400
+export const DIRECTIONS_PANEL_W = 384
+
+/**
  * Total mobile top inset, for whatever chrome is currently on screen.
  *
  * `safeTop` comes from useSafeArea rather than being baked in: env() is only
@@ -148,9 +171,10 @@ type Args = {
   topInset?: number
   /** Mobile: the home-indicator inset, so the nav's real height is known. */
   safeBottom?: number
-  /** Mobile: measured height of the Cards nearby banner, 0 when it isn't
-   *  showing (CARD_UI_SPEC M-2). It floats on the sheet edge, so it adds to
-   *  the sheet's inset together with its CARDS_FLOAT_GAP. */
+  /** Measured height of the Cards nearby banner, 0 when it isn't showing
+   *  (CARD_UI_SPEC M-2). Phone: it floats on the sheet edge, so it adds to
+   *  the sheet's inset together with its CARDS_FLOAT_GAP. Desktop: it floats
+   *  bottom-left above the attribution strip (S-10). */
   cardsBanner?: number
 }
 
@@ -186,7 +210,8 @@ export function useMapInsets({
     return {
       top: TOP_BAR_H,
       right: detailOpen ? DETAIL_PANEL_W + PANEL_GAP * 2 : PANEL_GAP,
-      bottom: PANEL_GAP,
+      // M-2 on desktop (S-10): the banner floats bottom-left of the map.
+      bottom: cardsBanner > 0 ? DESKTOP_CARDS_BANNER_BOTTOM + cardsBanner + CARDS_FLOAT_GAP : PANEL_GAP,
       left: resultsOpen ? RESULTS_PANEL_W + PANEL_GAP * 2 : PANEL_GAP,
     }
   }, [isMobile, resultsOpen, detailOpen, sheetHeight, topInset, safeBottom, cardsBanner])

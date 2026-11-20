@@ -42,12 +42,19 @@ function statusCopy(radar: CardRadarState): { text: string; warmth: string | nul
   }
 }
 
+/** Desktop / tablet placement (S-10): top-left of the map band, under
+ *  MapTopBar, beside whatever floating panel is open. */
+export type RadarPillDesktop = { left: number; top: number; maxWidth: number }
+
 export default function RadarPill({
   radar,
   hidden,
   lift = 0,
+  desktopAt,
 }: {
   radar: CardRadarState
+  /** Set on desktop (S-10); omitted on a phone, where the pill rides the sheet (L-3). */
+  desktopAt?: RadarPillDesktop
   /** L-3: px to rise by so the pill sits above the nearby banner (its
    *  measured height + gap), 0 when no banner shows. */
   lift?: number
@@ -77,11 +84,16 @@ export default function RadarPill({
       // GlassSurface itself.
       className="pointer-events-auto fixed z-30"
       style={{
-        left: '1.25rem',
-        // Never under the 48px control stack on the right (320px phones):
-        // both 1.25rem gutters + the button + an 8px gap.
-        maxWidth: 'calc(100vw - 2.5rem - 56px)',
-        bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP + lift}px)`,
+        ...(desktopAt
+          ? // S-10: top-left under MapTopBar, in the band between the panels.
+            { left: desktopAt.left, top: desktopAt.top, maxWidth: desktopAt.maxWidth }
+          : {
+              left: '1.25rem',
+              // Never under the 48px control stack on the right (320px phones):
+              // both 1.25rem gutters + the button + an 8px gap.
+              maxWidth: 'calc(100vw - 2.5rem - 56px)',
+              bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP + lift}px)`,
+            }),
         visibility: hidden ? 'hidden' : 'visible',
       }}
       aria-hidden={hidden || undefined}

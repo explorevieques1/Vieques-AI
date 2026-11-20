@@ -215,7 +215,7 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
       // because vaul sets pointer-events:none on <body>. touch-action none so a
       // downward drag is ours (swipe to close). The .vq-reveal fade is the one
       // entrance (M-4).
-      className={`vq-reveal pointer-events-auto fixed inset-0 z-[70] flex justify-center outline-none ${
+      className={`vq-reveal pointer-events-auto fixed inset-0 z-[70] flex justify-center outline-none sm:items-center ${
         closing ? 'vq-reveal--out' : ''
       }`}
       style={{ touchAction: 'none', overflowX: 'clip' }}
@@ -236,7 +236,7 @@ export default function CardDetail({ card, onClose, onShowOnMap, onSolveRiddle }
       />
 
       <div
-        className="pointer-events-none relative flex h-full w-full max-w-md flex-col items-center px-6 pt-[calc(var(--sat)+12px)] pb-[calc(var(--sab)+16px)]"
+        className="pointer-events-none relative flex h-full w-full max-w-md flex-col items-center px-6 pt-[calc(var(--sat)+12px)] pb-[calc(var(--sab)+16px)] sm:h-[min(760px,calc(100dvh-48px))]"
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           opacity: dragY ? Math.max(0.35, 1 - dragY / 360) : undefined,

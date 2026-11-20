@@ -58,7 +58,7 @@ type Props = {
   onClose?: () => void
   /** Mobile: clear the floating bottom nav at the scroller's foot. */
   navPad?: boolean
-  /** Phone only (S-10: the radar is a phone feature). Omitted → no radar row / CTA. */
+  /** The radar toggle (S-1 mirror) — both layouts (S-10). Omitted → no radar row / CTA. */
   radarOn?: boolean
   onRadarChange?: (next: boolean) => void
   /** Empty state's "Turn on radar": radar on + back to the map. */
@@ -248,7 +248,7 @@ function CardsTab({
       <>
         <div className="h-14 rounded-2xl bg-muted" />
         <div className="h-36 rounded-2xl bg-muted" />
-        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+        <div className="grid grid-cols-3 gap-2.5">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="aspect-[63/88] rounded-lg bg-muted" />
           ))}
@@ -343,7 +343,7 @@ function CardsTab({
                 : `No ${filter ? RARITY[filter].label.toLowerCase() : ''} cards yet.`}
             </p>
           ) : (
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2.5">
               {shown.map((c) => (
                 <GridCard
                   key={c.slug}

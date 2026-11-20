@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import maplibregl from 'maplibre-gl'
 import { Globe, LocateFixed, Minus, PanelLeftOpen, Plus } from 'lucide-react'
 
@@ -43,7 +43,7 @@ import { useCategoryPlaces } from '../hooks/useCategoryPlaces'
 import type { Favorites } from '../hooks/useFavorites'
 import type { Itineraries } from '../hooks/useItineraries'
 import { useIslandSearch, type SearchHit } from '../hooks/useIslandSearch'
-import { useIsMobile } from '../hooks/useIsMobile'
+import { useCanCollect, useIsMobile } from '../hooks/useIsMobile'
 import { useCardPins } from '../hooks/useCardPins'
 import { useCardRadar } from '../hooks/useCardRadar'
 import { useBackToClose } from '../hooks/useBackToClose'
@@ -53,9 +53,18 @@ import {
   mobileTopInset,
   safeInsets,
   useMapInsets,
+  AI_PANE_W,
   CARDS_FLOAT_GAP,
   CHROME_TOP_PAD,
+  DESKTOP_CARDS_BANNER_BOTTOM,
+  DESKTOP_CARDS_BANNER_W,
+  DESKTOP_CARDS_MIN_BAND,
+  DESKTOP_CARDS_TOP,
+  DESKTOP_CARDS_TOP_BELOW_TAB,
+  DESKTOP_CONTROLS_CLEAR,
   DETAIL_PANEL_W,
+  DIRECTIONS_PANEL_W,
+  PANEL_GAP,
   RESULTS_PANEL_W,
   SHEET_FULL,
   SHEET_HIDDEN,
@@ -100,6 +109,15 @@ import { ResponsivePanel } from './ui/ResponsivePanel'
 const VIEQUES_CENTER: [number, number] = [-65.44, 18.12]
 
 const METRES_PER_MILE = 1609.344
+
+/** Viewport width as an external store, for the desktop Cards band (S-10). */
+function subscribeViewport(onChange: () => void): () => void {
+  window.addEventListener('resize', onChange)
+  return () => window.removeEventListener('resize', onChange)
+}
+function readViewportW(): number {
+  return window.innerWidth
+}
 
 /** Which face a card pin shows (S-3). Owned wins; a revealed card this pass
  *  can't collect shows the lock. */
@@ -180,6 +198,8 @@ function MapView({
   const canWaterZones = useFeature('snorkel_zones')
   const canPlanTrips = useFeature('itinerary')
   const isMobile = useIsMobile()
+  /** Touch decides collecting, width decides layout (S-10, owner 2026-11-20). */
+  const canCollect = useCanCollect()
   const safeArea = useSafeArea()
   // Drives the amber dot on the nav's Profile cell — the nudge that used to sit
   // on the top bar's profile button.
@@ -268,11 +288,12 @@ function MapView({
     [userFix],
   )
   /** Vieques Cards radar (S-1/S-2). Off on every load: switching it on is the
-   *  tap that unlocks sound (I-1). Phone layout only until step 10 (S-10). */
+   *  tap that unlocks sound (I-1). Both layouts: on desktop the pill and the
+   *  banner float in the map band and collecting stays on the phone (S-10). */
   const [radarOn, setRadarOn] = useState(false)
-  const cardRadar = useCardRadar({ on: radarOn && isMobile, fix: userFix, locationBlocked })
+  const cardRadar = useCardRadar({ on: radarOn, fix: userFix, locationBlocked })
   /** Revealed + owned cards to pin while the radar is on (S-3, P-2, P-5). */
-  const cardPins = useCardPins({ on: radarOn && isMobile, revealed: cardRadar.revealed })
+  const cardPins = useCardPins({ on: radarOn, revealed: cardRadar.revealed })
   /**
    * The selected card pin (S-3: marker-lift + pulse). Set by a pin tap (which
    * also opens the card's detail) and by "Show on map"; cleared when the
@@ -820,8 +841,42 @@ function MapView({
     [],
   )
   /** The banner only reports a height while it's mounted and visible. */
-  const bannerShown = isMobile && radarOn && bannerCard != null
-  const bannerLift = bannerShown && cardsBannerH > 0 ? cardsBannerH + CARDS_FLOAT_GAP : 0
+  const bannerShown = radarOn && bannerCard != null
+  /** Phone only: the pill and the control stack rise above the banner (L-3). */
+  const bannerLift = isMobile && bannerShown && cardsBannerH > 0 ? cardsBannerH + CARDS_FLOAT_GAP : 0
+
+  // Vieques Cards on desktop / tablet (S-10): no sheet, so the pill sits
+  // top-left and the banner bottom-left of the map band between the floating
+  // panels. Where the band is too narrow for them (641–1024px with a right
+  // panel open — the inherited tablet gap) they step aside instead of
+  // covering a panel.
+  const viewportW = useSyncExternalStore(subscribeViewport, readViewportW)
+  const bandLeft = resultsOpen ? RESULTS_PANEL_W + PANEL_GAP * 2 : PANEL_GAP
+  const bandRight = Math.max(
+    PANEL_GAP,
+    detailOpen ? DETAIL_PANEL_W + PANEL_GAP * 2 : 0,
+    mode === 'ai' ? AI_PANE_W + PANEL_GAP * 2 : 0,
+    dirOpen ? DIRECTIONS_PANEL_W + PANEL_GAP : 0,
+  )
+  const pillBand = viewportW - bandLeft - bandRight
+  const bannerBand = pillBand - DESKTOP_CONTROLS_CLEAR
+  const desktopPillAt = isMobile
+    ? undefined
+    : {
+        left: bandLeft,
+        // Folded results panel: its edge tab holds the top-left corner.
+        top: resultsOpen ? DESKTOP_CARDS_TOP : DESKTOP_CARDS_TOP_BELOW_TAB,
+        maxWidth: Math.max(0, pillBand),
+      }
+  const desktopBannerAt = isMobile
+    ? undefined
+    : {
+        left: bandLeft,
+        bottom: DESKTOP_CARDS_BANNER_BOTTOM,
+        width: Math.max(0, Math.min(DESKTOP_CARDS_BANNER_W, bannerBand)),
+      }
+  const cardsPillCramped = !isMobile && pillBand < DESKTOP_CARDS_MIN_BAND
+  const cardsBannerCramped = !isMobile && bannerBand < DESKTOP_CARDS_MIN_BAND
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove())
@@ -1852,8 +1907,9 @@ function MapView({
               panel now always exists in Explore and always carries the search
               bar; the results below it are what appear once a category is
               picked. */}
-          {/* Collection (L-5) takes the same slot as Saved. Desktop polish —
-              the 4-column grid, radar pill placement — is build-order step 10. */}
+          {/* Collection (L-5, S-10) takes the same slot as Saved: 344px,
+              3-column grid. The radar row works here too — the pill shows to
+              the right of this panel. */}
           {mode === 'collection' && (
             <ResponsivePanel
               variant="floating"
@@ -1865,6 +1921,9 @@ function MapView({
                 <CollectionBody
                   key={collectionKey}
                   onClose={() => onModeChange('explore')}
+                  radarOn={radarOn}
+                  onRadarChange={toggleRadar}
+                  onTurnOnRadar={() => toggleRadar(true)}
                   onOpenCard={setDetailCard}
                 />
               </Suspense>
@@ -2014,21 +2073,27 @@ function MapView({
         >
           <LocateFixed size={19} />
         </GlassButton>
-        {/* Vieques Cards radar (S-1): last in the stack, below recentre. */}
-        {isMobile && (
-          <RadarButton on={radarOn} onToggle={toggleRadar} />
-        )}
+        {/* Vieques Cards radar (S-1): last in the stack, below recentre —
+            on desktop too (S-10: the radar works there; collecting doesn't). */}
+        <RadarButton on={radarOn} onToggle={toggleRadar} />
       </div>
 
       {/* Vieques Cards radar pill (S-2): left side, riding the sheet edge (L-3).
           Hidden — and its Radar paused — at the full stop or under a z-70
           overlay (L-4, W-2); unmounted with the radar. */}
-      {isMobile && radarOn && (
+      {radarOn && (
         <Suspense fallback={null}>
           <RadarPill
             radar={cardRadar}
-            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null || cardOverlayOpen}
+            hidden={
+              (isMobile && snap === SHEET_FULL) ||
+              addToTripFor != null ||
+              claimMoment != null ||
+              cardOverlayOpen ||
+              cardsPillCramped
+            }
             lift={bannerLift}
+            desktopAt={desktopPillAt}
           />
         </Suspense>
       )}
@@ -2042,7 +2107,15 @@ function MapView({
             card={bannerCard}
             fix={userFix}
             slim={selected != null}
-            hidden={snap === SHEET_FULL || addToTripFor != null || claimMoment != null || cardOverlayOpen}
+            hidden={
+              (isMobile && snap === SHEET_FULL) ||
+              addToTripFor != null ||
+              claimMoment != null ||
+              cardOverlayOpen ||
+              cardsBannerCramped
+            }
+            desktopAt={desktopBannerAt}
+            canCollect={canCollect}
             onClaimed={handleCardClaimed}
             // S-4 RIDDLE_UNSOLVED → the riddle sheet (S-8).
             onSolveRiddle={setRiddleCard}

@@ -17,6 +17,7 @@ import { TIER_LABELS } from '../../lib/entitlement'
 import { milesBetween } from '../../lib/geo'
 import { RARITY, rarityColor } from '../../lib/rarity'
 import { playSound } from '../../lib/sound'
+import { useKeyboardInset } from '../../hooks/useKeyboardInset'
 import { CARDS_FLOAT_GAP, NEARBY_BANNER_GUTTER } from '../../hooks/useMapInsets'
 import ClickSpark, { type ClickSparkHandle } from '../reactbits/ClickSpark'
 import HoldButton from '../reactbits/HoldButton'
@@ -116,7 +117,20 @@ export type NearbyBannerProps = {
   onDismiss: (slug: string) => void
   /** M-2: measured height in px, 0 while hidden or unmounted. */
   onHeight: (px: number) => void
+  /** Desktop / tablet layout (S-10, ≥641px): bottom-left of the map band.
+   *  Omitted on a phone, where the banner sits on the sheet edge (L-3). */
+  desktopAt?: NearbyBannerDesktop
+  /** Touch device (coarse pointer — phones and tablets): the full collect
+   *  flow. False on a laptop/desktop: the banner says where cards are
+   *  collected instead (S-10, owner 2026-11-20: touch decides, not width). */
+  canCollect: boolean
 }
+
+/** S-10 placement: px from the left and bottom of the viewport, and the width. */
+export type NearbyBannerDesktop = { left: number; bottom: number; width: number }
+
+/** S-10: desktop has no GPS worth hunting with. */
+const DESKTOP_COPY = 'Cards are collected on your phone, on the island.'
 
 export default function NearbyBanner({
   card,
@@ -127,8 +141,13 @@ export default function NearbyBanner({
   onSolveRiddle,
   onDismiss,
   onHeight,
+  desktopAt,
+  canCollect,
 }: NearbyBannerProps) {
   const boxRef = useRef<HTMLDivElement>(null)
+  // A tablet answering an on-site question in the band-placed banner: ride on
+  // top of the on-screen keyboard (iOS doesn't shrink the layout viewport).
+  const keyboard = useKeyboardInset(desktopAt != null && canCollect)
 
   // M-2: report the live height (it changes with the state) for the camera
   // inset, the radar pill and the control stack (L-3).
@@ -149,9 +168,14 @@ export default function NearbyBanner({
       // on <body>). L-3: directly on the sheet's live top edge.
       className="pointer-events-auto fixed z-30"
       style={{
-        left: NEARBY_BANNER_GUTTER,
-        right: NEARBY_BANNER_GUTTER,
-        bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP}px)`,
+        ...(desktopAt
+          ? // S-10: bottom-left of the map, above the attribution strip.
+            { left: desktopAt.left, bottom: desktopAt.bottom + keyboard, width: desktopAt.width }
+          : {
+              left: NEARBY_BANNER_GUTTER,
+              right: NEARBY_BANNER_GUTTER,
+              bottom: `calc(100dvh - var(--controls-y, calc(100dvh - 176px)) + ${CARDS_FLOAT_GAP}px)`,
+            }),
         visibility: hidden ? 'hidden' : 'visible',
       }}
       aria-hidden={hidden || undefined}
@@ -171,6 +195,7 @@ export default function NearbyBanner({
             key={card.slug}
             card={card}
             fix={fix}
+            canCollect={canCollect}
             onClaimed={onClaimed}
             onSolveRiddle={onSolveRiddle}
             onDismiss={onDismiss}
@@ -201,9 +226,9 @@ function SlimLine({ card }: { card: Card }) {
 type BodyProps = Pick<
   NearbyBannerProps,
   'card' | 'fix' | 'onClaimed' | 'onSolveRiddle' | 'onDismiss'
->
+> & { canCollect: boolean }
 
-function BannerBody({ card, fix, onClaimed, onSolveRiddle, onDismiss }: BodyProps) {
+function BannerBody({ card, fix, canCollect, onClaimed, onSolveRiddle, onDismiss }: BodyProps) {
   const style = RARITY[card.rarity]
   const [answer, setAnswer] = useState('')
   const [needsAnswer, setNeedsAnswer] = useState(card.challenge?.kind === 'on_site')
@@ -396,8 +421,9 @@ function BannerBody({ card, fix, onClaimed, onSolveRiddle, onDismiss }: BodyProp
         </div>
         <div className="mt-2.5 rounded-2xl border border-primary/30 bg-primary/10 px-3.5 py-3 text-sm text-foreground">
           <p>
-            {article(pass)} {pass} pass unlocks {style.label.toLowerCase()} cards. Upgrade now and
-            collect it while you're here.
+            {article(pass)} {pass} pass unlocks {style.label.toLowerCase()} cards.
+            {/* Only where collecting happens (S-7's copy otherwise). */}
+            {canCollect && " Upgrade now and collect it while you're here."}
           </p>
           <a
             href={`${LANDING_URL}/pricing`}
@@ -428,6 +454,27 @@ function BannerBody({ card, fix, onClaimed, onSolveRiddle, onDismiss }: BodyProp
             See other cards nearby
             <ChevronRight size={15} aria-hidden="true" />
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!canCollect) {
+    // S-10: no Hold to collect (and no on-site question) without touch — the
+    // same card line as ① / ②, then where collecting happens. The name only
+    // shows in range, as on the phone. Sold-out above is unchanged; locked
+    // drops its "collect it while you're here" line.
+    return (
+      <div className="flex items-center gap-3 p-3">
+        <Thumb url={inRange ? frontUrl : backUrl} card={card} />
+        <div className="min-w-0 flex-1">
+          {inRange ? <MicroLabel card={card} suffix="In range" /> : <MicroLabel card={card} suffix="card" sep=" " />}
+          <p className="truncate font-display text-[20px] leading-tight text-foreground">
+            {inRange ? card.name : "Something's here…"}
+          </p>
+          <p role="status" className="mt-0.5 text-[13px] text-muted-foreground">
+            {DESKTOP_COPY}
+          </p>
         </div>
       </div>
     )
